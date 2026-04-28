@@ -64,7 +64,9 @@ body.dark input[type="date"]::-webkit-calendar-picker-indicator {
 body.light input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(0) sepia(1) saturate(4) hue-rotate(295deg) brightness(0.85);
 }
-.scroll-container { flex:1; min-height:0; overflow:auto; width:100%; position:relative; -webkit-overflow-scrolling:touch; will-change:scroll-position; }
+.scroll-container { flex:1; min-height:0; overflow:auto; width:100%; position:relative; -webkit-overflow-scrolling:touch; will-change:transform; touch-action:pan-x pan-y; transform:translateZ(0); }
+.cv-row { content-visibility: auto; contain-intrinsic-size: 0 28px; }
+.cv-cell { contain: layout style; }
 .draggable-card { cursor:grab; touch-action:none; width:100%; height:100%; display:flex; align-items:center; transition:opacity 0.2s,transform 0.2s; }
 .draggable-card:active { cursor:grabbing; opacity:0.7; }
 .draggable-card[draggable="true"]:hover { opacity:0.85; }
@@ -528,10 +530,14 @@ function MainApp({authMaster,onLogout}){
     setForm({input:"",guests:"1",note:"",color:"none",isSplit:false,splitMasterId:""});
   };
 
+  const COLOR_NO_INPUT=new Set(["reserved","custom","vacation"]);
   const saveBk=async(isContinuous=false)=>{
-    if(!dialog||!form.input.trim()||saving)return;
+    const needInput=!COLOR_NO_INPUT.has(form.color);
+    if(!dialog||(needInput&&!form.input.trim())||saving)return;
     setSaving(true);
-    const{name,phone}=parseInput(form.input);
+    const colorLabels={reserved:"卡位",custom:"自訂",vacation:"休假"};
+    const rawInput=form.input.trim()||colorLabels[form.color]||"";
+    const{name,phone}=parseInput(rawInput);
     const noShowCount=await checkNoShow(phone);
     if(noShowCount>=5){
       if(!window.confirm(`⚠️ 此客戶 (${name}) 已累計放鳥 ${noShowCount} 次！確定要接受預約嗎？`)){setSaving(false);return;}
@@ -542,7 +548,7 @@ function MainApp({authMaster,onLogout}){
       await sb.from("bookings").delete().eq("id",conflict.id);
     }
     const guestsNum=parseInt(form.guests);
-    const rows=[{master_id:dialog.masterId,raw_input:form.input,customer_name:name,customer_phone:phone||null,date:dialog.dateStr,start_time:dialog.time+":00",guest_count:guestsNum,color_tag:form.color,note:form.note||null,booking_source:"internal",status:"confirmed"}];
+    const rows=[{master_id:dialog.masterId,raw_input:rawInput,customer_name:name,customer_phone:phone||null,date:dialog.dateStr,start_time:dialog.time+":00",guest_count:guestsNum,color_tag:form.color,note:form.note||null,booking_source:"internal",status:"confirmed"}];
     if(guestsNum>1&&form.isSplit&&form.splitMasterId){
       const other=masters.find(m=>m.id===form.splitMasterId);
       if(other){
@@ -1008,7 +1014,7 @@ function MainApp({authMaster,onLogout}){
                   })}
                 </tr>}
                 {TIMES.map(t=>(
-                  <tr key={t}>
+                  <tr key={t} className="cv-row">
                     <td style={{...thTime(FS.t),borderBottom:"1px solid var(--border)"}}>{t}</td>
                     {wk.map((d,i)=>renderCell(d,t,bk(d,t),i))}
                   </tr>
@@ -1091,8 +1097,9 @@ function MainApp({authMaster,onLogout}){
         </div>
         <div style={{marginBottom:10}}>
           <div style={{fontSize:11,color:"var(--text-muted)",marginBottom:4}}>姓名＋電話</div>
-          <input autoFocus value={form.input} onChange={e=>setForm(f=>({...f,input:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&saveBk()} placeholder="許小姐0978822100" style={{width:"100%",background:"var(--input-bg)",border:"1px solid var(--border2)",borderRadius:8,padding:"8px 11px",color:"var(--text-main)"}} />
+          <input autoFocus value={form.input} onChange={e=>setForm(f=>({...f,input:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&saveBk()} placeholder={COLOR_NO_INPUT.has(form.color)?"（選填）輸入客戶姓名...":"許小姐0978822100"} style={{width:"100%",background:COLOR_NO_INPUT.has(form.color)&&!form.input.trim()?`${{"reserved":"rgba(34,211,238,0.10)","custom":"rgba(162,155,254,0.10)","vacation":"rgba(233,69,96,0.10)"}[form.color]||"var(--input-bg)"}`:  "var(--input-bg)",border:`1px solid ${COLOR_NO_INPUT.has(form.color)&&!form.input.trim()?{"reserved":"#22d3ee88","custom":"#a29bfe88","vacation":"#e9456088"}[form.color]||"var(--border2)":"var(--border2)"}`,borderRadius:8,padding:"8px 11px",color:"var(--text-main)",transition:"all 0.2s"}} />
           {form.input&&(()=>{const{name,phone}=parseInput(form.input);return phone?<div style={{fontSize:10,color:"#00b894",marginTop:3}}>✓ {name}　{phone}</div>:null;})()}
+          {COLOR_NO_INPUT.has(form.color)&&!form.input.trim()&&<div style={{fontSize:10,color:{"reserved":"#22d3ee","custom":"#a29bfe","vacation":"#e94560"}[form.color]||"var(--text-dim)",marginTop:3}}>✦ {{"reserved":"卡位","custom":"自訂","vacation":"休假"}[form.color]}標記，不需填寫客戶資料也可儲存</div>}
         </div>
         <div style={{marginBottom:10}}>
           <div style={{fontSize:11,color:"var(--text-muted)",marginBottom:4}}>人數</div>
@@ -1134,8 +1141,8 @@ function MainApp({authMaster,onLogout}){
         </div>
         <div style={{display:"flex",gap:8}}>
           <button onClick={()=>setDialog(null)} style={{flex:1,padding:10,borderRadius:8,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-muted)",cursor:"pointer"}}>取消</button>
-          <button onClick={()=>saveBk(true)} disabled={!form.input.trim()||saving} style={{flex:1.5,padding:10,borderRadius:8,border:"1px solid #74b9ff",background:"transparent",color:"#74b9ff",cursor:"pointer"}}>儲存並繼續</button>
-          <button onClick={()=>saveBk(false)} disabled={!form.input.trim()||saving} style={{flex:1.5,padding:10,borderRadius:8,background:form.input.trim()&&!saving?"#e94560":"var(--border2)",border:"none",color:form.input.trim()&&!saving?"#fff":"var(--text-dim)",fontWeight:700,cursor:"pointer"}}>{saving?"儲存中...":"確認 ✓"}</button>
+          <button onClick={()=>saveBk(true)} disabled={(!COLOR_NO_INPUT.has(form.color)&&!form.input.trim())||saving} style={{flex:1.5,padding:10,borderRadius:8,border:"1px solid #74b9ff",background:"transparent",color:"#74b9ff",cursor:"pointer"}}>儲存並繼續</button>
+          <button onClick={()=>saveBk(false)} disabled={(!COLOR_NO_INPUT.has(form.color)&&!form.input.trim())||saving} style={{flex:1.5,padding:10,borderRadius:8,background:(COLOR_NO_INPUT.has(form.color)||form.input.trim())&&!saving?"#e94560":"var(--border2)",border:"none",color:(COLOR_NO_INPUT.has(form.color)||form.input.trim())&&!saving?"#fff":"var(--text-dim)",fontWeight:700,cursor:"pointer"}}>{saving?"儲存中...":"確認 ✓"}</button>
         </div>
       </div>
     </div>}
@@ -1330,10 +1337,14 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
     setDialog({master:m,masterId:m.id,dateStr,time:t});
     setForm({input:"",guests:"1",note:"",color:"none"});
   };
+  const COLOR_NO_INPUT_OV=new Set(["reserved","custom","vacation"]);
   const saveBk=async()=>{
-    if(!dialog||!form.input.trim()||saving)return;
+    const needInput=!COLOR_NO_INPUT_OV.has(form.color);
+    if(!dialog||(needInput&&!form.input.trim())||saving)return;
     setSaving(true);
-    const{name,phone}=parseInput(form.input);
+    const colorLabels={reserved:"卡位",custom:"自訂",vacation:"休假"};
+    const rawInput=form.input.trim()||colorLabels[form.color]||"";
+    const{name,phone}=parseInput(rawInput);
     const noShowCount=await checkNoShow(phone);
     if(noShowCount>=5){
       if(!window.confirm(`⚠️ 此客戶 (${name}) 已累計放鳥 ${noShowCount} 次！確定要接受預約嗎？`)){setSaving(false);return;}
@@ -1343,7 +1354,7 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
       if(!window.confirm(`該時段已有 [${conflict.customer_name}] 預約，確定要強制覆蓋嗎？`)){setSaving(false);return;}
       await sb.from("bookings").delete().eq("id",conflict.id);
     }
-    const{data:inserted,error}=await sb.from("bookings").insert({master_id:dialog.masterId,raw_input:form.input,customer_name:name,customer_phone:phone||null,date:dialog.dateStr,start_time:dialog.time+":00",guest_count:parseInt(form.guests),color_tag:form.color,note:form.note||null,booking_source:"internal",status:"confirmed"}).select();
+    const{data:inserted,error}=await sb.from("bookings").insert({master_id:dialog.masterId,raw_input:rawInput,customer_name:name,customer_phone:phone||null,date:dialog.dateStr,start_time:dialog.time+":00",guest_count:parseInt(form.guests),color_tag:form.color,note:form.note||null,booking_source:"internal",status:"confirmed"}).select();
     setSaving(false);
     if(!error){
       if(inserted&&pushUndo){
@@ -1670,7 +1681,7 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
               </tr>
               {/* 時間格 */}
               {TIMES.map(t=>(
-                <tr key={t}>
+                <tr key={t} className="cv-row">
                   <td style={{...TT,borderBottom:"1px solid var(--border)"}}>{t}</td>
                   {wk.map((d,i)=>sel.map((m,j)=>{
                     const b=bk(m.id,d,t);
@@ -1779,14 +1790,15 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
           </select>
         </div>
         <div style={{marginBottom:10}}>
-          <input autoFocus value={form.input} onChange={e=>setForm(f=>({...f,input:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&saveBk()} placeholder="許小姐0978822100" style={{width:"100%",background:"var(--input-bg)",border:"1px solid var(--border2)",borderRadius:8,padding:"8px 11px",fontSize:13,color:"var(--text-main)"}} />
+          <input autoFocus value={form.input} onChange={e=>setForm(f=>({...f,input:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&saveBk()} placeholder={COLOR_NO_INPUT_OV.has(form.color)?"（選填）輸入客戶姓名...":"許小姐0978822100"} style={{width:"100%",background:COLOR_NO_INPUT_OV.has(form.color)&&!form.input.trim()?{"reserved":"rgba(34,211,238,0.10)","custom":"rgba(162,155,254,0.10)","vacation":"rgba(233,69,96,0.10)"}[form.color]||"var(--input-bg)":"var(--input-bg)",border:`1px solid ${COLOR_NO_INPUT_OV.has(form.color)&&!form.input.trim()?{"reserved":"#22d3ee88","custom":"#a29bfe88","vacation":"#e9456088"}[form.color]||"var(--border2)":"var(--border2)"}`,borderRadius:8,padding:"8px 11px",fontSize:13,color:"var(--text-main)",transition:"all 0.2s"}} />
           {form.input&&(()=>{const{name,phone}=parseInput(form.input);return phone?<div style={{fontSize:10,color:"#00b894",marginTop:3}}>✓ {name}　{phone}</div>:null;})()}
+          {COLOR_NO_INPUT_OV.has(form.color)&&!form.input.trim()&&<div style={{fontSize:10,color:{"reserved":"#22d3ee","custom":"#a29bfe","vacation":"#e94560"}[form.color]||"var(--text-dim)",marginTop:3}}>✦ {{"reserved":"卡位","custom":"自訂","vacation":"休假"}[form.color]}標記，不需填寫客戶資料也可儲存</div>}
         </div>
         <div style={{display:"flex",gap:5,marginBottom:10}}>{["1","2","3","4"].map(n=><button key={n} onClick={()=>setForm(f=>({...f,guests:n}))} style={{flex:1,padding:6,borderRadius:6,border:`1px solid ${form.guests===n?"#74b9ff":"var(--border2)"}`,background:form.guests===n?"#74b9ff22":"transparent",color:form.guests===n?"#74b9ff":"var(--text-muted)",fontSize:14,fontWeight:700,cursor:"pointer"}}>{n}</button>)}</div>
         <div style={{display:"flex",gap:5,marginBottom:14}}>{COLORS.map(cc=>{const isSel=form.color===cc.key;const colorMap={"none":"#888","new_customer":"#f5a623","vacation":"#e94560","reserved":"#22d3ee","custom":"#a29bfe"};const col=colorMap[cc.key]||"#888";return<button key={cc.key} onClick={()=>setForm(f=>({...f,color:cc.key}))} style={{flex:1,padding:"8px 2px",borderRadius:8,border:`2px solid ${isSel?col:"#44444466"}`,background:isSel?col:"var(--bg-sub)",color:isSel?"#fff":"var(--text-muted)",cursor:"pointer",fontSize:11,fontWeight:isSel?800:500,boxShadow:isSel?`0 0 8px ${col}88`:"none",transition:"all 0.15s"}}>{cc.label}</button>;})}</div>
         <div style={{display:"flex",gap:8}}>
           <button onClick={()=>setDialog(null)} style={{flex:1,padding:10,borderRadius:8,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-muted)",cursor:"pointer"}}>取消</button>
-          <button onClick={saveBk} disabled={!form.input.trim()||saving} style={{flex:2,padding:10,borderRadius:8,background:form.input.trim()&&!saving?"#e94560":"var(--border2)",border:"none",color:form.input.trim()&&!saving?"#fff":"var(--text-dim)",fontWeight:700,cursor:"pointer"}}>{saving?"儲存中...":"確認預約 ✓"}</button>
+          <button onClick={saveBk} disabled={(!COLOR_NO_INPUT_OV.has(form.color)&&!form.input.trim())||saving} style={{flex:2,padding:10,borderRadius:8,background:(COLOR_NO_INPUT_OV.has(form.color)||form.input.trim())&&!saving?"#e94560":"var(--border2)",border:"none",color:(COLOR_NO_INPUT_OV.has(form.color)||form.input.trim())&&!saving?"#fff":"var(--text-dim)",fontWeight:700,cursor:"pointer"}}>{saving?"儲存中...":"確認預約 ✓"}</button>
         </div>
       </div>
     </div>}
