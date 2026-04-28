@@ -28,17 +28,34 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Install Expect (Auto-responder)
+        run: sudo apt-get install -y expect
+
       - name: Init Bubblewrap
         run: |
           mkdir apk-build && cd apk-build
-          bubblewrap init --manifest https://yongpingbone.netlify.app/manifest.json --directory .
+          expect -c '
+          set timeout 120
+          spawn bubblewrap init --manifest https://yongpingbone.netlify.app/manifest.json --directory .
+          expect "*correct*" { send "y\r" }
+          expect "*create one now*" { send "Yes\r" }
+          expect "*First and Last names*" { send "Yongping\r" }
+          expect "*Organizational Unit*" { send "Health\r" }
+          expect "*Organization*" { send "Health\r" }
+          expect "*Locality*" { send "Taipei\r" }
+          expect "*Province*" { send "TW\r" }
+          expect "*Country Code*" { send "TW\r" }
+          expect "*Keystore password*" { send "pass1234\r" }
+          expect "*Key password*" { send "pass1234\r" }
+          expect eof
+          '
         env:
           BUBBLEWRAP_SKIP_UPDATE_CHECK: true
 
       - name: Build APK
         run: |
           cd apk-build
-          bubblewrap build --skipPwaValidation
+          bubblewrap build --skipPwaValidation --keyPassword pass1234 --keystorePassword pass1234
         env:
           BUBBLEWRAP_SKIP_UPDATE_CHECK: true
 
