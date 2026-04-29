@@ -193,6 +193,69 @@ const thDay=(fs,cw)=>({
   color:"var(--text-muted)",fontSize:fs,fontWeight:600,textAlign:"center",position:"sticky",top:0,zIndex:9,width:cw,minWidth:cw,maxWidth:cw,overflow:"hidden"
 });
 
+
+// ═══════════════════════════════════════════
+// CUSTOMER AUTOCOMPLETE HOOK
+// ═══════════════════════════════════════════
+function useCustomerSuggest(inputValue, enabled=true, masterId=null, masters=[]){
+  const[suggestions,setSuggestions]=useState([]);
+  const[showSug,setShowSug]=useState(false);
+  const timerRef=useRef(null);
+
+  useEffect(()=>{
+    if(!enabled){setSuggestions([]);setShowSug(false);return;}
+    const q=inputValue.trim();
+    const hasPhone=/\d{4,}/.test(q);
+    if(!q||hasPhone){setSuggestions([]);setShowSug(false);return;}
+    clearTimeout(timerRef.current);
+    timerRef.current=setTimeout(async()=>{
+      try{
+        // 1. 從 customers 撈出符合姓名/電話的客戶
+        const{data:custData}=await sb.from("customers")
+          .select("name,phone")
+          .or(`name.ilike.%${q}%,phone.ilike.%${q}%`)
+          .order("last_visit_date",{ascending:false})
+          .limit(15);
+        if(!custData||custData.length===0){setSuggestions([]);setShowSug(false);return;}
+
+        // 2. 逐一查每位客戶最近一筆有效預約，找出被分配到哪位師傅
+        // 優先用電話查，沒電話或查無結果就用姓名查
+        const enriched=await Promise.all(custData.map(async(c)=>{
+          try{
+            let bkData=null;
+            if(c.phone){
+              const{data:d1}=await sb.from("bookings").select("master_id").eq("customer_phone",c.phone).neq("status","cancelled").neq("color_tag","vacation").order("date",{ascending:false}).order("start_time",{ascending:false}).limit(1);
+              bkData=d1;
+            }
+            if((!bkData||bkData.length===0)&&c.name){
+              const{data:d2}=await sb.from("bookings").select("master_id").ilike("customer_name",`${c.name}%`).neq("status","cancelled").neq("color_tag","vacation").order("date",{ascending:false}).order("start_time",{ascending:false}).limit(1);
+              bkData=d2;
+            }
+            if(bkData&&bkData.length>0){
+              const mid=bkData[0].master_id;
+              const mName=masters.find(m=>m.id===mid)?.name||"";
+              return{...c,_masterName:mName,_masterId:mid};
+            }
+          }catch(e){}
+          return{...c,_masterName:"",_masterId:null};
+        }));
+
+        // 3. 排序：目前師傅的客戶優先顯示，其次按原來順序
+        // 確保其他師傅的客人也一定出現（最多3個本師傅 + 剩餘給其他師傅）
+        const ownList=enriched.filter(a=>a._masterId===masterId);
+        const otherList=enriched.filter(a=>a._masterId!==masterId);
+        const sorted=[...ownList.slice(0,4),...otherList.slice(0,4)].slice(0,8);
+
+        setSuggestions(sorted);setShowSug(true);
+      }catch(e){setSuggestions([]);setShowSug(false);}
+    },200);
+    return()=>clearTimeout(timerRef.current);
+  },[inputValue,enabled,masterId]);
+
+  const dismiss=useCallback(()=>{setShowSug(false);},[]);
+  return{suggestions,showSug,dismiss,setSuggestions,setShowSug};
+}
+
 // ═══════════════════════════════════════════
 // MAIN APP
 // ═══════════════════════════════════════════
@@ -430,6 +493,7 @@ function MainApp({authMaster,onLogout}){
   const[clipBoard,setClipBoard]=useState(null); // 暫存複製的預約，關掉後可貼上
   const[editForm,setEditForm]=useState(null); // 編輯預約用
   const[editLogs,setEditLogs]=useState([]); // 歷史編輯記錄
+  const{suggestions:acSug,showSug:acShow,dismiss:acDismiss}=useCustomerSuggest(form.input,!!dialog,dialog?.masterId||master?.id||null,masters);
   const[showEditLogs,setShowEditLogs]=useState(false);
   const[cellHistory,setCellHistory]=useState(null); // {dateStr,time,masterId,logs}
   const[toast,setToast]=useState(null);
@@ -439,6 +503,7 @@ function MainApp({authMaster,onLogout}){
   const[searchLoading,setSearchLoading]=useState(false);
   const[searchMatchIdx,setSearchMatchIdx]=useState(0);
   const searchInputRef=useRef(null);
+  const[showOwnerPanel,setShowOwnerPanel]=useState(false);
   const[undoStack,setUndoStack]=useState([]); // [{type,snapshot,description}]
   const pushUndo=(desc,snapshot)=>setUndoStack(prev=>[{desc,snapshot,ts:Date.now()},...prev].slice(0,20));
   const[dragMode,setDragMode]=useState(false);
@@ -998,7 +1063,7 @@ function MainApp({authMaster,onLogout}){
               onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
               <div>
                 <div style={{fontSize:13,fontWeight:700,color:"var(--text-main)"}}>{displayName(b.customer_name)}</div>
-                <div style={{fontSize:11,color:"var(--text-muted)",marginTop:2}}>{b.customer_phone||"無電話"}</div>
+                <div style={{fontSize:11,color:"var(--text-muted)",marginTop:2}}>{b.customer_phone||parseInput(b.raw_input||b.customer_name||"").phone||"無電話"}</div>
               </div>
               <div style={{textAlign:"right"}}>
                 <div style={{fontSize:12,color:"#74b9ff",fontWeight:700}}>{b.date}</div>
@@ -1103,7 +1168,7 @@ function MainApp({authMaster,onLogout}){
 
       {/* 暫存提示條 */}
       {clipBoard&&<div style={{background:"rgba(0,184,148,0.15)",borderTop:"2px solid #00b894",padding:"5px 12px",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-        <span style={{fontSize:12,color:"#00b894",fontWeight:700}}>📌 已暫存：{clipBoard.customer_name}</span>
+        <span style={{fontSize:12,color:"#00b894",fontWeight:700}}>📌 已暫存：{displayName(clipBoard.customer_name)}</span>
         <span style={{fontSize:11,color:"var(--text-dim)"}}>點任意空白格貼上</span>
         <button onClick={()=>setClipBoard(null)} style={{marginLeft:"auto",background:"transparent",border:"1px solid #00b89460",color:"#00b894",borderRadius:5,padding:"2px 8px",fontSize:11,cursor:"pointer"}}>✕ 清除</button>
       </div>}
@@ -1114,7 +1179,11 @@ function MainApp({authMaster,onLogout}){
         <span style={{fontSize:FS.b,color:"#f5a623",fontWeight:700}}>新客 {mN}</span>
         <span style={{fontSize:FS.b,color:"#00b894",fontWeight:700}}>回頭 {mT-mN}</span>
         {dragMode&&<span style={{fontSize:FS.s,color:"#e94560",marginLeft:"auto",cursor:"pointer"}} onClick={()=>setDragMode(false)}>✕ 退出休假模式</span>}
+        <button onClick={()=>setShowOwnerPanel(p=>!p)} style={{marginLeft:"auto",padding:"3px 10px",borderRadius:8,border:`1px solid ${showOwnerPanel?"#74b9ff":"var(--border2)"}`,background:showOwnerPanel?"rgba(116,185,255,0.12)":"transparent",color:showOwnerPanel?"#74b9ff":"var(--text-dim)",fontSize:11,cursor:"pointer",fontWeight:700}}>👤 客戶歸屬</button>
       </div>
+
+      {/* Customer ownership panel */}
+      {showOwnerPanel&&<CustomerOwnerPanel master={master} masters={masters} year={year} month={month} FS={FS} onClose={()=>setShowOwnerPanel(false)} />}
     </>}
 
     {tab==="overview"&&<div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column"}}><OverviewMonth masters={masters} ovMasters={ovMasters} setOvMasters={setOvMasters} FS={FS} ovColW={parseInt(ovColW)} setOvColW={setOvColW} ovRowH={parseInt(ovRowH)} setOvRowH={setOvRowH} onBookingAdded={loadBk} loginMaster={loginMaster||master} undoStack={undoStack} pushUndo={pushUndo} executeUndo={executeUndo} /></div>}
@@ -1156,9 +1225,46 @@ function MainApp({authMaster,onLogout}){
         <div style={{marginBottom:10,textAlign:"right"}}>
           <span onClick={()=>{getEditLogsByCell(dialog.masterId,dialog.dateStr,dialog.time).then(logs=>{if(logs.length>0){setDialog(null);setCellHistory({dateStr:dialog.dateStr,time:dialog.time,masterId:dialog.masterId,logs});}else msg("此格沒有操作紀錄");});}} style={{fontSize:11,color:"#a29bfe",cursor:"pointer",userSelect:"none"}}>🕐 查此格歷史紀錄</span>
         </div>
-        <div style={{marginBottom:10}}>
+        <div style={{marginBottom:10,position:"relative"}}>
           <div style={{fontSize:11,color:"var(--text-muted)",marginBottom:4}}>姓名＋電話</div>
-          <input autoFocus value={form.input} onChange={e=>setForm(f=>({...f,input:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&saveBk()} placeholder={COLOR_NO_INPUT.has(form.color)?"（選填）輸入客戶姓名...":"許小姐0978822100"} style={{width:"100%",background:COLOR_NO_INPUT.has(form.color)&&!form.input.trim()?`${{"reserved":"rgba(34,211,238,0.10)","custom":"rgba(162,155,254,0.10)","vacation":"rgba(233,69,96,0.10)"}[form.color]||"var(--input-bg)"}`:  "var(--input-bg)",border:`1px solid ${COLOR_NO_INPUT.has(form.color)&&!form.input.trim()?{"reserved":"#22d3ee88","custom":"#a29bfe88","vacation":"#e9456088"}[form.color]||"var(--border2)":"var(--border2)"}`,borderRadius:8,padding:"8px 11px",color:"var(--text-main)",transition:"all 0.2s"}} />
+          <input autoFocus value={form.input} onChange={e=>{setForm(f=>({...f,input:e.target.value}));}} onKeyDown={e=>{if(e.key==="Enter"&&!acShow)saveBk();if(e.key==="Escape")acDismiss();}} placeholder={COLOR_NO_INPUT.has(form.color)?"（選填）輸入客戶姓名...":"許小姐0978822100"} style={{width:"100%",background:COLOR_NO_INPUT.has(form.color)&&!form.input.trim()?`${{"reserved":"rgba(34,211,238,0.10)","custom":"rgba(162,155,254,0.10)","vacation":"rgba(233,69,96,0.10)"}[form.color]||"var(--input-bg)"}`:  "var(--input-bg)",border:`1px solid ${COLOR_NO_INPUT.has(form.color)&&!form.input.trim()?{"reserved":"#22d3ee88","custom":"#a29bfe88","vacation":"#e9456088"}[form.color]||"var(--border2)":"var(--border2)"}`,borderRadius:8,padding:"8px 11px",color:"var(--text-main)",transition:"all 0.2s"}} />
+          {acShow&&acSug.length>0&&<div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:999,background:"var(--bg-header)",border:"1px solid var(--border2)",borderRadius:10,marginTop:3,boxShadow:"0 6px 20px rgba(0,0,0,0.4)",overflow:"hidden"}}>
+            {acSug.map((c,i)=>{
+              const isOwn=c._masterId&&c._masterId===(dialog?.masterId||master?.id);
+              const hasDiffMaster=c._masterId&&c._masterId!==(dialog?.masterId||master?.id);
+              return(
+              <div key={i} onMouseDown={e=>{
+                e.preventDefault();
+                setForm(f=>({...f,input:c.name+(c.phone?" "+c.phone:"")}));
+                // 若此客人原本屬於不同師傅，自動切換預約師傅
+                if(hasDiffMaster&&c._masterId&&dialog){
+                  setDialog(d=>({...d,masterId:c._masterId}));
+                }
+                acDismiss();
+              }}
+                style={{padding:"9px 13px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:i<acSug.length-1?"1px solid var(--border)":"none",borderLeft:`3px solid ${isOwn?"#00b894":hasDiffMaster?"#f5a623":"transparent"}`}}
+                onMouseEnter={e=>e.currentTarget.style.background="rgba(116,185,255,0.1)"}
+                onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{fontWeight:700,fontSize:13,color:"var(--text-main)"}}>{c.name}</span>
+                    {c._masterName&&(
+                      <span style={{fontSize:11,fontWeight:700,
+                        color:isOwn?"#00b894":"#f5a623",
+                        background:isOwn?"rgba(0,184,148,0.15)":"rgba(245,166,35,0.15)",
+                        borderRadius:5,padding:"1px 6px",display:"flex",alignItems:"center",gap:3}}>
+                        {isOwn?"👤":"🔁"}{c._masterName}師傅
+                      </span>
+                    )}
+                    {hasDiffMaster&&<span style={{fontSize:10,color:"#f5a623",opacity:0.8}}>→ 自動切換</span>}
+                  </div>
+                  {c.phone&&<span style={{fontSize:11,color:"var(--text-dim)",fontFamily:"monospace"}}>{c.phone}</span>}
+                </div>
+                {hasDiffMaster&&<span style={{fontSize:10,color:"#f5a623",flexShrink:0,marginLeft:4}}>⚡</span>}
+              </div>
+              );
+            })}
+          </div>}
           {form.input&&(()=>{const{name,phone}=parseInput(form.input);return phone?<div style={{fontSize:10,color:"#00b894",marginTop:3}}>✓ {name}　{phone}</div>:null;})()}
           {COLOR_NO_INPUT.has(form.color)&&!form.input.trim()&&<div style={{fontSize:10,color:{"reserved":"#22d3ee","custom":"#a29bfe","vacation":"#e94560"}[form.color]||"var(--text-dim)",marginTop:3}}>✦ {{"reserved":"卡位","custom":"自訂","vacation":"休假"}[form.color]}標記，不需填寫客戶資料也可儲存</div>}
         </div>
@@ -1216,9 +1322,12 @@ function MainApp({authMaster,onLogout}){
         <div style={{fontWeight:800,fontSize:16,marginBottom:12,color:"var(--text-main)"}}>預約詳情</div>
         {/* 客人資訊卡 */}
         <div style={{background:"var(--bg-sub)",borderRadius:12,padding:"14px 16px",marginBottom:14}}>
-          <div style={{fontSize:22,fontWeight:800,marginBottom:6,color:"var(--text-main)"}}>{cpMode.booking.customer_name}</div>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+            <div style={{fontSize:22,fontWeight:800,color:"var(--text-main)"}}>{displayName(cpMode.booking.customer_name)}</div>
+            <button onClick={()=>{const b=cpMode.booking;(async()=>{const _raw=b.raw_input||"";const _parsedRaw=parseInput(_raw);const _parsedName=parseInput(b.customer_name||"");let _phone=b.customer_phone||_parsedRaw.phone||_parsedName.phone||"";const _cleanName=_phone?(_parsedRaw.phone?_parsedRaw.name:(_parsedName.phone?_parsedName.name:displayName(b.customer_name||""))):displayName(b.customer_name||"");if(!_phone&&_cleanName){try{const{data:cust}=await sb.from("customers").select("phone").ilike("name",_cleanName).limit(1);if(cust&&cust[0]?.phone)_phone=cust[0].phone;}catch(e){}}setEditForm({id:b.id,customer_name:_cleanName,customer_phone:_phone,note:b.note||"",guest_count:b.guest_count||1,color_tag:b.color_tag||"none",_editorName:(loginMaster||master)?.name||""});})();setCpMode(null);}} style={{padding:"3px 8px",borderRadius:7,border:"1px solid #74b9ff",background:"rgba(116,185,255,0.1)",color:"#74b9ff",cursor:"pointer",fontSize:12,fontWeight:700,flexShrink:0}}>✏️ 編輯</button>
+          </div>
           <div style={{display:"flex",gap:16,flexWrap:"wrap",fontSize:13,color:"var(--text-muted)"}}>
-            {cpMode.booking.customer_phone&&<span>{cpMode.booking.customer_phone}</span>}
+            {(()=>{const _ph=cpMode.booking.customer_phone||parseInput(cpMode.booking.raw_input||cpMode.booking.customer_name||"").phone;return _ph?<span>{_ph}</span>:null;})()}
             <span>{cpMode.booking.date}</span>
             <span>{cpMode.booking.start_time?.slice(0,5)}</span>
             {cpMode.booking.note&&<span style={{width:"100%",marginTop:2}}>備註：{cpMode.booking.note}</span>}
@@ -1253,11 +1362,11 @@ function MainApp({authMaster,onLogout}){
             style={{padding:"13px 0",borderRadius:12,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-muted)",cursor:"pointer",fontSize:13,fontWeight:700}}>返回</button>
           <button onClick={()=>{const b=cpMode.booking;const dateStr=b.date;const t=b.start_time?.slice(0,5);getEditLogsByCell(b.master_id,dateStr,t).then(logs=>{if(logs.length>0)setCellHistory({dateStr,time:t,masterId:b.master_id,logs});else msg("此格沒有操作紀錄");});}}
             style={{padding:"13px 0",borderRadius:12,border:"1px solid #a29bfe",background:"rgba(162,155,254,0.1)",color:"#a29bfe",cursor:"pointer",fontSize:13,fontWeight:700}}>歷史</button>
-          <button onClick={()=>{const b=cpMode.booking;setEditForm({id:b.id,customer_name:b.customer_name||"",customer_phone:b.customer_phone||"",note:b.note||"",guest_count:b.guest_count||1,color_tag:b.color_tag||"none",_editorName:(loginMaster||master)?.name||""});setCpMode(null);}}
+          <button onClick={()=>{const b=cpMode.booking;(async()=>{const _raw=b.raw_input||"";const _parsedRaw=parseInput(_raw);const _parsedName=parseInput(b.customer_name||"");let _phone=b.customer_phone||_parsedRaw.phone||_parsedName.phone||"";const _cleanName=_phone?(_parsedRaw.phone?_parsedRaw.name:(_parsedName.phone?_parsedName.name:displayName(b.customer_name||""))):displayName(b.customer_name||"");if(!_phone&&_cleanName){try{const{data:cust}=await sb.from("customers").select("phone").ilike("name",_cleanName).limit(1);if(cust&&cust[0]?.phone)_phone=cust[0].phone;}catch(e){}}setEditForm({id:b.id,customer_name:_cleanName,customer_phone:_phone,note:b.note||"",guest_count:b.guest_count||1,color_tag:b.color_tag||"none",_editorName:(loginMaster||master)?.name||""});})();setCpMode(null);}}
             style={{padding:"13px 0",borderRadius:12,border:"1px solid #74b9ff",background:"rgba(116,185,255,0.1)",color:"#74b9ff",cursor:"pointer",fontSize:13,fontWeight:700}}>編輯</button>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:8}}>
-          <button onClick={()=>{setClipBoard(cpMode.booking);setCpMode(null);msg(`已暫存「${cpMode.booking.customer_name}」— 點空白格貼上`);}}
+          <button onClick={()=>{setClipBoard(cpMode.booking);setCpMode(null);msg(`已暫存「${displayName(cpMode.booking.customer_name)}」— 點空白格貼上`);}}
             style={{padding:"14px 0",borderRadius:12,border:"2px solid #00b894",background:"rgba(0,184,148,0.12)",color:"#00b894",cursor:"pointer",fontSize:14,fontWeight:800}}>暫存（貼到其他格）</button>
           <button onClick={()=>{setCpMode(null);delBk(cpMode.booking.id);}}
             style={{padding:"14px 0",borderRadius:12,border:"1px solid #e94560",background:"rgba(233,69,96,0.1)",color:"#e94560",cursor:"pointer",fontSize:14,fontWeight:700}}>刪除</button>
@@ -1296,12 +1405,124 @@ function MainApp({authMaster,onLogout}){
         <div style={{display:"flex",gap:8}}>
           <button onClick={()=>setEditForm(null)} style={{flex:1,padding:10,borderRadius:8,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-muted)",fontSize:13,cursor:"pointer"}}>取消</button>
           <button onClick={async()=>{
-            const {error}=await sb.from("bookings").update({customer_name:editForm.customer_name,customer_phone:editForm.customer_phone||null,note:editForm.note||null,guest_count:editForm.guest_count,color_tag:editForm.color_tag,last_edited_by:(loginMaster||master)?.name||"系統",last_edited_at:new Date().toISOString()}).eq("id",editForm.id);
-            if(!error){await saveEditLog(editForm.id,(loginMaster||master)?.name||"系統",`${editForm.customer_name} ${editForm.color_tag}`);msg("已更新");setEditForm(null);loadBk();}else msg("更新失敗",true);
+            const {error}=await sb.from("bookings").update({customer_name:editForm.customer_name,customer_phone:editForm.customer_phone||null,raw_input:editForm.customer_phone?(editForm.customer_name+(editForm.customer_phone?" "+editForm.customer_phone:"")):editForm.customer_name,note:editForm.note||null,guest_count:editForm.guest_count,color_tag:editForm.color_tag,last_edited_by:(loginMaster||master)?.name||"系統",last_edited_at:new Date().toISOString()}).eq("id",editForm.id);
+            if(!error){await saveEditLog(editForm.id,(loginMaster||master)?.name||"系統",`${editForm.customer_name} ${editForm.color_tag}`);if(editForm.customer_phone){const todayStr=getTaipeiNow().toISOString().slice(0,10);await sb.from("customers").upsert({phone:editForm.customer_phone,name:editForm.customer_name,last_visit_date:todayStr,total_visits:1},{onConflict:"phone",ignoreDuplicates:false});await sb.from("customers").update({name:editForm.customer_name}).eq("phone",editForm.customer_phone);}msg("已更新");setEditForm(null);loadBk();}else msg("更新失敗",true);
           }} style={{flex:2,padding:10,borderRadius:8,background:"#74b9ff",border:"none",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>儲存變更 ✓</button>
         </div>
       </div>
     </div>}
+  </div>
+  );
+}
+
+// ═══════════════════════════════════════════
+// CUSTOMER OWNER PANEL — 個人頁客戶歸屬分區
+// 上方：本師傅的客人（優先排序）
+// 下方：其他師傅的客人（本月出現在此師傅排班中）
+// ═══════════════════════════════════════════
+function CustomerOwnerPanel({master,masters,year,month,FS,onClose}){
+  const[data,setData]=useState(null);
+  const[loading,setLoading]=useState(true);
+
+  useEffect(()=>{
+    if(!master)return;
+    setLoading(true);
+    const s=fmtDate(year,month,1);
+    const e=fmtDate(year,month,new Date(year,month+1,0).getDate());
+    (async()=>{
+      // 撈本月此師傅所有預約
+      const{data:bks}=await sb.from("bookings")
+        .select("customer_name,customer_phone,date,start_time,color_tag")
+        .eq("master_id",master.id)
+        .gte("date",s).lte("date",e)
+        .neq("status","cancelled").neq("status","no_show")
+        .neq("color_tag","vacation")
+        .order("date",{ascending:false}).order("start_time",{ascending:false});
+
+      if(!bks||bks.length===0){setData({own:[],other:[]});setLoading(false);return;}
+
+      // 去重（同客人只顯示最近一筆），並查此客人的原始師傅
+      const seen=new Map();
+      for(const b of bks){
+        const phone=b.customer_phone||b.customer_name;
+        if(!seen.has(phone))seen.set(phone,b);
+      }
+      const unique=[...seen.values()];
+
+      // 並行查每位客人最近一筆有效預約（確認原本師傅）
+      const enriched=await Promise.all(unique.map(async(b)=>{
+        const phone=b.customer_phone;
+        if(!phone)return{...b,_origMasterId:master.id,_origMasterName:master.name};
+        try{
+          const{data:prev}=await sb.from("bookings")
+            .select("master_id")
+            .eq("customer_phone",phone)
+            .neq("status","cancelled").neq("color_tag","vacation")
+            .order("date",{ascending:false}).order("start_time",{ascending:false})
+            .limit(1);
+          const origMid=prev&&prev[0]?prev[0].master_id:master.id;
+          const origName=masters.find(m=>m.id===origMid)?.name||master.name;
+          return{...b,_origMasterId:origMid,_origMasterName:origName};
+        }catch(e){return{...b,_origMasterId:master.id,_origMasterName:master.name};}
+      }));
+
+      const own=enriched.filter(b=>b._origMasterId===master.id);
+      const other=enriched.filter(b=>b._origMasterId!==master.id);
+      setData({own,other});
+      setLoading(false);
+    })();
+  },[master?.id,year,month]);
+
+  const rowStyle={padding:"7px 12px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"default"};
+  const nameStyle={fontSize:13,fontWeight:700,color:"var(--text-main)"};
+  const phoneStyle={fontSize:11,color:"var(--text-dim)",fontFamily:"monospace",marginTop:1};
+  const dateStyle={fontSize:11,color:"#74b9ff",textAlign:"right",flexShrink:0};
+
+  return(
+  <div style={{background:"var(--bg-sub)",borderTop:"2px solid var(--border2)",flexShrink:0,maxHeight:"45vh",overflowY:"auto"}}>
+    <div style={{display:"flex",alignItems:"center",padding:"8px 14px",background:"var(--bg-header)",borderBottom:"1px solid var(--border2)",position:"sticky",top:0,zIndex:5}}>
+      <span style={{fontSize:13,fontWeight:800,color:"var(--text-main)"}}>👤 客戶歸屬一覽　{year}/{month+1}</span>
+      <button onClick={onClose} style={{marginLeft:"auto",background:"transparent",border:"none",color:"var(--text-muted)",fontSize:16,cursor:"pointer",padding:"0 4px"}}>✕</button>
+    </div>
+    {loading&&<div style={{padding:"16px",textAlign:"center",fontSize:12,color:"var(--text-dim)"}}>載入中...</div>}
+    {!loading&&data&&<>
+      {/* 上方：本師傅的客人 */}
+      <div style={{padding:"6px 12px 4px",background:"rgba(0,184,148,0.08)",borderBottom:"1px solid var(--border)"}}>
+        <span style={{fontSize:11,fontWeight:800,color:"#00b894"}}>✅ {master.name}師傅的客人　{data.own.length} 位</span>
+      </div>
+      {data.own.length===0&&<div style={{padding:"10px 14px",fontSize:12,color:"var(--text-dim)"}}>本月無固定客人</div>}
+      {data.own.map((b,i)=>(
+        <div key={i} style={{...rowStyle,background:"rgba(0,184,148,0.04)"}}>
+          <div>
+            <div style={nameStyle}>{displayName(b.customer_name)}
+              {b.color_tag==="new_customer"&&<span style={{fontSize:10,color:"#f5a623",marginLeft:5}}>★新客</span>}
+            </div>
+            {b.customer_phone&&<div style={phoneStyle}>{b.customer_phone}</div>}
+          </div>
+          <div style={dateStyle}><div>{b.date}</div><div style={{color:"var(--text-time)",fontSize:10}}>{b.start_time?.slice(0,5)}</div></div>
+        </div>
+      ))}
+
+      {/* 下方：其他師傅的客人（本月轉來） */}
+      <div style={{padding:"6px 12px 4px",background:"rgba(245,166,35,0.08)",borderBottom:"1px solid var(--border)",borderTop:"2px solid var(--border2)"}}>
+        <span style={{fontSize:11,fontWeight:800,color:"#f5a623"}}>🔁 其他師傅的客人（本月轉入）　{data.other.length} 位</span>
+      </div>
+      {data.other.length===0&&<div style={{padding:"10px 14px",fontSize:12,color:"var(--text-dim)"}}>無</div>}
+      {data.other.map((b,i)=>(
+        <div key={i} style={{...rowStyle}}>
+          <div>
+            <div style={nameStyle}>{displayName(b.customer_name)}
+              {b.color_tag==="new_customer"&&<span style={{fontSize:10,color:"#f5a623",marginLeft:5}}>★新客</span>}
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:5,marginTop:2}}>
+              {b.customer_phone&&<span style={phoneStyle}>{b.customer_phone}</span>}
+              <span style={{fontSize:10,color:"#f5a623",background:"rgba(245,166,35,0.15)",borderRadius:4,padding:"1px 5px",fontWeight:700}}>原：{b._origMasterName}師傅</span>
+            </div>
+          </div>
+          <div style={dateStyle}><div>{b.date}</div><div style={{color:"var(--text-time)",fontSize:10}}>{b.start_time?.slice(0,5)}</div></div>
+        </div>
+      ))}
+    </>}
   </div>
   );
 }
@@ -1335,6 +1556,7 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
   const[clipBoard,setClipBoard]=useState(null); // 暫存複製的預約，關掉後可貼上
   const[editForm,setEditForm]=useState(null); // 編輯預約用
   const[ovEditLogs,setOvEditLogs]=useState([]);
+  const{suggestions:acSug,showSug:acShow,dismiss:acDismiss}=useCustomerSuggest(form.input,!!dialog,dialog?.masterId||null,masters);
   const[ovShowEditLogs,setOvShowEditLogs]=useState(false);
   const[ovCellHistory,setOvCellHistory]=useState(null);
   const[ovDragMode,setOvDragMode]=useState(false);
@@ -1713,7 +1935,7 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
             onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
             <div>
               <div style={{fontSize:13,fontWeight:700,color:"var(--text-main)"}}>{displayName(b.customer_name)}</div>
-              <div style={{fontSize:11,color:"var(--text-muted)",marginTop:2}}>{b.customer_phone||"無電話"} · <span style={{color:"#a29bfe"}}>{b._masterName||""}</span></div>
+              <div style={{fontSize:11,color:"var(--text-muted)",marginTop:2}}>{b.customer_phone||parseInput(b.raw_input||b.customer_name||"").phone||"無電話"} · <span style={{color:"#a29bfe"}}>{b._masterName||""}</span></div>
             </div>
             <div style={{textAlign:"right"}}>
               <div style={{fontSize:12,color:"#74b9ff",fontWeight:700}}>{b.date}</div>
@@ -1927,9 +2149,45 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
         <div style={{marginBottom:10,textAlign:"right"}}>
           <span onClick={()=>{getEditLogsByCell(dialog.masterId,dialog.dateStr,dialog.time).then(logs=>{if(logs.length>0){setDialog(null);setOvCellHistory({dateStr:dialog.dateStr,time:dialog.time,masterId:dialog.masterId,masterName:masters.find(m=>m.id===dialog.masterId)?.name||"",logs});}else msg("此格沒有操作紀錄");});}} style={{fontSize:11,color:"#a29bfe",cursor:"pointer",userSelect:"none"}}>🕐 查此格歷史紀錄</span>
         </div>
-        <div style={{marginBottom:10}}>
+        <div style={{marginBottom:10,position:"relative"}}>
           <div style={{fontSize:11,color:"var(--text-muted)",marginBottom:4}}>姓名＋電話</div>
-          <input autoFocus value={form.input} onChange={e=>setForm(f=>({...f,input:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&saveBk()} placeholder={COLOR_NO_INPUT.has(form.color)?"（選填）輸入客戶姓名...":"許小姐0978822100"} style={{width:"100%",background:COLOR_NO_INPUT.has(form.color)&&!form.input.trim()?{"reserved":"rgba(34,211,238,0.10)","custom":"rgba(162,155,254,0.10)","vacation":"rgba(233,69,96,0.10)"}[form.color]||"var(--input-bg)":"var(--input-bg)",border:`1px solid ${COLOR_NO_INPUT.has(form.color)&&!form.input.trim()?{"reserved":"#22d3ee88","custom":"#a29bfe88","vacation":"#e9456088"}[form.color]||"var(--border2)":"var(--border2)"}`,borderRadius:8,padding:"8px 11px",color:"var(--text-main)",transition:"all 0.2s"}} />
+          <input autoFocus value={form.input} onChange={e=>{setForm(f=>({...f,input:e.target.value}));}} onKeyDown={e=>{if(e.key==="Enter"&&!acShow)saveBk();if(e.key==="Escape")acDismiss();}} placeholder={COLOR_NO_INPUT.has(form.color)?"（選填）輸入客戶姓名...":"許小姐0978822100"} style={{width:"100%",background:COLOR_NO_INPUT.has(form.color)&&!form.input.trim()?{"reserved":"rgba(34,211,238,0.10)","custom":"rgba(162,155,254,0.10)","vacation":"rgba(233,69,96,0.10)"}[form.color]||"var(--input-bg)":"var(--input-bg)",border:`1px solid ${COLOR_NO_INPUT.has(form.color)&&!form.input.trim()?{"reserved":"#22d3ee88","custom":"#a29bfe88","vacation":"#e9456088"}[form.color]||"var(--border2)":"var(--border2)"}`,borderRadius:8,padding:"8px 11px",color:"var(--text-main)",transition:"all 0.2s"}} />
+          {acShow&&acSug.length>0&&<div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:999,background:"var(--bg-header)",border:"1px solid var(--border2)",borderRadius:10,marginTop:3,boxShadow:"0 6px 20px rgba(0,0,0,0.4)",overflow:"hidden"}}>
+            {acSug.map((c,i)=>{
+              const isOwn=c._masterId&&c._masterId===dialog?.masterId;
+              const hasDiffMaster=c._masterId&&c._masterId!==dialog?.masterId;
+              return(
+              <div key={i} onMouseDown={e=>{
+                e.preventDefault();
+                setForm(f=>({...f,input:c.name+(c.phone?" "+c.phone:"")}));
+                if(hasDiffMaster&&c._masterId&&dialog){
+                  setDialog(d=>({...d,masterId:c._masterId}));
+                }
+                acDismiss();
+              }}
+                style={{padding:"9px 13px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:i<acSug.length-1?"1px solid var(--border)":"none",borderLeft:`3px solid ${isOwn?"#00b894":hasDiffMaster?"#f5a623":"transparent"}`}}
+                onMouseEnter={e=>e.currentTarget.style.background="rgba(116,185,255,0.1)"}
+                onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{fontWeight:700,fontSize:13,color:"var(--text-main)"}}>{c.name}</span>
+                    {c._masterName&&(
+                      <span style={{fontSize:11,fontWeight:700,
+                        color:isOwn?"#00b894":"#f5a623",
+                        background:isOwn?"rgba(0,184,148,0.15)":"rgba(245,166,35,0.15)",
+                        borderRadius:5,padding:"1px 6px",display:"flex",alignItems:"center",gap:3}}>
+                        {isOwn?"👤":"🔁"}{c._masterName}師傅
+                      </span>
+                    )}
+                    {hasDiffMaster&&<span style={{fontSize:10,color:"#f5a623",opacity:0.8}}>→ 自動切換</span>}
+                  </div>
+                  {c.phone&&<span style={{fontSize:11,color:"var(--text-dim)",fontFamily:"monospace"}}>{c.phone}</span>}
+                </div>
+                {hasDiffMaster&&<span style={{fontSize:10,color:"#f5a623",flexShrink:0,marginLeft:4}}>⚡</span>}
+              </div>
+              );
+            })}
+          </div>}
           {form.input&&(()=>{const{name,phone}=parseInput(form.input);return phone?<div style={{fontSize:10,color:"#00b894",marginTop:3}}>✓ {name}　{phone}</div>:null;})()}
           {COLOR_NO_INPUT.has(form.color)&&!form.input.trim()&&<div style={{fontSize:10,color:{"reserved":"#22d3ee","custom":"#a29bfe","vacation":"#e94560"}[form.color]||"var(--text-dim)",marginTop:3}}>✦ {{"reserved":"卡位","custom":"自訂","vacation":"休假"}[form.color]}標記，不需填寫客戶資料也可儲存</div>}
         </div>
@@ -1983,9 +2241,12 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
         <div style={{width:40,height:4,background:"var(--border2)",borderRadius:2,margin:"0 auto 16px"}}></div>
         <div style={{fontWeight:800,fontSize:16,marginBottom:12,color:"var(--text-main)"}}>預約詳情</div>
         <div style={{background:"var(--bg-sub)",borderRadius:12,padding:"14px 16px",marginBottom:14}}>
-          <div style={{fontSize:22,fontWeight:800,marginBottom:6,color:"var(--text-main)"}}>{cpMode.booking.customer_name}</div>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+            <div style={{fontSize:22,fontWeight:800,color:"var(--text-main)"}}>{displayName(cpMode.booking.customer_name)}</div>
+            <button onClick={()=>{const b=cpMode.booking;(async()=>{const _raw=b.raw_input||"";const _parsedRaw=parseInput(_raw);const _parsedName=parseInput(b.customer_name||"");let _phone=b.customer_phone||_parsedRaw.phone||_parsedName.phone||"";const _cleanName=_phone?(_parsedRaw.phone?_parsedRaw.name:(_parsedName.phone?_parsedName.name:displayName(b.customer_name||""))):displayName(b.customer_name||"");if(!_phone&&_cleanName){try{const{data:cust}=await sb.from("customers").select("phone").ilike("name",_cleanName).limit(1);if(cust&&cust[0]?.phone)_phone=cust[0].phone;}catch(e){}}setEditForm({id:b.id,customer_name:_cleanName,customer_phone:_phone,note:b.note||"",guest_count:b.guest_count||1,color_tag:b.color_tag||"none",_editorName:loginMaster?.name||""});})();setCpMode(null);}} style={{padding:"3px 8px",borderRadius:7,border:"1px solid #74b9ff",background:"rgba(116,185,255,0.1)",color:"#74b9ff",cursor:"pointer",fontSize:12,fontWeight:700,flexShrink:0}}>✏️ 編輯</button>
+          </div>
           <div style={{display:"flex",gap:16,flexWrap:"wrap",fontSize:13,color:"var(--text-muted)"}}>
-            {cpMode.booking.customer_phone&&<span>{cpMode.booking.customer_phone}</span>}
+            {(()=>{const _ph=cpMode.booking.customer_phone||parseInput(cpMode.booking.raw_input||cpMode.booking.customer_name||"").phone;return _ph?<span>{_ph}</span>:null;})()}
             <span>{cpMode.booking.date}</span>
             <span>{cpMode.booking.start_time?.slice(0,5)}</span>
             {cpMode.booking.note&&<span style={{width:"100%",marginTop:2}}>備註：{cpMode.booking.note}</span>}
@@ -2017,11 +2278,11 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
             style={{padding:"13px 0",borderRadius:12,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-muted)",cursor:"pointer",fontSize:13,fontWeight:700}}>返回</button>
           <button onClick={()=>{const b=cpMode.booking;const dateStr=b.date;const t=b.start_time?.slice(0,5);getEditLogsByCell(b.master_id,dateStr,t).then(logs=>{if(logs.length>0)setOvCellHistory({dateStr,time:t,masterId:b.master_id,masterName:masters.find(m=>m.id===b.master_id)?.name||"",logs});else msg("此格沒有操作紀錄");});}}
             style={{padding:"13px 0",borderRadius:12,border:"1px solid #a29bfe",background:"rgba(162,155,254,0.1)",color:"#a29bfe",cursor:"pointer",fontSize:13,fontWeight:700}}>歷史</button>
-          <button onClick={()=>{const b=cpMode.booking;setEditForm({id:b.id,customer_name:b.customer_name||"",customer_phone:b.customer_phone||"",note:b.note||"",guest_count:b.guest_count||1,color_tag:b.color_tag||"none",_editorName:loginMaster?.name||""});setCpMode(null);}}
+          <button onClick={()=>{const b=cpMode.booking;(async()=>{const _raw=b.raw_input||"";const _parsedRaw=parseInput(_raw);const _parsedName=parseInput(b.customer_name||"");let _phone=b.customer_phone||_parsedRaw.phone||_parsedName.phone||"";const _cleanName=_phone?(_parsedRaw.phone?_parsedRaw.name:(_parsedName.phone?_parsedName.name:displayName(b.customer_name||""))):displayName(b.customer_name||"");if(!_phone&&_cleanName){try{const{data:cust}=await sb.from("customers").select("phone").ilike("name",_cleanName).limit(1);if(cust&&cust[0]?.phone)_phone=cust[0].phone;}catch(e){}}setEditForm({id:b.id,customer_name:_cleanName,customer_phone:_phone,note:b.note||"",guest_count:b.guest_count||1,color_tag:b.color_tag||"none",_editorName:loginMaster?.name||""});})();setCpMode(null);}}
             style={{padding:"13px 0",borderRadius:12,border:"1px solid #74b9ff",background:"rgba(116,185,255,0.1)",color:"#74b9ff",cursor:"pointer",fontSize:13,fontWeight:700}}>編輯</button>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:8}}>
-          <button onClick={()=>{setClipBoard(cpMode.booking);setCpMode(null);msg(`已暫存「${cpMode.booking.customer_name}」— 點空白格貼上`);}}
+          <button onClick={()=>{setClipBoard(cpMode.booking);setCpMode(null);msg(`已暫存「${displayName(cpMode.booking.customer_name)}」— 點空白格貼上`);}}
             style={{padding:"14px 0",borderRadius:12,border:"2px solid #00b894",background:"rgba(0,184,148,0.12)",color:"#00b894",cursor:"pointer",fontSize:14,fontWeight:800}}>暫存（貼到其他格）</button>
           <button onClick={()=>{setCpMode(null);delBk(cpMode.booking.id);}}
             style={{padding:"14px 0",borderRadius:12,border:"1px solid #e94560",background:"rgba(233,69,96,0.1)",color:"#e94560",cursor:"pointer",fontSize:14,fontWeight:700}}>刪除</button>
@@ -2060,8 +2321,8 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
         <div style={{display:"flex",gap:8}}>
           <button onClick={()=>setEditForm(null)} style={{flex:1,padding:10,borderRadius:8,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-muted)",fontSize:13,cursor:"pointer"}}>取消</button>
           <button onClick={async()=>{
-            const{error}=await sb.from("bookings").update({customer_name:editForm.customer_name,customer_phone:editForm.customer_phone||null,note:editForm.note||null,guest_count:editForm.guest_count,color_tag:editForm.color_tag,last_edited_by:editForm._editorName||loginMaster?.name||"系統",last_edited_at:new Date().toISOString()}).eq("id",editForm.id);
-            if(!error){await saveEditLog(editForm.id,editForm._editorName||loginMaster?.name||"系統",`${editForm.customer_name} ${editForm.color_tag}`);msg("已更新");setEditForm(null);loadBk();if(onBookingAdded)onBookingAdded();}else msg("更新失敗",true);
+            const{error}=await sb.from("bookings").update({customer_name:editForm.customer_name,customer_phone:editForm.customer_phone||null,raw_input:editForm.customer_phone?(editForm.customer_name+(editForm.customer_phone?" "+editForm.customer_phone:"")):editForm.customer_name,note:editForm.note||null,guest_count:editForm.guest_count,color_tag:editForm.color_tag,last_edited_by:editForm._editorName||loginMaster?.name||"系統",last_edited_at:new Date().toISOString()}).eq("id",editForm.id);
+            if(!error){await saveEditLog(editForm.id,editForm._editorName||loginMaster?.name||"系統",`${editForm.customer_name} ${editForm.color_tag}`);if(editForm.customer_phone){const todayStr=getTaipeiNow().toISOString().slice(0,10);await sb.from("customers").upsert({phone:editForm.customer_phone,name:editForm.customer_name,last_visit_date:todayStr,total_visits:1},{onConflict:"phone",ignoreDuplicates:false});await sb.from("customers").update({name:editForm.customer_name}).eq("phone",editForm.customer_phone);}msg("已更新");setEditForm(null);loadBk();if(onBookingAdded)onBookingAdded();}else msg("更新失敗",true);
           }} style={{flex:2,padding:10,borderRadius:8,background:"#74b9ff",border:"none",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>儲存變更 ✓</button>
         </div>
       </div>
@@ -2393,12 +2654,12 @@ function CRMModule({masters,FS}){
         {noShowFiltered.map(b=>(
           <div key={b.id} style={{padding:"10px 14px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
             <div style={{flex:1}}>
-              <div style={{fontWeight:700,fontSize:13,marginBottom:2,color:"#e94560"}}>{b.customer_name} <span style={{fontSize:10,background:"rgba(233,69,96,0.15)",padding:"1px 6px",borderRadius:6,color:"#e94560"}}>放鳥</span></div>
-              <div style={{fontSize:11,color:"var(--text-muted)"}}>{b.customer_phone||"無電話"} · {b.date} {b.start_time?.slice(0,5)}</div>
+              <div style={{fontWeight:700,fontSize:13,marginBottom:2,color:"#e94560"}}>{displayName(b.customer_name)} <span style={{fontSize:10,background:"rgba(233,69,96,0.15)",padding:"1px 6px",borderRadius:6,color:"#e94560"}}>放鳥</span></div>
+              <div style={{fontSize:11,color:"var(--text-muted)"}}>{b.customer_phone||parseInput(b.raw_input||b.customer_name||"").phone||"無電話"} · {b.date} {b.start_time?.slice(0,5)}</div>
               {b.note&&<div style={{fontSize:11,color:"var(--text-dim)"}}>📝 {b.note}</div>}
             </div>
             <div style={{display:"flex",gap:5,flexShrink:0}}>
-              <button onClick={()=>setNoShowEdit({id:b.id,customer_name:b.customer_name||"",customer_phone:b.customer_phone||"",note:b.note||""})} style={{padding:"4px 10px",borderRadius:6,border:"1px solid #74b9ff",background:"transparent",color:"#74b9ff",fontSize:11,cursor:"pointer",fontWeight:700}}>✏️</button>
+              <button onClick={()=>setNoShowEdit((()=>{const _raw=b.raw_input||"";const _p=parseInput(_raw);const _pn=parseInput(b.customer_name||"");const _phone=b.customer_phone||_p.phone||_pn.phone||"";const _name=_phone?(_p.phone?_p.name:(_pn.phone?_pn.name:displayName(b.customer_name||""))):displayName(b.customer_name||"");return{id:b.id,customer_name:_name,customer_phone:_phone,note:b.note||""};})())} style={{padding:"4px 10px",borderRadius:6,border:"1px solid #74b9ff",background:"transparent",color:"#74b9ff",fontSize:11,cursor:"pointer",fontWeight:700}}>✏️</button>
               <button onClick={async()=>{if(window.confirm("確定要恢復此客人為一般預約嗎？")){await sb.from("bookings").update({status:"confirmed"}).eq("id",b.id);msgNs("已恢復");reloadNoShow();}}} style={{padding:"4px 10px",borderRadius:6,border:"1px solid #00b894",background:"transparent",color:"#00b894",fontSize:11,cursor:"pointer"}}>恢復</button>
               <button onClick={async()=>{if(window.confirm("確定要永久刪除此筆放鳥記錄嗎？")){await sb.from("bookings").delete().eq("id",b.id);msgNs("已刪除");reloadNoShow();}}} style={{padding:"4px 10px",borderRadius:6,border:"1px solid #e94560",background:"transparent",color:"#e94560",fontSize:11,cursor:"pointer"}}>刪除</button>
             </div>
