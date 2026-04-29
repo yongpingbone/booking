@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="永平預約">
 <link rel="manifest" href="/booking/manifest.json">
 <title>永平整復保健 預約系統</title>
-<script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');</script>
+<script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/booking/sw.js');</script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -95,7 +95,10 @@ const DYNAMIC_YEARS=[TPE_NOW.getFullYear()-1,TPE_NOW.getFullYear(),TPE_NOW.getFu
 const TIMES=[];
 for(let h=8;h<=22;h++){TIMES.push(`${String(h).padStart(2,"0")}:00`);if(h<22)TIMES.push(`${String(h).padStart(2,"0")}:30`);}
 TIMES.push("22:30");
-const REST=new Set(["08:00","12:00","12:30","13:00","13:30","18:00","18:30"]);
+const DEFAULT_REST=["08:00","12:00","12:30","13:00","13:30","18:00","18:30"];
+function loadRest(){try{const s=localStorage.getItem("rest_times");return s?new Set(JSON.parse(s)):new Set(DEFAULT_REST);}catch(e){return new Set(DEFAULT_REST);}}
+function saveRest(set){try{localStorage.setItem("rest_times",JSON.stringify([...set]));}catch(e){}}
+let REST=loadRest();
 const DAYS=["一","二","三","四","五","六","日"];
 const ALL_DAYS_OV=["日","一","二","三","四","五","六"];
 const MONTHS=["一月","二月","三月","四月","五月","六月","七月","八月","九月","十月","十一月","十二月"];
@@ -140,6 +143,12 @@ const getEditLogsByCell=async(masterId,dateStr,timeStr)=>{
   }catch(e){return[];}
 };
 
+function getNextTime(timeStr,steps){
+  const idx=TIMES.indexOf(timeStr);
+  if(idx===-1)return null;
+  const next=TIMES[idx+steps];
+  return next||null;
+}
 function parseInput(s){
   const m=s.trim().match(/^(.+?)(\d{4,})(.*)$/);
   return m?{name:(m[1]+(m[3]||"")).trim(),phone:m[2]}:{name:s.trim(),phone:""};
@@ -551,7 +560,7 @@ function MainApp({authMaster,onLogout}){
       await sb.from("bookings").delete().eq("id",conflict.id);
     }
     const guestsNum=parseInt(form.guests);
-    const rows=[{master_id:dialog.masterId,raw_input:rawInput,customer_name:name,customer_phone:phone||null,date:dialog.dateStr,start_time:dialog.time+":00",guest_count:guestsNum,color_tag:form.color,note:form.note||null,booking_source:"internal",status:"confirmed"}];
+    const rows=[{master_id:dialog.masterId,raw_input:rawInput,customer_name:name,customer_phone:phone||null,date:dialog.dateStr,start_time:dialog.time+":00",guest_count:1,color_tag:form.color,note:form.note||null,booking_source:"internal",status:"confirmed"}];
     if(guestsNum>1&&form.isSplit&&form.splitMasterId){
       const other=masters.find(m=>m.id===form.splitMasterId);
       if(other){
@@ -560,8 +569,20 @@ function MainApp({authMaster,onLogout}){
           if(!window.confirm(`[${other.name}] 此時段已被 [${otherConflict.customer_name}] 佔用，確定覆蓋嗎？`)){setSaving(false);return;}
           await sb.from("bookings").delete().eq("id",otherConflict.id);
         }
-        rows[0].guest_count=guestsNum-1;
         rows.push({master_id:other.id,raw_input:form.input,customer_name:`${name}-同行`,customer_phone:phone||null,date:dialog.dateStr,start_time:dialog.time+":00",guest_count:1,color_tag:form.color,note:"同行拆單",booking_source:"internal",status:"confirmed"});
+      }
+    }else if(guestsNum>1){
+      // 不拆單：同師傅佔用連續時段，每位客人各佔一格
+      for(let i=1;i<guestsNum;i++){
+        const nextTime=getNextTime(dialog.time,i);
+        if(nextTime){
+          const slotConflict=await checkConflict(dialog.masterId,dialog.dateStr,nextTime);
+          if(slotConflict){
+            if(!window.confirm(`${nextTime} 時段已有 [${slotConflict.customer_name}]，確定覆蓋嗎？`)){setSaving(false);return;}
+            await sb.from("bookings").delete().eq("id",slotConflict.id);
+          }
+          rows.push({master_id:dialog.masterId,raw_input:form.input,customer_name:`${name}-同行${guestsNum>2?i:""}`,customer_phone:phone||null,date:dialog.dateStr,start_time:nextTime+":00",guest_count:1,color_tag:form.color,note:form.note||null,booking_source:"internal",status:"confirmed"});
+        }
       }
     }
     const{data:inserted,error}=await sb.from("bookings").insert(rows).select();
@@ -569,9 +590,10 @@ function MainApp({authMaster,onLogout}){
     if(!error){
       // 記錄 undo：新增 → 還原方式是刪除這些 id
       if(inserted){
-        pushUndo(`新增 ${name} (${dialog.dateStr} ${dialog.time})`,{action:"delete_ids",ids:inserted.map(r=>r.id)});
+        const editorName=(loginMaster||master)?.name||"系統";
         const nowStr=new Date().toLocaleString("zh-TW",{timeZone:"Asia/Taipei",hour:"2-digit",minute:"2-digit"});
-        await saveEditLog(inserted[0].id,(loginMaster||master)?.name||"系統",`【新增】${name} ${dialog.dateStr} ${dialog.time}（${nowStr}）`,{master_id:dialog.masterId,date:dialog.dateStr,start_time:dialog.time+":00"});
+        pushUndo(`新增 ${name} (${dialog.dateStr} ${dialog.time})`,{action:"delete_ids",ids:inserted.map(r=>r.id)});
+        await saveEditLog(inserted[0].id,editorName,`【新增】${name} ${dialog.dateStr} ${dialog.time}（${nowStr}）`,{master_id:dialog.masterId,date:dialog.dateStr,start_time:dialog.time+":00"});
       }
       if(phone){
         const todayStr=getTaipeiNow().toISOString().slice(0,10);
@@ -579,36 +601,34 @@ function MainApp({authMaster,onLogout}){
         await sb.from("customers").update({last_visit_date:todayStr,name}).eq("phone",phone).lt("last_visit_date",todayStr);
       }
       msg(rows.length>1?"已成功建立多筆拆單預約！":"預約成功！");
-      loadBk();
+      loadBk();if(onBookingAdded)onBookingAdded();
       setCrmKey(p=>p+1);
-      if(isContinuous)setForm(f=>({...f,input:"",note:""}));
+      if(isContinuous)setForm(f=>({...f,input:"",note:"",isSplit:false,splitMasterId:""}));
       else setDialog(null);
     }else msg("儲存失敗",true);
   };
 
   const delBk=async(id)=>{
-    if(window.confirm("確定要取消此預約嗎？")){
-      // 取得快照以便還原
-      const{data:snap}=await sb.from("bookings").select("*").eq("id",id).single();
-      const editorName=(loginMaster||master)?.name||"系統";
-      const nowStr=new Date().toLocaleString("zh-TW",{timeZone:"Asia/Taipei",hour:"2-digit",minute:"2-digit"});
-      if(window.confirm("是否要將此客人標記為「放鳥 (No-show)」？\n(點「取消」則一般刪除)")){
-        await sb.from("bookings").update({status:"no_show"}).eq("id",id);
-        if(snap){
-          pushUndo(`放鳥還原 ${snap.customer_name} (${snap.date} ${snap.start_time?.slice(0,5)})`,{action:"restore_status",id,status:"confirmed"});
-          await saveEditLog(id,editorName,`【放鳥】${snap.customer_name} ${snap.date} ${snap.start_time?.slice(0,5)}（${nowStr}）`,{master_id:snap.master_id,date:snap.date,start_time:snap.start_time});
-        }
-        msg("已標記為放鳥");
-      }else{
-        await sb.from("bookings").delete().eq("id",id);
-        if(snap){
-          pushUndo(`刪除 ${snap.customer_name} (${snap.date} ${snap.start_time?.slice(0,5)})`,{action:"reinsert",row:{...snap,id:undefined}});
-          await saveEditLog(snap.id||id,editorName,`【刪除】${snap.customer_name} ${snap.date} ${snap.start_time?.slice(0,5)}（${nowStr}）`,{master_id:snap.master_id,date:snap.date,start_time:snap.start_time});
-        }
-        msg("已刪除");
+    if(!window.confirm("確定要取消此預約嗎？"))return;
+    const{data:snap}=await sb.from("bookings").select("*").eq("id",id).single();
+    const editorName=(loginMaster||master)?.name||"系統";
+    const nowStr=new Date().toLocaleString("zh-TW",{timeZone:"Asia/Taipei",hour:"2-digit",minute:"2-digit"});
+    if(window.confirm("是否要將此客人標記為「放鳥 (No-show)」？\n(點「取消」則一般刪除)")){
+      await sb.from("bookings").update({status:"no_show"}).eq("id",id);
+      if(snap){
+        pushUndo(`放鳥還原 ${snap.customer_name} (${snap.date} ${snap.start_time?.slice(0,5)})`,{action:"restore_status",id,status:"confirmed"});
+        await saveEditLog(id,editorName,`【放鳥】${snap.customer_name} ${snap.date} ${snap.start_time?.slice(0,5)}（${nowStr}）`,{master_id:snap.master_id,date:snap.date,start_time:snap.start_time});
       }
-      loadBk();
+      msg("已標記為放鳥");
+    }else{
+      await sb.from("bookings").delete().eq("id",id);
+      if(snap){
+        pushUndo(`刪除 ${snap.customer_name} (${snap.date} ${snap.start_time?.slice(0,5)})`,{action:"reinsert",row:{...snap,id:undefined}});
+        await saveEditLog(snap.id||id,editorName,`【刪除】${snap.customer_name} ${snap.date} ${snap.start_time?.slice(0,5)}（${nowStr}）`,{master_id:snap.master_id,date:snap.date,start_time:snap.start_time});
+      }
+      msg("已刪除");
     }
+    loadBk();if(onBookingAdded)onBookingAdded();
   };
 
   const copyBk=async()=>{
@@ -822,7 +842,7 @@ function MainApp({authMaster,onLogout}){
     TIMES.forEach(time=>{const b=bk(d,time);if(b&&(b.guest_count||0)>0&&b.color_tag!=="vacation"&&b.customer_name!=="休假"){t+=b.guest_count;if(b.color_tag==="new_customer")n+=b.guest_count;}});
     return{t,n};
   };
-  const mStats=()=>{let t=0,n=0;Object.values(bookings).forEach(b=>{if(b.guest_count>0&&b.color_tag!=="vacation"&&b.customer_name!=="休假"){t+=b.guest_count;if(b.color_tag==="new_customer")n+=b.guest_count;}});return{t,n};};
+  const mStats=()=>{let t=0,n=0;Object.values(bookings).forEach(b=>{if(b&&b.guest_count>0&&b.color_tag!=="vacation"&&b.customer_name!=="休假"){t+=b.guest_count;if(b.color_tag==="new_customer")n+=b.guest_count;}});return{t,n};};
   const{t:mT,n:mN}=mStats();
 
   const todayStr=fmtDate(today.getFullYear(),today.getMonth(),today.getDate());
@@ -835,13 +855,11 @@ function MainApp({authMaster,onLogout}){
     const isVac=b?.color_tag==="vacation";
     const cellKey=d?`${fmtDate(year,month,d)}__${t}`:"";
     const isDragSel=dragCells.has(cellKey);
-    const co=COLORS.find(c=>c.key===(b?.color_tag||"none"))||COLORS[0];
     return(
       <td key={`${d}-${t}`} data-cellkey={cellKey}
         onMouseDown={e=>d&&onCellMouseDown(d,t,e)}
         onMouseEnter={()=>d&&onCellMouseEnter(d,t)}
-        onClick={()=>{if(isDragging)return;if(b){setEditLogs([]);setShowEditLogs(false);setCellHistory(null);sb.from("bookings").select("*").eq("id",b.id).single().then(({data})=>{setCpMode({booking:data||b});if(data)getEditLogs(data.id).then(logs=>{setEditLogs(logs);if(logs.length>0)setShowEditLogs(true);});});}else if(d){const dateStr=fmtDate(year,month,d);getEditLogsByCell(master.id,dateStr,t).then(logs=>{if(logs.length>0){setCellHistory({dateStr,time:t,masterId:master.id,logs});}else if(!isVac){clipBoard?pasteClipBoard(d,t):openDlg(d,t);}});}}}
-
+        onClick={()=>{if(isDragging)return;if(b){setEditLogs([]);setShowEditLogs(false);setCellHistory(null);sb.from("bookings").select("*").eq("id",b.id).single().then(({data})=>{setCpMode({booking:data||b});if(data)getEditLogs(data.id).then(logs=>{setEditLogs(logs);if(logs.length>0)setShowEditLogs(true);});});}else if(d&&!isVac){if(clipBoard){pasteClipBoard(d,t);}else{openDlg(d,t);}}}}
         className={isDragSel?"drag-select":(b?`c-${b.color_tag}`:"")}
         style={{padding:"1px 3px",borderBottom:"1px solid var(--border)",borderRight:"1px solid var(--border)",height:rh,width:cw,minWidth:cw,maxWidth:cw,
           background:isDragSel?"rgba(162,155,254,0.4)":isR&&!b?"var(--bg-rest)":"",
@@ -852,7 +870,7 @@ function MainApp({authMaster,onLogout}){
             onTouchStart={e=>handleTouchStart(e,b)}
             onTouchEnd={()=>clearTimeout(longPressTimer.current)}
             style={{justifyContent:"space-between",overflow:"hidden",WebkitUserSelect:"none"}}>
-            <span style={{fontSize:FS.n-1,color:b.color_tag==="new_customer"?"#f5c842":b.color_tag==="reserved"?"#22d3ee":"var(--text-main)",fontWeight:b.color_tag==="new_customer"?900:700,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>
+            <span style={{fontSize:FS.n-1,color:b.color_tag==="new_customer"?"#f5c842":b.color_tag==="reserved"?"#22d3ee":"var(--text-main)",fontWeight:b.color_tag==="new_customer"?900:700,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis",flex:1,minWidth:0}}>
               {b.color_tag==="new_customer"&&<span style={{fontSize:FS.s-1,marginRight:2}}>★</span>}{displayName(b.customer_name)}
             </span>
             {canDelete&&<span onClick={e=>{e.stopPropagation();delBk(b.id);}} style={{fontSize:9,color:"var(--text-muted)",padding:"2px 4px",flexShrink:0}}>✕</span>}
@@ -1086,7 +1104,7 @@ function MainApp({authMaster,onLogout}){
     </div>}
     {dialog&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:100}} onClick={()=>setDialog(null)}>
       <div style={{background:"var(--bg-header)",border:"1px solid var(--border2)",borderRadius:"16px 16px 0 0",padding:16,width:"100%",maxWidth:480}} onClick={e=>e.stopPropagation()}>
-        <div style={{display:"flex",gap:6,marginBottom:12}}>
+        <div style={{display:"flex",gap:6,marginBottom:6}}>
           <input type="date" value={dialog.dateStr} onChange={e=>setDialog(d=>({...d,dateStr:e.target.value}))} style={{flex:1,background:"var(--input-bg)",color:"var(--text-main)",border:"1px solid var(--border2)",borderRadius:5,padding:6}} />
           <select value={dialog.time} onChange={e=>setDialog(d=>({...d,time:e.target.value}))} style={{background:"var(--input-bg)",color:"var(--text-main)",border:"1px solid var(--border2)",borderRadius:5,padding:6}}>
             {TIMES.map(t=>{
@@ -1097,6 +1115,9 @@ function MainApp({authMaster,onLogout}){
           <select value={dialog.masterId} onChange={e=>setDialog(d=>({...d,masterId:e.target.value}))} style={{background:"var(--input-bg)",color:"var(--text-main)",border:"1px solid var(--border2)",borderRadius:5,padding:6}}>
             {masters.filter(m=>m.role!=="editor").map(m=><option key={m.id} value={m.id}>{m.name}{m.role==="admin"?"(老闆)":""}</option>)}
           </select>
+        </div>
+        <div style={{marginBottom:10,textAlign:"right"}}>
+          <span onClick={()=>{getEditLogsByCell(dialog.masterId,dialog.dateStr,dialog.time).then(logs=>{if(logs.length>0){setDialog(null);setCellHistory({dateStr:dialog.dateStr,time:dialog.time,masterId:dialog.masterId,logs});}else msg("此格沒有操作紀錄");});}} style={{fontSize:11,color:"#a29bfe",cursor:"pointer",userSelect:"none"}}>🕐 查此格歷史紀錄</span>
         </div>
         <div style={{marginBottom:10}}>
           <div style={{fontSize:11,color:"var(--text-muted)",marginBottom:4}}>姓名＋電話</div>
@@ -1117,7 +1138,7 @@ function MainApp({authMaster,onLogout}){
           </label>
           {form.isSplit&&<select value={form.splitMasterId} onChange={e=>setForm(f=>({...f,splitMasterId:e.target.value}))} style={{width:"100%",marginTop:6,background:"var(--input-bg)",border:"1px solid var(--border2)",borderRadius:6,padding:6,color:"var(--text-main)"}}>
             <option value="">請選擇...</option>
-            {masters.filter(m=>m.id!==dialog.masterId).map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
+            {masters.filter(m=>m.id!==dialog.masterId&&m.name!=="Hanna"&&m.username!=="hanna").map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
           </select>}
         </div>}
         <div style={{marginBottom:10}}>
@@ -1184,6 +1205,7 @@ function MainApp({authMaster,onLogout}){
         </div>
         <div style={{display:"flex",gap:8}}>
           <button onClick={()=>setCpMode(null)} style={{flex:1,padding:10,borderRadius:8,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-muted)",cursor:"pointer",fontSize:12,fontWeight:700}}>← 返回</button>
+          <button onClick={()=>{const b=cpMode.booking;const dateStr=b.date;const t=b.start_time?.slice(0,5);getEditLogsByCell(b.master_id,dateStr,t).then(logs=>{if(logs.length>0)setCellHistory({dateStr,time:t,masterId:b.master_id,logs});else msg("此格沒有操作紀錄");});}} style={{flex:1,padding:10,borderRadius:8,border:"1px solid #a29bfe",background:"transparent",color:"#a29bfe",cursor:"pointer",fontSize:12,fontWeight:700}}>🕐 歷史</button>
           <button onClick={()=>{const b=cpMode.booking;setEditForm({id:b.id,customer_name:b.customer_name||"",customer_phone:b.customer_phone||"",note:b.note||"",guest_count:b.guest_count||1,color_tag:b.color_tag||"none",_editorName:(loginMaster||master)?.name||""});setCpMode(null);}} style={{flex:1,padding:10,borderRadius:8,border:"1px solid #74b9ff",background:"transparent",color:"#74b9ff",cursor:"pointer",fontSize:12,fontWeight:700}}>✏️ 編輯</button>
           <button onClick={()=>{setClipBoard(cpMode.booking);setCpMode(null);msg(`已暫存「${cpMode.booking.customer_name}」— 點空白格貼上`);}} style={{flex:1.2,padding:10,borderRadius:8,border:"2px solid #00b894",background:"#00b89420",color:"#00b894",cursor:"pointer",fontSize:12,fontWeight:700}}>📌 暫存</button>
           <button onClick={copyBk} disabled={!cpTarget.date||!cpTarget.time||saving} style={{flex:1.2,padding:10,borderRadius:8,background:cpTarget.date&&cpTarget.time?"#a29bfe":"var(--border2)",border:"none",color:cpTarget.date&&cpTarget.time?"#fff":"var(--text-dim)",fontWeight:700,cursor:"pointer",fontSize:12}}>{saving?"複製中...":"複製 📋"}</button>
@@ -1338,11 +1360,11 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
     if(!d||!m)return;
     const dateStr=fmtDate(yr,mo,d);
     setDialog({master:m,masterId:m.id,dateStr,time:t});
-    setForm({input:"",guests:"1",note:"",color:"none"});
+    setForm({input:"",guests:"1",note:"",color:"none",isSplit:false,splitMasterId:""});
   };
-  const COLOR_NO_INPUT_OV=new Set(["reserved","custom","vacation"]);
-  const saveBk=async()=>{
-    const needInput=!COLOR_NO_INPUT_OV.has(form.color);
+  const COLOR_NO_INPUT=new Set(["reserved","custom","vacation"]);
+  const saveBk=async(isContinuous=false)=>{
+    const needInput=!COLOR_NO_INPUT.has(form.color);
     if(!dialog||(needInput&&!form.input.trim())||saving)return;
     setSaving(true);
     const colorLabels={reserved:"卡位",custom:"自訂",vacation:"休假"};
@@ -1357,38 +1379,70 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
       if(!window.confirm(`該時段已有 [${conflict.customer_name}] 預約，確定要強制覆蓋嗎？`)){setSaving(false);return;}
       await sb.from("bookings").delete().eq("id",conflict.id);
     }
-    const{data:inserted,error}=await sb.from("bookings").insert({master_id:dialog.masterId,raw_input:rawInput,customer_name:name,customer_phone:phone||null,date:dialog.dateStr,start_time:dialog.time+":00",guest_count:parseInt(form.guests),color_tag:form.color,note:form.note||null,booking_source:"internal",status:"confirmed"}).select();
+    const guestsNum=parseInt(form.guests);
+    const rows=[{master_id:dialog.masterId,raw_input:rawInput,customer_name:name,customer_phone:phone||null,date:dialog.dateStr,start_time:dialog.time+":00",guest_count:1,color_tag:form.color,note:form.note||null,booking_source:"internal",status:"confirmed"}];
+    if(guestsNum>1&&form.isSplit&&form.splitMasterId){
+      const other=masters.find(m=>m.id===form.splitMasterId);
+      if(other){
+        const otherConflict=await checkConflict(other.id,dialog.dateStr,dialog.time);
+        if(otherConflict){
+          if(!window.confirm(`[${other.name}] 此時段已被 [${otherConflict.customer_name}] 佔用，確定覆蓋嗎？`)){setSaving(false);return;}
+          await sb.from("bookings").delete().eq("id",otherConflict.id);
+        }
+        rows.push({master_id:other.id,raw_input:form.input,customer_name:`${name}-同行`,customer_phone:phone||null,date:dialog.dateStr,start_time:dialog.time+":00",guest_count:1,color_tag:form.color,note:"同行拆單",booking_source:"internal",status:"confirmed"});
+      }
+    }else if(guestsNum>1){
+      // 不拆單：同師傅佔用連續時段，每位客人各佔一格
+      for(let i=1;i<guestsNum;i++){
+        const nextTime=getNextTime(dialog.time,i);
+        if(nextTime){
+          const slotConflict=await checkConflict(dialog.masterId,dialog.dateStr,nextTime);
+          if(slotConflict){
+            if(!window.confirm(`${nextTime} 時段已有 [${slotConflict.customer_name}]，確定覆蓋嗎？`)){setSaving(false);return;}
+            await sb.from("bookings").delete().eq("id",slotConflict.id);
+          }
+          rows.push({master_id:dialog.masterId,raw_input:form.input,customer_name:`${name}-同行${guestsNum>2?i:""}`,customer_phone:phone||null,date:dialog.dateStr,start_time:nextTime+":00",guest_count:1,color_tag:form.color,note:form.note||null,booking_source:"internal",status:"confirmed"});
+        }
+      }
+    }
+    const{data:inserted,error}=await sb.from("bookings").insert(rows).select();
     setSaving(false);
     if(!error){
-      if(inserted&&pushUndo){
+      if(inserted){
+        const editorName=(loginMaster||master)?.name||"系統";
         const nowStr=new Date().toLocaleString("zh-TW",{timeZone:"Asia/Taipei",hour:"2-digit",minute:"2-digit"});
         pushUndo(`新增 ${name} (${dialog.dateStr} ${dialog.time})`,{action:"delete_ids",ids:inserted.map(r=>r.id)});
-        await saveEditLog(inserted[0].id,loginMaster?.name||"系統",`【新增】${name} ${dialog.dateStr} ${dialog.time}（${nowStr}）`,{master_id:dialog.masterId,date:dialog.dateStr,start_time:dialog.time+":00"});
+        await saveEditLog(inserted[0].id,editorName,`【新增】${name} ${dialog.dateStr} ${dialog.time}（${nowStr}）`,{master_id:dialog.masterId,date:dialog.dateStr,start_time:dialog.time+":00"});
       }
       if(phone){
         const todayStr=getTaipeiNow().toISOString().slice(0,10);
         await sb.from("customers").upsert({phone,name,first_visit_date:todayStr,last_visit_date:todayStr,total_visits:1},{onConflict:"phone",ignoreDuplicates:false});
         await sb.from("customers").update({last_visit_date:todayStr,name}).eq("phone",phone).lt("last_visit_date",todayStr);
       }
-      setDialog(null);msg("預約成功！");loadBk();if(onBookingAdded)onBookingAdded();
+      msg(rows.length>1?"已成功建立多筆拆單預約！":"預約成功！");
+      loadBk();if(onBookingAdded)onBookingAdded();
+      setCrmKey(p=>p+1);
+      if(isContinuous)setForm(f=>({...f,input:"",note:"",isSplit:false,splitMasterId:""}));
+      else setDialog(null);
     }else msg("儲存失敗",true);
   };
   const delBk=async(id)=>{
     if(!window.confirm("確定要取消此預約嗎？"))return;
     const{data:snap}=await sb.from("bookings").select("*").eq("id",id).single();
+    const editorName=(loginMaster||master)?.name||"系統";
     const nowStr=new Date().toLocaleString("zh-TW",{timeZone:"Asia/Taipei",hour:"2-digit",minute:"2-digit"});
     if(window.confirm("是否要將此客人標記為「放鳥 (No-show)」？\n(點「取消」則一般刪除)")){
       await sb.from("bookings").update({status:"no_show"}).eq("id",id);
-      if(snap&&pushUndo){
+      if(snap){
         pushUndo(`放鳥還原 ${snap.customer_name} (${snap.date} ${snap.start_time?.slice(0,5)})`,{action:"restore_status",id,status:"confirmed"});
-        await saveEditLog(id,loginMaster?.name||"系統",`【放鳥】${snap.customer_name} ${snap.date} ${snap.start_time?.slice(0,5)}（${nowStr}）`,{master_id:snap.master_id,date:snap.date,start_time:snap.start_time});
+        await saveEditLog(id,editorName,`【放鳥】${snap.customer_name} ${snap.date} ${snap.start_time?.slice(0,5)}（${nowStr}）`,{master_id:snap.master_id,date:snap.date,start_time:snap.start_time});
       }
       msg("已標記為放鳥");
     }else{
       await sb.from("bookings").delete().eq("id",id);
-      if(snap&&pushUndo){
+      if(snap){
         pushUndo(`刪除 ${snap.customer_name} (${snap.date} ${snap.start_time?.slice(0,5)})`,{action:"reinsert",row:{...snap,id:undefined}});
-        await saveEditLog(id,loginMaster?.name||"系統",`【刪除】${snap.customer_name} ${snap.date} ${snap.start_time?.slice(0,5)}（${nowStr}）`,{master_id:snap.master_id,date:snap.date,start_time:snap.start_time});
+        await saveEditLog(snap.id||id,editorName,`【刪除】${snap.customer_name} ${snap.date} ${snap.start_time?.slice(0,5)}（${nowStr}）`,{master_id:snap.master_id,date:snap.date,start_time:snap.start_time});
       }
       msg("已刪除");
     }
@@ -1556,7 +1610,7 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
       <div style={{fontWeight:700,fontSize:FS.b+1}}>全覽　{yr}年{mo+1}月{loading&&<span style={{fontSize:9,color:"var(--text-dim)",marginLeft:6}}>載入中</span>}</div>
       <button onClick={()=>{if(mo===11){setYr(y=>y+1);setMo(0);}else setMo(m=>m+1);}} className="nb">▶</button>
       <div style={{display:"flex",gap:5,marginLeft:8}}>
-        {masters.filter(m=>m.role!=="editor").map(m=>(
+        {masters.filter(m=>m.role!=="editor"&&m.name!=="Hanna"&&m.username!=="hanna").map(m=>(
           <button key={m.id} onClick={()=>setOvMasters(p=>p.includes(m.id)?p.filter(x=>x!==m.id):[...p,m.id])}
             style={{padding:"3px 10px",borderRadius:16,border:`1px solid ${ovMasters.includes(m.id)?"#e94560":"var(--border2)"}`,background:ovMasters.includes(m.id)?"#e9456022":"transparent",color:ovMasters.includes(m.id)?"#e94560":"var(--text-muted)",fontSize:FS.s,cursor:"pointer"}}>{m.name}
           </button>
@@ -1571,7 +1625,7 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
         <button onClick={()=>{setOvShowSearch(s=>{const next=!s;if(next)setTimeout(()=>ovSearchInputRef.current?.focus(),80);return next;});setOvSearchQ("");setOvSearchResults([]);}} className="nb" style={{color:ovShowSearch?"#74b9ff":"var(--nav-color)",borderColor:ovShowSearch?"#74b9ff":"var(--border2)"}}>🔍搜尋</button>
         <button onClick={()=>{setOvDragMode(p=>!p);setOvIsDraggingVac(false);setOvDragCells(new Set());}} className="nb" style={{color:ovDragMode?"#e94560":"var(--nav-color)",borderColor:ovDragMode?"#e94560":"var(--border2)",fontWeight:ovDragMode?700:400}}>🔴{ovDragMode?"退出":"休假"}</button>
         <button onClick={()=>{setOvMoveMode(p=>!p);setOvIsDragActive(false);}} className="nb" style={{color:ovMoveMode?"#a29bfe":"var(--nav-color)",borderColor:ovMoveMode?"#a29bfe":"var(--border2)",fontWeight:ovMoveMode?700:400}}>🔀{ovMoveMode?"退出":"移動"}</button>
-        <button onClick={()=>{if(!sel.length)return;const m=sel[0];const d=yr===today.getFullYear()&&mo===today.getMonth()?today.getDate():1;const dateStr=fmtDate(yr,mo,d);const t=TIMES.find(x=>!REST.has(x)&&!bks[`${m.id}__${dateStr}__${x}`])||"09:00";setDialog({master:m,masterId:m.id,dateStr,time:t});setForm({input:"",guests:"1",note:"",color:"none"});}} className="nb" style={{color:"#e94560",borderColor:"#e94560"}}>＋ 新增</button>
+        <button onClick={()=>{if(!sel.length)return;const m=sel[0];const d=yr===today.getFullYear()&&mo===today.getMonth()?today.getDate():1;const dateStr=fmtDate(yr,mo,d);const t=TIMES.find(x=>!REST.has(x)&&!bks[`${m.id}__${dateStr}__${x}`])||"09:00";setDialog({master:m,masterId:m.id,dateStr,time:t});setForm({input:"",guests:"1",note:"",color:"none",isSplit:false,splitMasterId:""});}} className="nb" style={{color:"#e94560",borderColor:"#e94560"}}>＋ 新增</button>
         <span style={{fontSize:10,color:"var(--text-dim)"}}>欄</span>
         <input type="range" min="45" max="140" value={ocw} onChange={e=>setOvColW(e.target.value)} style={{width:50,cursor:"pointer",accentColor:"#74b9ff"}} />
         <span style={{fontSize:10,color:"#74b9ff",minWidth:22,fontWeight:700}}>{ocw}</span>
@@ -1619,7 +1673,7 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
         return<div key={m.id} style={{marginBottom:4}}>
           <span style={{fontSize:11,color:"#00b894",marginRight:6,fontWeight:700}}>{m.name} 空檔 {slots.length} 格</span>
           <span style={{display:"inline-flex",flexWrap:"wrap",gap:3}}>
-            {slots.map(t=><button key={t} onClick={()=>{setDialog({master:m,masterId:m.id,dateStr,time:t});setForm({input:"",guests:"1",note:"",color:"none"});setOvShowSlots(false);setOvSlotDate(null);}} style={{padding:"2px 7px",background:"#00b89415",border:"1px solid #00b89440",color:"#00b894",borderRadius:4,fontSize:10,cursor:"pointer"}}>{t}</button>)}
+            {slots.map(t=><button key={t} onClick={()=>{setDialog({master:m,masterId:m.id,dateStr,time:t});setForm({input:"",guests:"1",note:"",color:"none",isSplit:false,splitMasterId:""});setOvShowSlots(false);setOvSlotDate(null);}} style={{padding:"2px 7px",background:"#00b89415",border:"1px solid #00b89440",color:"#00b894",borderRadius:4,fontSize:10,cursor:"pointer"}}>{t}</button>)}
           </span>
         </div>;
       })}
@@ -1705,7 +1759,7 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
                       onDragOver={e=>{e.preventDefault();const td=e.currentTarget;if(ovDragOverRef.current&&ovDragOverRef.current!==td){ovDragOverRef.current.classList.remove("drag-over-cell");}td.classList.add("drag-over-cell");ovDragOverRef.current=td;ovDragOverKeyRef.current=cellKey;}}
                       onDragLeave={e=>{e.currentTarget.classList.remove("drag-over-cell");if(ovDragOverRef.current===e.currentTarget){ovDragOverRef.current=null;ovDragOverKeyRef.current=null;}}}
                       onDrop={e=>{e.preventDefault();e.stopPropagation();e.currentTarget.classList.remove("drag-over-cell");if(ovDragOverRef.current===e.currentTarget){ovDragOverRef.current=null;ovDragOverKeyRef.current=null;}const bs=e.dataTransfer.getData("ov/bk");if(bs&&d&&cellKey){try{const bkg=JSON.parse(bs);ovProcessDrop(bkg,m.id,fmtDate(yr,mo,d),t);}catch(err){}}}}
-                      onClick={()=>{if(b){setOvEditLogs([]);setOvShowEditLogs(false);setOvCellHistory(null);sb.from("bookings").select("*").eq("id",b.id).single().then(({data})=>{setCpMode({booking:data||b});if(data)getEditLogs(data.id).then(logs=>{setOvEditLogs(logs);if(logs.length>0)setOvShowEditLogs(true);});});}else if(d){const dateStr=fmtDate(yr,mo,d);getEditLogsByCell(m.id,dateStr,t).then(logs=>{if(logs.length>0){setOvCellHistory({dateStr,time:t,masterId:m.id,masterName:m.name,logs});}else if(canAdd){openDlg(m,d,t);}});}}}
+                      onClick={()=>{if(b){setOvEditLogs([]);setOvShowEditLogs(false);setOvCellHistory(null);sb.from("bookings").select("*").eq("id",b.id).single().then(({data})=>{setCpMode({booking:data||b});if(data)getEditLogs(data.id).then(logs=>{setOvEditLogs(logs);if(logs.length>0)setOvShowEditLogs(true);});});}else if(d&&canAdd){openDlg(m,d,t);}}}
                       style={{padding:"1px 2px",borderBottom:"1px solid var(--border)",
                         borderRight:j===sel.length-1?"2px solid var(--border2)":"1px solid var(--border)",
                         height:orh,verticalAlign:"middle",overflow:"hidden",
@@ -1775,9 +1829,9 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
       </div>
     </div>}
     {dialog&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:200}} onClick={()=>setDialog(null)}>
-      <div style={{background:"var(--bg-header)",border:"1px solid var(--border2)",borderRadius:"16px 16px 0 0",padding:"16px 16px 32px",width:"100%",maxWidth:480}} onClick={e=>e.stopPropagation()}>
-        {/* 可編輯日期、時間、師傅 (與個人排班一致) */}
-        <div style={{display:"flex",gap:6,marginBottom:12}}>
+      <div style={{background:"var(--bg-header)",border:"1px solid var(--border2)",borderRadius:"16px 16px 0 0",padding:16,width:"100%",maxWidth:480}} onClick={e=>e.stopPropagation()}>
+        {/* 日期、時間、師傅 */}
+        <div style={{display:"flex",gap:6,marginBottom:6}}>
           <input type="date" value={dialog.dateStr} onChange={e=>setDialog(d=>({...d,dateStr:e.target.value}))}
             style={{flex:1,background:"var(--input-bg)",color:"var(--text-main)",border:"1px solid var(--border2)",borderRadius:5,padding:6,fontSize:13}} />
           <select value={dialog.time} onChange={e=>setDialog(d=>({...d,time:e.target.value}))}
@@ -1789,19 +1843,60 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
           </select>
           <select value={dialog.masterId} onChange={e=>setDialog(d=>({...d,masterId:e.target.value}))}
             style={{background:"var(--input-bg)",color:"var(--text-main)",border:"1px solid var(--border2)",borderRadius:5,padding:6,fontSize:13}}>
-            {masters.filter(m=>m.role!=="editor").map(m=><option key={m.id} value={m.id}>{m.name}{m.role==="admin"?"(老闆)":""}</option>)}
+            {masters.filter(m=>m.role!=="editor"&&m.name!=="Hanna"&&m.username!=="hanna").map(m=><option key={m.id} value={m.id}>{m.name}{m.role==="admin"?"(老闆)":""}</option>)}
           </select>
         </div>
-        <div style={{marginBottom:10}}>
-          <input autoFocus value={form.input} onChange={e=>setForm(f=>({...f,input:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&saveBk()} placeholder={COLOR_NO_INPUT_OV.has(form.color)?"（選填）輸入客戶姓名...":"許小姐0978822100"} style={{width:"100%",background:COLOR_NO_INPUT_OV.has(form.color)&&!form.input.trim()?{"reserved":"rgba(34,211,238,0.10)","custom":"rgba(162,155,254,0.10)","vacation":"rgba(233,69,96,0.10)"}[form.color]||"var(--input-bg)":"var(--input-bg)",border:`1px solid ${COLOR_NO_INPUT_OV.has(form.color)&&!form.input.trim()?{"reserved":"#22d3ee88","custom":"#a29bfe88","vacation":"#e9456088"}[form.color]||"var(--border2)":"var(--border2)"}`,borderRadius:8,padding:"8px 11px",fontSize:13,color:"var(--text-main)",transition:"all 0.2s"}} />
-          {form.input&&(()=>{const{name,phone}=parseInput(form.input);return phone?<div style={{fontSize:10,color:"#00b894",marginTop:3}}>✓ {name}　{phone}</div>:null;})()}
-          {COLOR_NO_INPUT_OV.has(form.color)&&!form.input.trim()&&<div style={{fontSize:10,color:{"reserved":"#22d3ee","custom":"#a29bfe","vacation":"#e94560"}[form.color]||"var(--text-dim)",marginTop:3}}>✦ {{"reserved":"卡位","custom":"自訂","vacation":"休假"}[form.color]}標記，不需填寫客戶資料也可儲存</div>}
+        <div style={{marginBottom:10,textAlign:"right"}}>
+          <span onClick={()=>{getEditLogsByCell(dialog.masterId,dialog.dateStr,dialog.time).then(logs=>{if(logs.length>0){setDialog(null);setOvCellHistory({dateStr:dialog.dateStr,time:dialog.time,masterId:dialog.masterId,masterName:masters.find(m=>m.id===dialog.masterId)?.name||"",logs});}else msg("此格沒有操作紀錄");});}} style={{fontSize:11,color:"#a29bfe",cursor:"pointer",userSelect:"none"}}>🕐 查此格歷史紀錄</span>
         </div>
-        <div style={{display:"flex",gap:5,marginBottom:10}}>{["1","2","3","4"].map(n=><button key={n} onClick={()=>setForm(f=>({...f,guests:n}))} style={{flex:1,padding:6,borderRadius:6,border:`1px solid ${form.guests===n?"#74b9ff":"var(--border2)"}`,background:form.guests===n?"#74b9ff22":"transparent",color:form.guests===n?"#74b9ff":"var(--text-muted)",fontSize:14,fontWeight:700,cursor:"pointer"}}>{n}</button>)}</div>
-        <div style={{display:"flex",gap:5,marginBottom:14}}>{COLORS.map(cc=>{const isSel=form.color===cc.key;const colorMap={"none":"#888","new_customer":"#f5a623","vacation":"#e94560","reserved":"#22d3ee","custom":"#a29bfe"};const col=colorMap[cc.key]||"#888";return<button key={cc.key} onClick={()=>setForm(f=>({...f,color:cc.key}))} style={{flex:1,padding:"8px 2px",borderRadius:8,border:`2px solid ${isSel?col:"#44444466"}`,background:isSel?col:"var(--bg-sub)",color:isSel?"#fff":"var(--text-muted)",cursor:"pointer",fontSize:11,fontWeight:isSel?800:500,boxShadow:isSel?`0 0 8px ${col}88`:"none",transition:"all 0.15s"}}>{cc.label}</button>;})}</div>
+        <div style={{marginBottom:10}}>
+          <div style={{fontSize:11,color:"var(--text-muted)",marginBottom:4}}>姓名＋電話</div>
+          <input autoFocus value={form.input} onChange={e=>setForm(f=>({...f,input:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&saveBk()} placeholder={COLOR_NO_INPUT.has(form.color)?"（選填）輸入客戶姓名...":"許小姐0978822100"} style={{width:"100%",background:COLOR_NO_INPUT.has(form.color)&&!form.input.trim()?{"reserved":"rgba(34,211,238,0.10)","custom":"rgba(162,155,254,0.10)","vacation":"rgba(233,69,96,0.10)"}[form.color]||"var(--input-bg)":"var(--input-bg)",border:`1px solid ${COLOR_NO_INPUT.has(form.color)&&!form.input.trim()?{"reserved":"#22d3ee88","custom":"#a29bfe88","vacation":"#e9456088"}[form.color]||"var(--border2)":"var(--border2)"}`,borderRadius:8,padding:"8px 11px",color:"var(--text-main)",transition:"all 0.2s"}} />
+          {form.input&&(()=>{const{name,phone}=parseInput(form.input);return phone?<div style={{fontSize:10,color:"#00b894",marginTop:3}}>✓ {name}　{phone}</div>:null;})()}
+          {COLOR_NO_INPUT.has(form.color)&&!form.input.trim()&&<div style={{fontSize:10,color:{"reserved":"#22d3ee","custom":"#a29bfe","vacation":"#e94560"}[form.color]||"var(--text-dim)",marginTop:3}}>✦ {{"reserved":"卡位","custom":"自訂","vacation":"休假"}[form.color]}標記，不需填寫客戶資料也可儲存</div>}
+        </div>
+        <div style={{marginBottom:10}}>
+          <div style={{fontSize:11,color:"var(--text-muted)",marginBottom:4}}>人數</div>
+          <div style={{display:"flex",gap:5}}>
+            {["1","2","3","4"].map(n=><button key={n} onClick={()=>setForm(f=>({...f,guests:n}))} style={{flex:1,padding:6,borderRadius:6,border:`1px solid ${form.guests===n?"#74b9ff":"var(--border2)"}`,background:form.guests===n?"#74b9ff22":"transparent",color:form.guests===n?"#74b9ff":"var(--text-muted)",fontSize:14,fontWeight:700,cursor:"pointer"}}>{n}</button>)}
+          </div>
+        </div>
+        {parseInt(form.guests)>1&&<div style={{marginBottom:10,padding:8,background:"rgba(116,185,255,0.1)",borderRadius:8}}>
+          <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,cursor:"pointer"}}>
+            <input type="checkbox" checked={form.isSplit} onChange={e=>setForm(f=>({...f,isSplit:e.target.checked,splitMasterId:f.splitMasterId||masters.find(m=>m.id!==dialog.masterId&&m.name!=="Hanna"&&m.username!=="hanna")?.id||""}))} style={{width:16,height:16}} />
+            同行者拆單給另一師傅
+          </label>
+          {form.isSplit&&<select value={form.splitMasterId} onChange={e=>setForm(f=>({...f,splitMasterId:e.target.value}))} style={{width:"100%",marginTop:6,background:"var(--input-bg)",border:"1px solid var(--border2)",borderRadius:6,padding:6,color:"var(--text-main)"}}>
+            <option value="">請選擇...</option>
+            {masters.filter(m=>m.id!==dialog.masterId&&m.name!=="Hanna"&&m.username!=="hanna").map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>}
+        </div>}
+        <div style={{marginBottom:10}}>
+          <div style={{fontSize:11,color:"var(--text-muted)",marginBottom:6}}>標記</div>
+          <div style={{display:"flex",gap:5}}>{COLORS.map(cc=>{
+            const isSel=form.color===cc.key;
+            const colorMap={"none":"#888","new_customer":"#f5a623","vacation":"#e94560","reserved":"#22d3ee","custom":"#a29bfe"};
+            const col=colorMap[cc.key]||"#888";
+            return<button key={cc.key} onClick={()=>setForm(f=>({...f,color:cc.key}))}
+              style={{flex:1,padding:"8px 2px",borderRadius:8,
+                border:`2px solid ${isSel?col:"#44444466"}`,
+                background:isSel?col:"var(--bg-sub)",
+                color:isSel?"#fff":"var(--text-muted)",
+                cursor:"pointer",fontSize:11,fontWeight:isSel?800:500,
+                boxShadow:isSel?`0 0 8px ${col}88`:"none",
+                transition:"all 0.15s"}}>
+              {cc.label}
+            </button>;
+          })}</div>
+        </div>
+        <div style={{marginBottom:12}}>
+          <div style={{fontSize:11,color:"var(--text-muted)",marginBottom:4}}>備註</div>
+          <input value={form.note} onChange={e=>setForm(f=>({...f,note:e.target.value}))} placeholder="備註..." style={{width:"100%",background:"var(--input-bg)",border:"1px solid var(--border2)",borderRadius:8,padding:"7px 11px",color:"var(--text-main)"}} />
+        </div>
         <div style={{display:"flex",gap:8}}>
           <button onClick={()=>setDialog(null)} style={{flex:1,padding:10,borderRadius:8,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-muted)",cursor:"pointer"}}>取消</button>
-          <button onClick={saveBk} disabled={(!COLOR_NO_INPUT_OV.has(form.color)&&!form.input.trim())||saving} style={{flex:2,padding:10,borderRadius:8,background:(COLOR_NO_INPUT_OV.has(form.color)||form.input.trim())&&!saving?"#e94560":"var(--border2)",border:"none",color:(COLOR_NO_INPUT_OV.has(form.color)||form.input.trim())&&!saving?"#fff":"var(--text-dim)",fontWeight:700,cursor:"pointer"}}>{saving?"儲存中...":"確認預約 ✓"}</button>
+          <button onClick={()=>saveBk(true)} disabled={(!COLOR_NO_INPUT.has(form.color)&&!form.input.trim())||saving} style={{flex:1.5,padding:10,borderRadius:8,border:"1px solid #74b9ff",background:"transparent",color:"#74b9ff",cursor:"pointer"}}>儲存並繼續</button>
+          <button onClick={()=>saveBk(false)} disabled={(!COLOR_NO_INPUT.has(form.color)&&!form.input.trim())||saving} style={{flex:1.5,padding:10,borderRadius:8,background:(COLOR_NO_INPUT.has(form.color)||form.input.trim())&&!saving?"#e94560":"var(--border2)",border:"none",color:(COLOR_NO_INPUT.has(form.color)||form.input.trim())&&!saving?"#fff":"var(--text-dim)",fontWeight:700,cursor:"pointer"}}>{saving?"儲存中...":"確認 ✓"}</button>
         </div>
       </div>
     </div>}
@@ -1832,6 +1927,7 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
         </div>
         <div style={{display:"flex",gap:8}}>
           <button onClick={()=>setCpMode(null)} style={{flex:1,padding:10,borderRadius:8,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-muted)",cursor:"pointer",fontSize:12,fontWeight:700}}>← 返回</button>
+          <button onClick={()=>{const b=cpMode.booking;const dateStr=b.date;const t=b.start_time?.slice(0,5);getEditLogsByCell(b.master_id,dateStr,t).then(logs=>{if(logs.length>0)setOvCellHistory({dateStr,time:t,masterId:b.master_id,masterName:masters.find(m=>m.id===b.master_id)?.name||"",logs});else msg("此格沒有操作紀錄");});}} style={{flex:1,padding:10,borderRadius:8,border:"1px solid #a29bfe",background:"transparent",color:"#a29bfe",cursor:"pointer",fontSize:12,fontWeight:700}}>🕐 歷史</button>
           <button onClick={()=>{const b=cpMode.booking;setEditForm({id:b.id,customer_name:b.customer_name||"",customer_phone:b.customer_phone||"",note:b.note||"",guest_count:b.guest_count||1,color_tag:b.color_tag||"none",_editorName:loginMaster?.name||""});setCpMode(null);}} style={{flex:1,padding:10,borderRadius:8,border:"1px solid #74b9ff",background:"transparent",color:"#74b9ff",cursor:"pointer",fontSize:12,fontWeight:700}}>✏️ 編輯</button>
           <button onClick={()=>{setClipBoard(cpMode.booking);setCpMode(null);msg(`已暫存「${cpMode.booking.customer_name}」— 點空白格貼上`);}} style={{flex:1.2,padding:10,borderRadius:8,border:"2px solid #00b894",background:"#00b89420",color:"#00b894",cursor:"pointer",fontSize:12,fontWeight:700}}>📌 暫存</button>
           <button onClick={copyBk} disabled={!cpTarget.date||!cpTarget.time||saving} style={{flex:1.2,padding:10,borderRadius:8,background:cpTarget.date&&cpTarget.time?"#a29bfe":"var(--border2)",border:"none",color:cpTarget.date&&cpTarget.time?"#fff":"var(--text-dim)",fontWeight:700,cursor:"pointer",fontSize:12}}>{saving?"複製中...":"複製 📋"}</button>
@@ -2378,6 +2474,22 @@ function SettingsModule({masters,setMasters,FS,msg}){
   const[editMaster,setEditMaster]=useState(null);
   const[form,setForm]=useState({name:"",username:"",role:"master",display_color:"#74b9ff",reserve_color:"#a29bfe"});
   const[saving,setSaving]=useState(false);
+  const[histLogs,setHistLogs]=useState([]);
+  const[histLoading,setHistLoading]=useState(false);
+  const[histMaster,setHistMaster]=useState("");
+  const[histDate,setHistDate]=useState(getTaipeiNow().toISOString().slice(0,10));
+  const[restSet,setRestSet]=useState(()=>new Set([...REST]));
+  const[restSaved,setRestSaved]=useState(false);
+
+  const loadHistory=async()=>{
+    setHistLoading(true);
+    let q=sb.from("booking_edit_logs").select("*").order("edited_at",{ascending:false}).limit(100);
+    if(histDate)q=q.gte("edited_at",histDate+"T00:00:00").lte("edited_at",histDate+"T23:59:59");
+    if(histMaster)q=q.eq("editor_name",histMaster);
+    const{data}=await q;
+    setHistLogs(data||[]);
+    setHistLoading(false);
+  };
 
   const openEdit=(m)=>{setEditMaster(m);setForm({name:m.name||"",username:m.username||"",role:m.role||"master",display_color:m.display_color||"#74b9ff",reserve_color:m.reserve_color||"#a29bfe"});};
   const saveEdit=async()=>{
@@ -2393,8 +2505,8 @@ function SettingsModule({masters,setMasters,FS,msg}){
   return(
   <div style={{flex:1,overflow:"auto"}}>
     <div style={{display:"flex",background:"var(--bg-header)",borderBottom:"1px solid var(--border)"}}>
-      {[["masters","帳號管理"],["rest","休息時段"],["export","資料匯出"]].map(([k,l])=>(
-        <button key={k} className={`tab-btn${settTab===k?" active":""}`} onClick={()=>setSettTab(k)}>{l}</button>
+      {[["masters","帳號管理"],["rest","休息時段"],["export","資料匯出"],["history","歷史紀錄"]].map(([k,l])=>(
+        <button key={k} className={`tab-btn${settTab===k?" active":""}`} onClick={()=>{setSettTab(k);if(k==="history")loadHistory();}}>{l}</button>
       ))}
     </div>
 
@@ -2418,15 +2530,31 @@ function SettingsModule({masters,setMasters,FS,msg}){
     </div>}
 
     {settTab==="rest"&&<div style={{padding:12}}>
-      <div style={{background:"var(--bg-header)",borderRadius:10,padding:"14px 16px",border:"1px solid var(--border2)"}}>
-        <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>預設休息時段</div>
-        {[["早休","08:00 – 08:30"],["午休","12:00 – 14:00"],["晚休","18:00 – 18:30"]].map(([l,t])=>(
-          <div key={l} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid var(--border)"}}>
-            <span style={{fontSize:13}}>{l}</span>
-            <span style={{fontSize:13,color:"var(--text-time)",fontWeight:700}}>{t}</span>
-          </div>
-        ))}
-        <div style={{marginTop:10,fontSize:11,color:"var(--text-dim)"}}>※ 週日不套用</div>
+      <div style={{background:"var(--bg-header)",borderRadius:10,padding:"14px 16px",border:"1px solid var(--border2)",marginBottom:10}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <div style={{fontWeight:700,fontSize:14}}>休息時段設定</div>
+          <button onClick={()=>setRestSet(new Set(DEFAULT_REST))} style={{fontSize:11,padding:"3px 10px",borderRadius:6,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-muted)",cursor:"pointer"}}>還原預設</button>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:14}}>
+          {(()=>{const blocks=[];for(let h=8;h<=22;h++){const t0=`${String(h).padStart(2,"0")}:00`;const t1=`${String(h).padStart(2,"0")}:30`;blocks.push([t0,h<22?t1:null]);}return blocks;})().map(([t0,t1])=>(
+            <div key={t0} style={{display:"flex",gap:4}}>
+              {[t0,t1].filter(Boolean).map(t=>(
+                <button key={t} onClick={()=>setRestSet(prev=>{const n=new Set(prev);n.has(t)?n.delete(t):n.add(t);return n;})}
+                  style={{flex:1,padding:"6px 4px",borderRadius:7,fontSize:12,fontWeight:700,cursor:"pointer",
+                    border:`2px solid ${restSet.has(t)?"#e94560":"var(--border2)"}`,
+                    background:restSet.has(t)?"rgba(233,69,96,0.15)":"transparent",
+                    color:restSet.has(t)?"#e94560":"var(--text-muted)"}}>
+                  {t}{restSet.has(t)?" 休":""}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+        <div style={{fontSize:11,color:"var(--text-dim)",marginBottom:10}}>※ 紅色＝休息時段（灰底顯示）　週日不套用</div>
+        <button onClick={()=>{REST=restSet;saveRest(restSet);setRestSaved(true);setTimeout(()=>setRestSaved(false),2000);msg("休息時段已儲存");}}
+          style={{width:"100%",padding:"10px",borderRadius:8,background:"#e94560",border:"none",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>
+          {restSaved?"✓ 已儲存":"儲存休息時段"}
+        </button>
       </div>
     </div>}
 
@@ -2443,6 +2571,30 @@ function SettingsModule({masters,setMasters,FS,msg}){
           const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`永平預約_${getTaipeiNow().toISOString().slice(0,10)}.csv`;a.click();
         }} style={{padding:"10px 20px",background:"#00b894",border:"none",borderRadius:8,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",width:"100%"}}>📥 下載 CSV</button>
       </div>
+    </div>}
+
+    {settTab==="history"&&<div style={{padding:12}}>
+      <div style={{background:"var(--bg-header)",borderRadius:10,padding:"12px 14px",border:"1px solid var(--border2)",marginBottom:10}}>
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          <input type="date" value={histDate} onChange={e=>setHistDate(e.target.value)} style={{background:"var(--input-bg)",border:"1px solid var(--border2)",borderRadius:6,padding:"5px 8px",fontSize:12,color:"var(--text-main)",flex:1,minWidth:120}} />
+          <select value={histMaster} onChange={e=>setHistMaster(e.target.value)} style={{background:"var(--input-bg)",border:"1px solid var(--border2)",borderRadius:6,padding:"5px 8px",fontSize:12,color:"var(--text-main)",flex:1,minWidth:80}}>
+            <option value="">全部人員</option>
+            {masters.map(m=><option key={m.id} value={m.name}>{m.name}</option>)}
+          </select>
+          <button onClick={loadHistory} style={{padding:"6px 16px",background:"#74b9ff",border:"none",borderRadius:6,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",flexShrink:0}}>{histLoading?"載入中...":"查詢"}</button>
+        </div>
+      </div>
+      {histLogs.length===0&&!histLoading&&<div style={{textAlign:"center",color:"var(--text-dim)",fontSize:13,padding:24}}>尚無紀錄</div>}
+      {histLogs.map((l,i)=>(
+        <div key={i} style={{background:"var(--bg-header)",borderRadius:8,padding:"10px 12px",marginBottom:6,border:"1px solid var(--border2)"}}>
+          <div style={{fontSize:12,fontWeight:700,color:"var(--text-main)",marginBottom:4}}>{l.changes_summary}</div>
+          <div style={{display:"flex",gap:10,fontSize:11,color:"var(--text-muted)"}}>
+            <span style={{color:"#74b9ff",fontWeight:700}}>👤 {l.editor_name}</span>
+            {l.date&&<span>📅 {l.date} {l.start_time?.slice(0,5)}</span>}
+            <span style={{marginLeft:"auto"}}>{l.edited_at?new Date(l.edited_at).toLocaleString("zh-TW",{timeZone:"Asia/Taipei",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}):""}</span>
+          </div>
+        </div>
+      ))}
     </div>}
 
     {editMaster&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}} onClick={()=>setEditMaster(null)}>
