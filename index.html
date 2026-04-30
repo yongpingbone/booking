@@ -46,6 +46,7 @@ body.light {
 .c-vacation { background:rgba(220,38,38,0.45) !important; border-left:3px solid #e94560 !important; }
 .c-reserved { background:rgba(34,211,238,0.30) !important; border-left:3px solid #22d3ee !important; }
 .c-custom { background:rgba(162,155,254,0.30) !important; border-left:3px solid #a29bfe !important; }
+.c-aftercare { background:rgba(0,208,156,0.20) !important; border-left:3px solid #00d09c !important; }
 .drag-select { background:rgba(162,155,254,0.4) !important; border:1px solid #a29bfe !important; }
 .drag-over-cell { background:rgba(116,185,255,0.22) !important; outline:2px solid #74b9ff !important; outline-offset:-2px; }
 .search-hl { outline:2px solid #f5a623 !important; outline-offset:-2px; background:rgba(245,166,35,0.18) !important; }
@@ -108,6 +109,7 @@ const COLORS=[
   {key:"vacation",label:"休假",text:"#e94560"},
   {key:"reserved",label:"卡位",text:"#22d3ee"},
   {key:"custom",label:"自訂",text:"#a29bfe"},
+  {key:"aftercare",label:"售後",text:"#00d09c"},
 ];
 
 const checkNoShow=async(phone)=>{
@@ -854,12 +856,12 @@ function MainApp({authMaster,onLogout}){
     setForm({input:"",guests:"1",note:"",color:"none",isSplit:false,splitMasterId:""});
   };
 
-  const COLOR_NO_INPUT=new Set(["reserved","custom","vacation"]);
+  const COLOR_NO_INPUT=new Set(["reserved","custom","vacation","aftercare"]);
   const saveBk=async(isContinuous=false)=>{
     const needInput=!COLOR_NO_INPUT.has(form.color);
     if(!dialog||(needInput&&!form.input.trim())||saving)return;
     setSaving(true);
-    const colorLabels={reserved:"卡位",custom:"自訂",vacation:"休假"};
+    const colorLabels={reserved:"卡位",custom:"自訂",vacation:"休假",aftercare:"售後"};
     const rawInput=form.input.trim()||colorLabels[form.color]||"";
     const{name,phone}=parseInput(rawInput);
     const noShowCount=await checkNoShow(phone);
@@ -1156,10 +1158,10 @@ function MainApp({authMaster,onLogout}){
 
   const getDayStats=(d)=>{
     if(!d)return{t:0,n:0};let t=0,n=0;
-    TIMES.forEach(time=>{const b=bk(d,time);if(b&&(b.guest_count||0)>0&&b.color_tag!=="vacation"&&b.customer_name!=="休假"){t+=b.guest_count;if(b.color_tag==="new_customer")n+=b.guest_count;}});
+    TIMES.forEach(time=>{const b=bk(d,time);if(b&&(b.guest_count||0)>0&&b.color_tag!=="vacation"&&b.color_tag!=="aftercare"){t+=b.guest_count;if(b.color_tag==="new_customer")n+=b.guest_count;}});
     return{t,n};
   };
-  const mStats=()=>{let t=0,n=0;Object.values(bookings).forEach(b=>{if(b&&b.guest_count>0&&b.color_tag!=="vacation"&&b.customer_name!=="休假"){t+=b.guest_count;if(b.color_tag==="new_customer")n+=b.guest_count;}});return{t,n};};
+  const mStats=()=>{let t=0,n=0;Object.values(bookings).forEach(b=>{if(b&&b.guest_count>0&&b.color_tag!=="vacation"&&b.color_tag!=="aftercare"){t+=b.guest_count;if(b.color_tag==="new_customer")n+=b.guest_count;}});return{t,n};};
   const{t:mT,n:mN}=mStats();
 
   const todayStr=fmtDate(today.getFullYear(),today.getMonth(),today.getDate());
@@ -1489,7 +1491,7 @@ function MainApp({authMaster,onLogout}){
         if(count===0) setForm(f=>({...f,color:"new_customer"}));
       }).catch(()=>{});
   }
-}} onKeyDown={e=>{if(e.key==="Enter"&&!acShow)saveBk();if(e.key==="Escape")acDismiss();}} placeholder={COLOR_NO_INPUT.has(form.color)?"（選填）輸入客戶姓名...":"許小姐0978822100"} style={{width:"100%",background:COLOR_NO_INPUT.has(form.color)&&!form.input.trim()?`${{"reserved":"rgba(34,211,238,0.10)","custom":"rgba(162,155,254,0.10)","vacation":"rgba(233,69,96,0.10)"}[form.color]||"var(--input-bg)"}`:  "var(--input-bg)",border:`1px solid ${COLOR_NO_INPUT.has(form.color)&&!form.input.trim()?{"reserved":"#22d3ee88","custom":"#a29bfe88","vacation":"#e9456088"}[form.color]||"var(--border2)":"var(--border2)"}`,borderRadius:8,padding:"8px 11px",color:"var(--text-main)",transition:"all 0.2s"}} />
+}} onKeyDown={e=>{if(e.key==="Enter"&&!acShow)saveBk();if(e.key==="Escape")acDismiss();}} placeholder={COLOR_NO_INPUT.has(form.color)?"（選填）輸入客戶姓名...":"許小姐0978822100"} style={{width:"100%",background:COLOR_NO_INPUT.has(form.color)&&!form.input.trim()?`${{"reserved":"rgba(34,211,238,0.10)","custom":"rgba(162,155,254,0.10)","vacation":"rgba(233,69,96,0.10)","aftercare":"rgba(0,208,156,0.10)"}[form.color]||"var(--input-bg)"}`:  "var(--input-bg)",border:`1px solid ${COLOR_NO_INPUT.has(form.color)&&!form.input.trim()?{"reserved":"#22d3ee88","custom":"#a29bfe88","vacation":"#e9456088"}[form.color]||"var(--border2)":"var(--border2)"}`,borderRadius:8,padding:"8px 11px",color:"var(--text-main)",transition:"all 0.2s"}} />
           {acShow&&acSug.length>0&&<div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:999,background:"var(--bg-header)",border:"1px solid var(--border2)",borderRadius:10,marginTop:3,boxShadow:"0 6px 20px rgba(0,0,0,0.4)",overflow:"hidden"}}>
             {acSug.map((c,i)=>{
               const isOwn=c._masterId&&c._masterId===(dialog?.masterId||master?.id);
@@ -1890,7 +1892,7 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
   const bk=(mid,d,t)=>d?bks[`${mid}__${fmtDate(yr,mo,d)}__${t}`]:null;
   const dStats=(mid,d)=>{
     if(!d)return{t:0,n:0};let t=0,n=0;
-    TIMES.forEach(x=>{const b=bk(mid,d,x);if(b&&(b.guest_count||0)>0&&b.color_tag!=="vacation"&&b.customer_name!=="休假"){t+=b.guest_count;if(b.color_tag==="new_customer")n+=b.guest_count;}});
+    TIMES.forEach(x=>{const b=bk(mid,d,x);if(b&&(b.guest_count||0)>0&&b.color_tag!=="vacation"&&b.color_tag!=="aftercare"){t+=b.guest_count;if(b.color_tag==="new_customer")n+=b.guest_count;}});
     return{t,n};
   };
   const wStats=(mid,wk)=>{let t=0,n=0;wk.forEach(d=>{if(d){const s=dStats(mid,d);t+=s.t;n+=s.n;}});return{t,n};};
@@ -1901,12 +1903,12 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
     setDialog({master:m,masterId:m.id,dateStr,time:t});
     setForm({input:"",guests:"1",note:"",color:"none",isSplit:false,splitMasterId:""});
   };
-  const COLOR_NO_INPUT=new Set(["reserved","custom","vacation"]);
+  const COLOR_NO_INPUT=new Set(["reserved","custom","vacation","aftercare"]);
   const saveBk=async(isContinuous=false)=>{
     const needInput=!COLOR_NO_INPUT.has(form.color);
     if(!dialog||(needInput&&!form.input.trim())||saving)return;
     setSaving(true);
-    const colorLabels={reserved:"卡位",custom:"自訂",vacation:"休假"};
+    const colorLabels={reserved:"卡位",custom:"自訂",vacation:"休假",aftercare:"售後"};
     const rawInput=form.input.trim()||colorLabels[form.color]||"";
     const{name,phone}=parseInput(rawInput);
     const noShowCount=await checkNoShow(phone);
@@ -2618,6 +2620,74 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
 // ═══════════════════════════════════════════
 // CRM MODULE
 // ═══════════════════════════════════════════
+
+function LineNameSearch({selName, lineBindings, onMatch, existingMatch, onRename, onUpdateBookings}){
+  const[searchQ,setSearchQ]=React.useState('');
+  const[results,setResults]=React.useState(null);
+  const[searching,setSearching]=React.useState(false);
+
+  const doSearch=async()=>{
+    if(!searchQ.trim())return;
+    setSearching(true);
+    // Search line_bindings by display_name
+    const{data}=await sb.from('line_bindings').select('phone,display_name,line_user_id').ilike('display_name',`%${searchQ.trim()}%`).limit(10);
+    setResults(data||[]);
+    setSearching(false);
+  };
+
+  // Auto-search by customer name on first render
+  React.useEffect(()=>{
+    if(selName){
+      setSearchQ(selName);
+      sb.from('line_bindings').select('phone,display_name,line_user_id').ilike('display_name',`%${selName}%`).limit(5).then(({data})=>{
+        if(data&&data.length>0) setResults(data);
+      });
+    }
+  },[selName]);
+
+  if(existingMatch){
+    const isDiff=existingMatch.name&&existingMatch.name!==selName&&!selName.includes(existingMatch.name)&&!existingMatch.name.includes(selName);
+    return<div style={{marginTop:6}}>
+      <div style={{fontSize:12,color:'#22d3ee'}}>💬 LINE：{existingMatch.name}</div>
+      {isDiff&&<div style={{marginTop:6,background:'rgba(245,166,35,0.12)',border:'1px solid rgba(245,166,35,0.35)',borderRadius:8,padding:'8px 10px'}}>
+        <div style={{fontSize:11,color:'#f5a623',fontWeight:700,marginBottom:6}}>⚠️ LINE名稱「{existingMatch.name}」與登記名「{selName}」不同</div>
+        <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+          <button onClick={()=>onUpdateBookings(existingMatch.name)} style={{fontSize:11,padding:'4px 10px',borderRadius:7,background:'rgba(34,211,238,0.15)',border:'1px solid rgba(34,211,238,0.4)',color:'#22d3ee',cursor:'pointer'}}>
+            用 LINE 名稱「{existingMatch.name}」
+          </button>
+          <button onClick={()=>onRename(existingMatch.name)} style={{fontSize:11,padding:'4px 10px',borderRadius:7,background:'rgba(116,185,255,0.1)',border:'1px solid rgba(116,185,255,0.3)',color:'#74b9ff',cursor:'pointer'}}>
+            ✏️ 自訂名稱
+          </button>
+        </div>
+      </div>}
+    </div>;
+  }
+
+  return<div style={{marginTop:6}}>
+    <div style={{fontSize:11,color:'#8b949e',marginBottom:5}}>🔍 搜尋 LINE 名稱</div>
+    <div style={{display:'flex',gap:6}}>
+      <input value={searchQ} onChange={e=>setSearchQ(e.target.value)} onKeyDown={e=>e.key==='Enter'&&doSearch()}
+        placeholder="輸入 LINE 名稱搜尋..."
+        style={{flex:1,background:'var(--input-bg)',border:'1px solid var(--border2)',borderRadius:6,padding:'5px 8px',color:'var(--text-main)',fontSize:12}}/>
+      <button onClick={doSearch} style={{padding:'5px 10px',borderRadius:6,background:'rgba(34,211,238,0.15)',border:'1px solid rgba(34,211,238,0.4)',color:'#22d3ee',fontSize:12,cursor:'pointer'}}>
+        {searching?'...':'搜尋'}
+      </button>
+    </div>
+    {results&&results.length===0&&<div style={{fontSize:11,color:'#8b949e',marginTop:4}}>找不到符合的 LINE 名稱</div>}
+    {results&&results.length>0&&<div style={{marginTop:6,display:'flex',flexDirection:'column',gap:4}}>
+      {results.map((r,i)=><div key={i} style={{display:'flex',alignItems:'center',gap:8,background:'var(--bg-header)',borderRadius:7,padding:'6px 10px'}}>
+        <div style={{flex:1}}>
+          <div style={{fontSize:13,fontWeight:700,color:'#22d3ee'}}>{r.display_name}</div>
+          {r.phone&&<div style={{fontSize:11,color:'#8b949e'}}>📞 {r.phone}</div>}
+        </div>
+        <button onClick={()=>onMatch(r.display_name,r.line_user_id)} style={{fontSize:11,padding:'3px 8px',borderRadius:6,background:'rgba(34,211,238,0.15)',border:'1px solid rgba(34,211,238,0.4)',color:'#22d3ee',cursor:'pointer'}}>
+          選擇
+        </button>
+      </div>)}
+    </div>}
+  </div>;
+}
+
 function CRMModule({masters,FS}){
   const[bks,setBks]=useState([]);
   const[noShowBks,setNoShowBks]=useState([]);
@@ -2844,37 +2914,83 @@ function CRMModule({masters,FS}){
                     ))}
                   </div>
                 )}
-                <div style={{fontSize:13,color:"var(--text-muted)"}}>📞 {sel.phone||(()=>{const pm=sel.bks.map(b=>b.customer_phone||parseInput(b.customer_name||"").phone).find(p=>p);return pm||"未留電話";})()}</div>
                 {(()=>{
-                  const phone=sel.phone;
+                  // Find phone: from this record, or from bookings with same name (any master)
+                  const directPhone=sel.phone||(()=>{const pm=sel.bks.map(b=>b.customer_phone||parseInput(b.customer_name||"").phone).find(p=>p);return pm;})();
+                  // Also look for phone in ALL bookings with matching name
+                  const allBksPhone=(()=>{
+                    const cleanName=displayName(sel.name).replace(/（.*?）/g,"").trim();
+                    if(!cleanName||directPhone) return directPhone;
+                    const nameMatch=bks.find(b=>{
+                      const bn=displayName(b.customer_name||"").replace(/（.*?）/g,"").trim();
+                      return b.customer_phone&&(bn===cleanName||bn.includes(cleanName)||cleanName.includes(bn));
+                    });
+                    return nameMatch?.customer_phone||null;
+                  })();
+                  const resolvedPhone=directPhone||allBksPhone;
+                  return resolvedPhone?
+                    <div style={{fontSize:13,color:"var(--text-muted)"}}>📞 {resolvedPhone}</div>:
+                    <div style={{fontSize:13,color:"var(--text-dim)"}}>📞 未留電話</div>;
+                })()}
+                {(()=>{
+                  // Use resolved phone for LINE lookup
+                  const directPhone=sel.phone||(()=>{const pm=sel.bks.map(b=>b.customer_phone||parseInput(b.customer_name||"").phone).find(p=>p);return pm;})();
+                  const allBksPhone=(()=>{
+                    const cleanName=displayName(sel.name).replace(/（.*?）/g,"").trim();
+                    if(!cleanName||directPhone) return directPhone;
+                    const nameMatch=bks.find(b=>{
+                      const bn=displayName(b.customer_name||"").replace(/（.*?）/g,"").trim();
+                      return b.customer_phone&&(bn===cleanName||bn.includes(cleanName)||cleanName.includes(bn));
+                    });
+                    return nameMatch?.customer_phone||null;
+                  })();
+                  const phone=directPhone||allBksPhone;
                   const lb=lineBindings[phone];
-                  if(!lb) return null;
-                  const lineName=lb.displayName;
-                  const isDiff=lineName&&lineName!==sel.name&&!sel.name.includes(lineName)&&!lineName.includes(sel.name);
-                  return<div style={{marginTop:6}}>
-                    <div style={{fontSize:12,color:"#22d3ee",display:"flex",alignItems:"center",gap:6}}>
-                      💬 LINE：{lineName||"已綁定（無名稱）"}
-                    </div>
-                    {isDiff&&<div style={{marginTop:6,background:"rgba(245,166,35,0.12)",border:"1px solid rgba(245,166,35,0.35)",borderRadius:8,padding:"8px 10px"}}>
-                      <div style={{fontSize:11,color:"#f5a623",fontWeight:700,marginBottom:6}}>⚠️ LINE名稱「{lineName}」與登記名「{sel.name}」不同</div>
-                      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                        <button onClick={async()=>{
-                          const ids=sel.bks.map(b=>b.id);
-                          for(let i=0;i<ids.length;i+=100){
-                            await sb.from("bookings").update({customer_name:lineName}).in("id",ids.slice(i,i+100));
-                          }
-                          setSel(prev=>({...prev,name:lineName,bks:prev.bks.map(b=>({...b,customer_name:lineName}))}));
-                          setBks(prev=>prev.map(b=>ids.includes(b.id)?{...b,customer_name:lineName}:b));
-                          msgCrm("✅ 已改為 LINE 名稱："+lineName);
-                        }} style={{fontSize:11,padding:"4px 10px",borderRadius:7,background:"rgba(34,211,238,0.15)",border:"1px solid rgba(34,211,238,0.4)",color:"#22d3ee",cursor:"pointer"}}>
-                          用 LINE 名稱「{lineName}」
-                        </button>
-                        <button onClick={()=>{setRenameNew(lineName);setRenameModal(true);}} style={{fontSize:11,padding:"4px 10px",borderRadius:7,background:"rgba(116,185,255,0.1)",border:"1px solid rgba(116,185,255,0.3)",color:"#74b9ff",cursor:"pointer"}}>
-                          ✏️ 自訂名稱
-                        </button>
+                  if(lb){
+                    const lineName=lb.displayName;
+                    const isDiff=lineName&&lineName!==sel.name&&!sel.name.includes(lineName)&&!lineName.includes(sel.name);
+                    return<div style={{marginTop:6}}>
+                      <div style={{fontSize:12,color:"#22d3ee",display:"flex",alignItems:"center",gap:6}}>
+                        💬 LINE：{lineName||"已綁定（無名稱）"}
                       </div>
-                    </div>}
-                  </div>;
+                      {isDiff&&<div style={{marginTop:6,background:"rgba(245,166,35,0.12)",border:"1px solid rgba(245,166,35,0.35)",borderRadius:8,padding:"8px 10px"}}>
+                        <div style={{fontSize:11,color:"#f5a623",fontWeight:700,marginBottom:6}}>⚠️ LINE名稱「{lineName}」與登記名「{sel.name}」不同</div>
+                        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                          <button onClick={async()=>{
+                            const ids=sel.bks.map(b=>b.id);
+                            for(let i=0;i<ids.length;i+=100){
+                              await sb.from("bookings").update({customer_name:lineName}).in("id",ids.slice(i,i+100));
+                            }
+                            setSel(prev=>({...prev,name:lineName,bks:prev.bks.map(b=>({...b,customer_name:lineName}))}));
+                            setBks(prev=>prev.map(b=>ids.includes(b.id)?{...b,customer_name:lineName}:b));
+                            msgCrm("✅ 已改為 LINE 名稱："+lineName);
+                          }} style={{fontSize:11,padding:"4px 10px",borderRadius:7,background:"rgba(34,211,238,0.15)",border:"1px solid rgba(34,211,238,0.4)",color:"#22d3ee",cursor:"pointer"}}>
+                            用 LINE 名稱「{lineName}」
+                          </button>
+                          <button onClick={()=>{setRenameNew(lineName);setRenameModal(true);}} style={{fontSize:11,padding:"4px 10px",borderRadius:7,background:"rgba(116,185,255,0.1)",border:"1px solid rgba(116,185,255,0.3)",color:"#74b9ff",cursor:"pointer"}}>
+                            ✏️ 自訂名稱
+                          </button>
+                        </div>
+                      </div>}
+                    </div>;
+                  }
+                  if(phone){
+                    // No LINE binding for this phone yet
+                    return<div style={{fontSize:12,color:"var(--text-dim)",marginTop:4}}>💬 LINE 尚未綁定</div>;
+                  }
+                  // No phone at all - show name search
+                  return <LineNameSearch selName={sel.name} lineBindings={lineBindings} onMatch={(lineName,lineUid)=>{
+                    setSel(prev=>({...prev,_lineMatch:{name:lineName,uid:lineUid}}));
+                  }} existingMatch={sel._lineMatch} onRename={(n)=>{setRenameNew(n);setRenameModal(true);}}
+                  onUpdateBookings={async(newName)=>{
+                    const ids=sel.bks.map(b=>b.id);
+                    for(let i=0;i<ids.length;i+=100){
+                      await sb.from("bookings").update({customer_name:newName}).in("id",ids.slice(i,i+100));
+                    }
+                    setSel(prev=>({...prev,name:newName,bks:prev.bks.map(b=>({...b,customer_name:newName}))}));
+                    setBks(prev=>prev.map(b=>ids.includes(b.id)?{...b,customer_name:newName}:b));
+                    msgCrm("✅ 已更新為："+newName);
+                  }}/>;
                 })()}
                 <div style={{fontSize:12,color:"var(--text-dim)",marginTop:3}}>師傅：{sel.masterName}</div>
               </div>
@@ -3064,7 +3180,7 @@ function AnalyticsModule({masters,FS,currentMaster}){
     const fetchYear=async(y)=>{
       let all=[],from=0;
       while(true){
-        const{data}=await sb.from("bookings").select("master_id,date,guest_count,color_tag,customer_phone,customer_name").gte("date",`${y}-01-01`).lte("date",`${y}-12-31`).range(from,from+999);
+        const{data}=await sb.from("bookings").select("master_id,date,guest_count,color_tag,customer_phone,customer_name,status").gte("date",`${y}-01-01`).lte("date",`${y}-12-31`).neq("status","cancelled").neq("status","no_show").range(from,from+999);
         if(!data||data.length===0)break;
         all=[...all,...data];
         if(data.length<1000)break;
@@ -3080,13 +3196,11 @@ function AnalyticsModule({masters,FS,currentMaster}){
 
   const calcStat=(masterId,y,m)=>{
     const prefix=`${y}-${String(m+1).padStart(2,"0")}`;
-    const bks=allData.filter(b=>b.master_id===masterId&&b.date.startsWith(prefix)&&b.color_tag!=="vacation"&&b.customer_name!=="休假"&&b.guest_count!==0);
+    const vacDates=new Set(allData.filter(b=>b.master_id===masterId&&b.date.startsWith(prefix)&&b.color_tag==="vacation").map(b=>b.date));
+    const bks=allData.filter(b=>b.master_id===masterId&&b.date.startsWith(prefix)&&b.color_tag!=="vacation"&&b.color_tag!=="aftercare"&&b.guest_count!==0);
     const total=bks.reduce((s,b)=>s+(b.guest_count||1),0);
     const newC=bks.filter(b=>b.color_tag==="new_customer").reduce((s,b)=>s+(b.guest_count||1),0);
-    // 休假天 = 有vacation紀錄 且 當天完全沒有真實客人（total=0）才算
-    const vacDates=[...new Set(allData.filter(b=>b.master_id===masterId&&b.date.startsWith(prefix)&&b.color_tag==="vacation").map(b=>b.date))];
-    const realBkDates=new Set(bks.map(b=>b.date));
-    const vacDays=vacDates.filter(d=>!realBkDates.has(d)).length;
+    const vacDays=vacDates.size;
     return{total,newC,old:total-newC,vacDays};
   };
   const calcYearStat=(masterId,y)=>{let total=0,newC=0,vac=0;for(let m=0;m<12;m++){const s=calcStat(masterId,y,m);total+=s.total;newC+=s.newC;vac+=s.vacDays;}return{total,newC,old:total-newC,vac};};
