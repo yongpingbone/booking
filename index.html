@@ -88,7 +88,9 @@ const sb=supabase.createClient(
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlrenl6a2h1aXJlcXp0YmhydG5hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMjI1NjIsImV4cCI6MjA5Mjc5ODU2Mn0.rIXfMsiuYg6HoJaACxvxr1SFS9M3m7XNP57qcoyvRxw"
 );
 
-function getTaipeiNow(){return new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Taipei"}));}
+function getTaipeiNow(){const t=new Date();const s=t.toLocaleString("en-US",{timeZone:"Asia/Taipei",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false});const[date,time]=s.split(", ");const[mo,dy,yr]=date.split("/");const[h,mi,sc]=(time||"00:00:00").split(":");return new Date(+yr,+mo-1,+dy,+h,+mi,+sc);}
+function getTaipeiDateStr(){const t=getTaipeiNow();return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")}`;}
+
 function fmtDate(y,m,d){return `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;}
 const TPE_NOW=getTaipeiNow();
 const DYNAMIC_YEARS=[TPE_NOW.getFullYear()-1,TPE_NOW.getFullYear(),TPE_NOW.getFullYear()+1];
@@ -842,8 +844,27 @@ function MainApp({authMaster,onLogout}){
 
   const msg=(m,err)=>{setToast({m,err});setTimeout(()=>setToast(null),2500);};
   const bk=(d,t)=>d?bookings[`${fmtDate(year,month,d)}__${t}`]:null;
-  const prevM=()=>{if(month===0){setYear(y=>y-1);setMonth(11);}else setMonth(m=>m-1);};
-  const nextM=()=>{if(month===11){setYear(y=>y+1);setMonth(0);}else setMonth(m=>m+1);};
+  const getFirstValidWeekIdx=(y,m)=>{
+    const wks=getWeeksMon(y,m,showSun==="1");
+    // 如果是當月，跳到包含今天的那週
+    if(y===today.getFullYear()&&m===today.getMonth()){
+      const idx=wks.findIndex(wk=>wk.includes(today.getDate()));
+      if(idx>=0)return idx;
+    }
+    // 否則跳到第一個有實際日期的週
+    const idx=wks.findIndex(wk=>wk.some(d=>d!==null));
+    return Math.max(0,idx);
+  };
+  const prevM=()=>{
+    let y=year,m=month;
+    if(m===0){y--;m=11;}else{m--;}
+    setYear(y);setMonth(m);setWeekIdx(getFirstValidWeekIdx(y,m));
+  };
+  const nextM=()=>{
+    let y=year,m=month;
+    if(m===11){y++;m=0;}else{m++;}
+    setYear(y);setMonth(m);setWeekIdx(getFirstValidWeekIdx(y,m));
+  };
 
   const openDlg=(day,time)=>{
     let tt=time;
@@ -910,7 +931,7 @@ function MainApp({authMaster,onLogout}){
         await saveEditLog(inserted[0].id,editorName,`【新增】${name} ${dialog.dateStr} ${dialog.time}（${nowStr}）`,{master_id:dialog.masterId,date:dialog.dateStr,start_time:dialog.time+":00"});
       }
       if(phone){
-        const todayStr=getTaipeiNow().toISOString().slice(0,10);
+        const todayStr=getTaipeiDateStr();
         await sb.from("customers").upsert({phone,name,first_visit_date:todayStr,last_visit_date:todayStr,total_visits:1},{onConflict:"phone",ignoreDuplicates:false});
         await sb.from("customers").update({last_visit_date:todayStr,name}).eq("phone",phone).lt("last_visit_date",todayStr);
       }
@@ -1267,12 +1288,15 @@ function MainApp({authMaster,onLogout}){
     {tab==="schedule"&&<>
       <div style={{display:"flex",background:"var(--bg-header)",borderBottom:"1px solid var(--border)",flexShrink:0}}>
         {[["month","月"],["week","週"]].map(([v,l])=>(
-          <button key={v} onClick={()=>setView(v)} style={{padding:"7px 14px",background:"transparent",border:"none",borderBottom:`2px solid ${view===v?"#e94560":"transparent"}`,color:view===v?"#e94560":"var(--text-muted)",fontSize:11,fontWeight:view===v?700:400,cursor:"pointer"}}>{l}</button>
+          <button key={v} onClick={()=>{if(v==="week"){setWeekIdx(getFirstValidWeekIdx(year,month));}setView(v);}} style={{padding:"7px 14px",background:"transparent",border:"none",borderBottom:`2px solid ${view===v?"#e94560":"transparent"}`,color:view===v?"#e94560":"var(--text-muted)",fontSize:11,fontWeight:view===v?700:400,cursor:"pointer"}}>{l}</button>
         ))}
         <div style={{marginLeft:"auto",display:"flex",gap:4,padding:"0 8px",alignItems:"center"}}>
           <button onClick={()=>{
             // 跳到今日：切換年月 + 滾到今日時段
             setYear(today.getFullYear());setMonth(today.getMonth());
+            const wks=getWeeksMon(today.getFullYear(),today.getMonth(),showSun==="1");
+            const idx=wks.findIndex(wk=>wk.includes(today.getDate()));
+            setWeekIdx(Math.max(0,idx));
             setView("month");
             setTimeout(()=>{
               const h=today.getHours(),mn=today.getMinutes();
@@ -1674,7 +1698,7 @@ function MainApp({authMaster,onLogout}){
           <button onClick={()=>setEditForm(null)} style={{flex:1,padding:10,borderRadius:8,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-muted)",fontSize:13,cursor:"pointer"}}>取消</button>
           <button onClick={async()=>{
             const {error}=await sb.from("bookings").update({customer_name:editForm.customer_name,customer_phone:editForm.customer_phone||null,raw_input:editForm.customer_phone?(editForm.customer_name+(editForm.customer_phone?" "+editForm.customer_phone:"")):editForm.customer_name,note:editForm.note||null,guest_count:editForm.guest_count,color_tag:editForm.color_tag,last_edited_by:(loginMaster||master)?.name||"系統",last_edited_at:new Date().toISOString()}).eq("id",editForm.id);
-            if(!error){await saveEditLog(editForm.id,(loginMaster||master)?.name||"系統",`${editForm.customer_name} ${editForm.color_tag}`);if(editForm.customer_phone){const todayStr=getTaipeiNow().toISOString().slice(0,10);await sb.from("customers").upsert({phone:editForm.customer_phone,name:editForm.customer_name,last_visit_date:todayStr,total_visits:1},{onConflict:"phone",ignoreDuplicates:false});await sb.from("customers").update({name:editForm.customer_name}).eq("phone",editForm.customer_phone);}msg("已更新");setEditForm(null);loadBk();}else msg("更新失敗",true);
+            if(!error){await saveEditLog(editForm.id,(loginMaster||master)?.name||"系統",`${editForm.customer_name} ${editForm.color_tag}`);if(editForm.customer_phone){const todayStr=getTaipeiDateStr();await sb.from("customers").upsert({phone:editForm.customer_phone,name:editForm.customer_name,last_visit_date:todayStr,total_visits:1},{onConflict:"phone",ignoreDuplicates:false});await sb.from("customers").update({name:editForm.customer_name}).eq("phone",editForm.customer_phone);}msg("已更新");setEditForm(null);loadBk();}else msg("更新失敗",true);
           }} style={{flex:2,padding:10,borderRadius:8,background:"#74b9ff",border:"none",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>儲存變更 ✓</button>
         </div>
       </div>
@@ -1956,7 +1980,7 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
         await saveEditLog(inserted[0].id,editorName,`【新增】${name} ${dialog.dateStr} ${dialog.time}（${nowStr}）`,{master_id:dialog.masterId,date:dialog.dateStr,start_time:dialog.time+":00"});
       }
       if(phone){
-        const todayStr=getTaipeiNow().toISOString().slice(0,10);
+        const todayStr=getTaipeiDateStr();
         await sb.from("customers").upsert({phone,name,first_visit_date:todayStr,last_visit_date:todayStr,total_visits:1},{onConflict:"phone",ignoreDuplicates:false});
         await sb.from("customers").update({last_visit_date:todayStr,name}).eq("phone",phone).lt("last_visit_date",todayStr);
       }
@@ -2608,7 +2632,7 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
           <button onClick={()=>setEditForm(null)} style={{flex:1,padding:10,borderRadius:8,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-muted)",fontSize:13,cursor:"pointer"}}>取消</button>
           <button onClick={async()=>{
             const{error}=await sb.from("bookings").update({customer_name:editForm.customer_name,customer_phone:editForm.customer_phone||null,raw_input:editForm.customer_phone?(editForm.customer_name+(editForm.customer_phone?" "+editForm.customer_phone:"")):editForm.customer_name,note:editForm.note||null,guest_count:editForm.guest_count,color_tag:editForm.color_tag,last_edited_by:editForm._editorName||loginMaster?.name||"系統",last_edited_at:new Date().toISOString()}).eq("id",editForm.id);
-            if(!error){await saveEditLog(editForm.id,editForm._editorName||loginMaster?.name||"系統",`${editForm.customer_name} ${editForm.color_tag}`);if(editForm.customer_phone){const todayStr=getTaipeiNow().toISOString().slice(0,10);await sb.from("customers").upsert({phone:editForm.customer_phone,name:editForm.customer_name,last_visit_date:todayStr,total_visits:1},{onConflict:"phone",ignoreDuplicates:false});await sb.from("customers").update({name:editForm.customer_name}).eq("phone",editForm.customer_phone);}msg("已更新");setEditForm(null);loadBk();if(onBookingAdded)onBookingAdded();}else msg("更新失敗",true);
+            if(!error){await saveEditLog(editForm.id,editForm._editorName||loginMaster?.name||"系統",`${editForm.customer_name} ${editForm.color_tag}`);if(editForm.customer_phone){const todayStr=getTaipeiDateStr();await sb.from("customers").upsert({phone:editForm.customer_phone,name:editForm.customer_name,last_visit_date:todayStr,total_visits:1},{onConflict:"phone",ignoreDuplicates:false});await sb.from("customers").update({name:editForm.customer_name}).eq("phone",editForm.customer_phone);}msg("已更新");setEditForm(null);loadBk();if(onBookingAdded)onBookingAdded();}else msg("更新失敗",true);
           }} style={{flex:2,padding:10,borderRadius:8,background:"#74b9ff",border:"none",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>儲存變更 ✓</button>
         </div>
       </div>
@@ -3403,7 +3427,7 @@ function SettingsModule({masters,setMasters,FS,msg}){
   const[histLogs,setHistLogs]=useState([]);
   const[histLoading,setHistLoading]=useState(false);
   const[histMaster,setHistMaster]=useState("");
-  const[histDate,setHistDate]=useState(getTaipeiNow().toISOString().slice(0,10));
+  const[histDate,setHistDate]=useState(getTaipeiDateStr());
   const[restSet,setRestSet]=useState(()=>new Set([...REST]));
   const[restSaved,setRestSaved]=useState(false);
 
@@ -3494,7 +3518,7 @@ function SettingsModule({masters,setMasters,FS,msg}){
           const header="日期,時間,師傅,狀態,姓名,電話,人數,顏色,備註\n";
           const rows=all.map(b=>[b.date,b.start_time?.slice(0,5),b.masters?.name||"",b.status||"confirmed",b.customer_name||"",b.customer_phone||"",b.guest_count,b.color_tag,b.note||""].join(",")).join("\n");
           const blob=new Blob(["\ufeff"+header+rows],{type:"text/csv;charset=utf-8"});
-          const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`永平預約_${getTaipeiNow().toISOString().slice(0,10)}.csv`;a.click();
+          const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`永平預約_${getTaipeiDateStr()}.csv`;a.click();
         }} style={{padding:"10px 20px",background:"#00b894",border:"none",borderRadius:8,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",width:"100%"}}>📥 下載 CSV</button>
       </div>
     </div>}
