@@ -493,7 +493,7 @@ function PendingBookings({masters, currentMaster, isAdmin, onConfirmed}){
 
   return<div style={{flex:1,overflow:'auto',padding:'12px 14px',maxWidth:480,margin:'0 auto'}}>
     {items.map(b=>{
-      const d=b.date?new Date(b.date):null;
+      const d=b.date?new Date(b.date+'T00:00:00'):null;
       const timeStr=b.start_time?b.start_time.slice(0,5):'待定';
       const lineInfo=lineNames[b.customer_phone]||{};
       const isReq=!b.date;
@@ -1452,7 +1452,7 @@ function MainApp({authMaster,onLogout}){
         </div>
         <div style={{display:"flex",gap:8,marginTop:12}}>
           <button onClick={()=>setCellHistory(null)} style={{flex:1,padding:10,borderRadius:8,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-muted)",cursor:"pointer"}}>關閉</button>
-          <button onClick={()=>{setCellHistory(null);openDlg(new Date(cellHistory.dateStr).getDate(),cellHistory.time);}} style={{flex:1,padding:10,borderRadius:8,background:"#e94560",border:"none",color:"#fff",fontWeight:700,cursor:"pointer"}}>＋ 新增預約</button>
+          <button onClick={()=>{setCellHistory(null);openDlg(new Date(cellHistory.dateStr+'T00:00:00').getDate(),cellHistory.time);}} style={{flex:1,padding:10,borderRadius:8,background:"#e94560",border:"none",color:"#fff",fontWeight:700,cursor:"pointer"}}>＋ 新增預約</button>
         </div>
       </div>
     </div>}
