@@ -14,6 +14,20 @@
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
+:root{
+  --vv-top:0px; --vv-left:0px;
+  --vv-width:100vw; --vv-height:100vh;
+  --vv-scale:1;
+}
+/* Modal backdrop 自動跟著 visualViewport，pinch-zoom 時彈窗會在縮放後的可視區域內 */
+[data-modal-backdrop]{
+  position:fixed !important;
+  top:var(--vv-top) !important;
+  left:var(--vv-left) !important;
+  width:var(--vv-width) !important;
+  height:var(--vv-height) !important;
+  inset:auto !important;
+}
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'Noto Sans TC', sans-serif; font-size: 14px; -webkit-text-size-adjust: 100%; overflow: hidden; background: var(--bg-main); color: var(--text-main); touch-action: pan-x pan-y pinch-zoom; }
 input, select, button, textarea { font-family: inherit; outline: none; }
@@ -87,6 +101,48 @@ const sb=supabase.createClient(
   "https://ikzyzkhuireqztbhrtna.supabase.co",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlrenl6a2h1aXJlcXp0YmhydG5hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMjI1NjIsImV4cCI6MjA5Mjc5ODU2Mn0.rIXfMsiuYg6HoJaACxvxr1SFS9M3m7XNP57qcoyvRxw"
 );
+
+// ═══════════════════════════════════════════
+// 全域彈窗 stack — 給「左滑返回」優先關彈窗用
+// 每個彈窗用 useModalBackClose hook 註冊自己的 close 函數
+// 左滑（popstate）時先呼叫 stack 最上層的 close，沒彈窗才回上一個 tab
+// ═══════════════════════════════════════════
+const __modalStack=[];
+function pushModal(closeFn){__modalStack.push(closeFn);}
+function popModal(closeFn){const i=__modalStack.lastIndexOf(closeFn);if(i>=0)__modalStack.splice(i,1);}
+function tryCloseTopModal(){
+  if(__modalStack.length===0)return false;
+  const closeFn=__modalStack.pop();
+  try{closeFn();}catch(e){console.warn(e);}
+  return true;
+}
+// hook：彈窗開啟時呼叫，傳入 isOpen + onClose
+function useModalBackClose(isOpen,onClose){
+  React.useEffect(()=>{
+    if(!isOpen)return;
+    pushModal(onClose);
+    return()=>popModal(onClose);
+  },[isOpen,onClose]);
+}
+
+// 監聽 visualViewport 變動，把目前縮放/位置寫入 CSS 變數
+// 所有 modal 都可以用 var(--vv-top) var(--vv-left) var(--vv-width) var(--vv-height) 自動跟隨
+// 這樣使用者 pinch-zoom 時，彈窗會跟著縮放後的視覺視窗一起移動和變大變小
+(function setupVisualViewportTracking(){
+  if(typeof window==="undefined"||!window.visualViewport)return;
+  const v=window.visualViewport;
+  const update=()=>{
+    const r=document.documentElement.style;
+    r.setProperty("--vv-top",`${v.offsetTop}px`);
+    r.setProperty("--vv-left",`${v.offsetLeft}px`);
+    r.setProperty("--vv-width",`${v.width}px`);
+    r.setProperty("--vv-height",`${v.height}px`);
+    r.setProperty("--vv-scale",`${v.scale}`);
+  };
+  update();
+  v.addEventListener("resize",update);
+  v.addEventListener("scroll",update);
+})();
 
 function getTaipeiNow(){const t=new Date();const s=t.toLocaleString("en-US",{timeZone:"Asia/Taipei",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false});const[date,time]=s.split(", ");const[mo,dy,yr]=date.split("/");const[h,mi,sc]=(time||"00:00:00").split(":");return new Date(+yr,+mo-1,+dy,+h,+mi,+sc);}
 function getTaipeiDateStr(){const t=getTaipeiNow();return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")}`;}
@@ -193,8 +249,23 @@ function getNextTime(timeStr,steps){
   return next||null;
 }
 function parseInput(s){
-  const m=s.trim().match(/^(.+?)(\d{4,})(.*)$/);
-  return m?{name:(m[1]+(m[3]||"")).trim(),phone:m[2]}:{name:s.trim(),phone:""};
+  // 預處理：
+  //   1. 全形數字 ０-９ 轉半形
+  //   2. 全形空白統一成半形
+  //   3. 數字之間的常見分隔符（連字號、空白、點號、括號）去掉
+  //   4. 尾端的多餘符號清掉
+  const cleaned=s
+    .replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
+    .replace(/[\u3000\s]+/g," ")
+    .replace(/(\d)[\s\-\u2010-\u2015\u2212.()](?=\d)/g,"$1")
+    .trim();
+  // 從尾端抓最長一段連續數字（≥4 位）當電話
+  // 用 .*? 而非 .+? 避免名字頭被吃掉一個字（如「0908327052」開頭的 0）
+  const m=cleaned.match(/^(.*?)(\d{4,})(\D*)$/);
+  if(!m)return{name:cleaned,phone:""};
+  // 名字部分把括號等多餘符號去掉
+  const name=(m[1]+(m[3]||"")).replace(/^[\s()【】\[\]『』「」]+|[\s()【】\[\]『』「」]+$/g,"").trim();
+  return{name,phone:m[2]};
 }
 function displayName(n){if(!n)return"";const m=n.trim().match(/^([^0-9]+?)([0-9R][0-9]{3,}).*/);return m?m[1].trim():n.trim();}
 function getWeeksMon(y,m,showSun){
@@ -458,6 +529,10 @@ function PendingBookings({masters, currentMaster, isAdmin, onConfirmed}){
   const[copyInfo,setCopyInfo]=React.useState(null);
   const[copied,setCopied]=React.useState(false);
   const[historyDays,setHistoryDays]=React.useState(30); // 取消歷史顯示最近 N 天
+
+  // 註冊彈窗
+  useModalBackClose(!!confirmDialog,React.useCallback(()=>setConfirmDialog(null),[]));
+  useModalBackClose(!!copyInfo,React.useCallback(()=>{setCopyInfo(null);setCopied(false);},[]));
 
   const MASTER_IDS={
     '7ae4e5c5-bfa5-46f6-8a90-a96e8721cea5':'哲瑋老師',
@@ -836,6 +911,51 @@ function MainApp({authMaster,onLogout}){
   const FS={sm:{b:9,n:10,t:9,s:8},md:{b:11,n:11,t:10,s:9},lg:{b:13,n:13,t:11,s:10}}[fontSize]||{b:11,n:11,t:10,s:9};
   useEffect(()=>{document.body.className=theme;},[theme]);
 
+  // 防止手機左滑邊緣手勢造成閃退，並支援「左滑返回上一個 tab」
+  // 策略：
+  //   - 維護一個 tab 歷史 stack（最多 10 筆，避免無限長）
+  //   - 進 app 時放一個 anchor 在 history 裡
+  //   - 切換 tab 時也 push 一筆 history
+  //   - 收到 popstate → 跳回上一個 tab；無上一個則補一個 anchor 回去（防閃退）
+  const tabHistoryRef=useRef(["schedule"]);
+  const isPopHandlingRef=useRef(false);
+  useEffect(()=>{
+    // 進入 app 時放 anchor
+    if(!window.history.state||!window.history.state.__appAnchor){
+      window.history.pushState({__appAnchor:true,tab:"schedule"},"",window.location.href);
+    }
+    const onPop=()=>{
+      isPopHandlingRef.current=true;
+      // 優先：關掉最上層的彈窗
+      const closed=tryCloseTopModal();
+      if(!closed){
+        // 沒彈窗 → 跳回上一個 tab
+        const stack=tabHistoryRef.current;
+        if(stack.length>1){
+          stack.pop();
+          const prevTab=stack[stack.length-1];
+          setTab(prevTab);
+        }
+      }
+      // 不論有沒有處理，都補一個 anchor 回 history（防止真的離開 app）
+      window.history.pushState({__appAnchor:true,tab:tabHistoryRef.current.slice(-1)[0]},"",window.location.href);
+      setTimeout(()=>{isPopHandlingRef.current=false;},50);
+    };
+    window.addEventListener("popstate",onPop);
+    return()=>window.removeEventListener("popstate",onPop);
+  },[]);
+
+  // 切 tab 的統一入口：同時更新 history stack（讓「左滑返回上一個 tab」可以回追）
+  const goTab=(k)=>{
+    if(k===tab)return;
+    if(isPopHandlingRef.current){setTab(k);return;}
+    const stack=tabHistoryRef.current;
+    stack.push(k);
+    if(stack.length>10)stack.shift(); // 最多 10 筆
+    window.history.pushState({__appAnchor:true,tab:k},"",window.location.href);
+    setTab(k);
+  };
+
   const[masters,setMasters]=useState([]);
   const[master,setMaster]=useState(null);
   const loginMaster=authMaster; // 登入者永遠是 authMaster，不隨瀏覽切換
@@ -885,12 +1005,22 @@ function MainApp({authMaster,onLogout}){
   const[searchLoading,setSearchLoading]=useState(false);
   const[searchMatchIdx,setSearchMatchIdx]=useState(0);
   const searchInputRef=useRef(null);
+
+  // 註冊彈窗到全域 stack — 左滑時優先關彈窗
+  useModalBackClose(!!dialog,React.useCallback(()=>setDialog(null),[]));
+  useModalBackClose(!!editForm,React.useCallback(()=>setEditForm(null),[]));
+  useModalBackClose(showSlots,React.useCallback(()=>{setShowSlots(false);setSlotDate(null);},[]));
+  useModalBackClose(!!cellHistory,React.useCallback(()=>setCellHistory(null),[]));
+  useModalBackClose(showEditLogs,React.useCallback(()=>setShowEditLogs(false),[]));
+  useModalBackClose(showSearch,React.useCallback(()=>setShowSearch(false),[]));
+  useModalBackClose(!!cpMode,React.useCallback(()=>setCpMode(null),[]));
   const[showOwnerPanel,setShowOwnerPanel]=useState(false);
   const[undoStack,setUndoStack]=useState([]); // [{type,snapshot,description}]
   const pushUndo=(desc,snapshot)=>setUndoStack(prev=>[{desc,snapshot,ts:Date.now()},...prev].slice(0,20));
   const[dragMode,setDragMode]=useState(false);
   const[moveMode,setMoveMode]=useState(false); // 🔀 手機移動模式
   const[dragCells,setDragCells]=useState(new Set());
+  const[removeVacCells,setRemoveVacCells]=useState(new Set()); // 休假模式下要取消的休假格
   const[isDragging,setIsDragging]=useState(false);
   const dragOverRef=useRef(null);
   const[isDragActive,setIsDragActive]=useState(false);
@@ -1225,25 +1355,91 @@ function MainApp({authMaster,onLogout}){
   // Vacation drag
   const saveDragVacation=async(cells)=>{
     const cellSet=cells||dragCells;
-    if(!cellSet.size)return;
+    const removeSet=removeVacCells;
+    if(!cellSet.size&&!removeSet.size)return;
+    // 1. 收集要新增的休假
     const rows=[...cellSet].map(key=>{const[dateStr,timeStr]=key.split("__");return{master_id:master.id,raw_input:"休假",customer_name:"休假",customer_phone:null,date:dateStr,start_time:timeStr+":00",guest_count:0,color_tag:"vacation",note:null,status:"confirmed"};});
-    // 先刪除同格的舊資料，再插入，避免 upsert 因缺少 unique constraint 失敗
-    for(const row of rows){
-      await sb.from("bookings").delete().eq("master_id",row.master_id).eq("date",row.date).eq("start_time",row.start_time).neq("status","cancelled");
+    // 2. 收集要移除的休假紀錄（用於還原）
+    const removedVacations=[];
+    if(removeSet.size>0){
+      for(const key of removeSet){
+        const[dateStr,timeStr]=key.split("__");
+        const{data}=await sb.from("bookings").select("*").eq("master_id",master.id).eq("date",dateStr).eq("start_time",timeStr+":00").eq("color_tag","vacation").neq("status","cancelled");
+        if(data&&data.length>0)removedVacations.push(...data);
+      }
+      // 真正刪除
+      if(removedVacations.length>0){
+        await sb.from("bookings").delete().in("id",removedVacations.map(v=>v.id));
+      }
     }
-    const{error}=await sb.from("bookings").insert(rows);
-    setDragCells(new Set());setIsDragging(false);
-    if(!error){msg(`已標記 ${rows.length} 格休假`);loadBk();}
-    else{msg("休假標記失敗",true);}
+    // 3. 新增休假時收集會被覆蓋的客人預約
+    const overwritten=[];
+    if(rows.length>0){
+      for(const row of rows){
+        const{data:existing}=await sb.from("bookings").select("*").eq("master_id",row.master_id).eq("date",row.date).eq("start_time",row.start_time).neq("status","cancelled");
+        if(existing&&existing.length>0)overwritten.push(...existing);
+        await sb.from("bookings").delete().eq("master_id",row.master_id).eq("date",row.date).eq("start_time",row.start_time).neq("status","cancelled");
+      }
+    }
+    // 4. 插入新休假
+    let inserted=[];
+    if(rows.length>0){
+      const{data,error}=await sb.from("bookings").insert(rows).select();
+      if(error){msg("休假標記失敗",true);setDragCells(new Set());setRemoveVacCells(new Set());setIsDragging(false);return;}
+      inserted=data||[];
+    }
+    // 5. 清狀態
+    setDragCells(new Set());setRemoveVacCells(new Set());setIsDragging(false);
+    // 6. push undo
+    const descParts=[];
+    if(rows.length>0)descParts.push(`新增 ${rows.length} 格`);
+    if(removedVacations.length>0)descParts.push(`取消 ${removedVacations.length} 格`);
+    pushUndo(`休假：${descParts.join("、")}`,{
+      action:"undo_vacation",
+      insertedIds:inserted.map(r=>r.id),
+      overwritten:overwritten.map(b=>{const{id,...rest}=b;return rest;}),
+      restoredVacations:removedVacations.map(b=>{const{id,...rest}=b;return rest;})
+    });
+    msg(`✅ ${descParts.join("、")}`);
+    loadBk();
   };
+  // 滑鼠拖曳保留（電腦：Shift+拖曳）
   const onCellMouseDown=(d,t,e)=>{
-    if(e.shiftKey||dragMode){e.preventDefault();setIsDragging(true);setDragCells(new Set([`${fmtDate(year,month,d)}__${t}`]));}
+    if(e.shiftKey){e.preventDefault();setIsDragging(true);setDragCells(new Set([`${fmtDate(year,month,d)}__${t}`]));}
   };
   const onCellMouseEnter=(d,t)=>{if(isDragging&&d)setDragCells(prev=>new Set(prev).add(`${fmtDate(year,month,d)}__${t}`));};
   const onMouseUp=()=>{
     if(isDragging){
       if(dragCells.size>0)saveDragVacation(dragCells);
       else{setIsDragging(false);setDragCells(new Set());}
+    }
+  };
+
+  // ── 休假模式：點選 toggle（取代之前的拖曳）── 
+  // 進入休假模式後，點一格 = 加選；再點 = 取消選；按「✓ 確認」儲存
+  // 休假模式下，點已休假的格子 = 加入「待移除」集合（會把休假取消變回空格）
+  const toggleVacationCell=(d,t)=>{
+    if(!d)return;
+    const k=`${fmtDate(year,month,d)}__${t}`;
+    const b=bk(d,t);
+    // 已是休假 → toggle 待移除集合
+    if(b&&b.color_tag==="vacation"){
+      setRemoveVacCells(prev=>{
+        const next=new Set(prev);
+        if(next.has(k))next.delete(k);
+        else next.add(k);
+        return next;
+      });
+      return;
+    }
+    // 空格 → toggle 加選
+    if(!b){
+      setDragCells(prev=>{
+        const next=new Set(prev);
+        if(next.has(k))next.delete(k);
+        else next.add(k);
+        return next;
+      });
     }
   };
 
@@ -1279,13 +1475,16 @@ function MainApp({authMaster,onLogout}){
 
   // ── 執行上一步還原 ──
   const executeUndo=async()=>{
-    if(!undoStack.length)return;
+    console.log("[executeUndo] called, stack:",undoStack);
+    if(!undoStack.length){msg("沒有可還原的操作",true);return;}
     const[top,...rest]=undoStack;
+    console.log("[executeUndo] top:",top);
     const{action,...data}=top.snapshot;
     const editorName=(loginMaster||master)?.name||"系統";
     const nowStr=new Date().toLocaleString("zh-TW",{timeZone:"Asia/Taipei",hour:"2-digit",minute:"2-digit"});
     let ok=false;
     let affectedId=null;
+    let errorMsg=null;
     if(action==="delete_ids"){
       const{error}=await sb.from("bookings").delete().in("id",data.ids);
       ok=!error;affectedId=data.ids[0];
@@ -1298,6 +1497,41 @@ function MainApp({authMaster,onLogout}){
     }else if(action==="update_datetime"){
       const{error}=await sb.from("bookings").update({date:data.date,start_time:data.start_time}).eq("id",data.id);
       ok=!error;affectedId=data.id;
+    }else if(action==="undo_vacation"){
+      try{
+        let anyError=null;
+        // 過濾不該回填的欄位（DB auto-generated + 唯讀）
+        const cleanRow=(b)=>{
+          const{id,created_at,updated_at,last_edited_at,last_edited_by,...rest}=b;
+          return rest;
+        };
+        // 1. 刪掉新增的休假紀錄
+        if(data.insertedIds&&data.insertedIds.length>0){
+          const{error}=await sb.from("bookings").delete().in("id",data.insertedIds);
+          if(error){console.error("[undo_vacation] delete error:",error);anyError=error;}
+        }
+        // 2. 恢復被覆蓋的客人預約
+        if(data.overwritten&&data.overwritten.length>0){
+          const{error}=await sb.from("bookings").insert(data.overwritten.map(cleanRow));
+          if(error){console.error("[undo_vacation] restore overwritten error:",error);anyError=error;}
+        }
+        // 3. 恢復被取消的休假紀錄
+        if(data.restoredVacations&&data.restoredVacations.length>0){
+          const{error}=await sb.from("bookings").insert(data.restoredVacations.map(cleanRow));
+          if(error){console.error("[undo_vacation] restore vacation error:",error);anyError=error;}
+        }
+        if(anyError){
+          ok=false;
+          errorMsg=anyError.message||anyError.code||JSON.stringify(anyError).slice(0,80);
+        }else{
+          ok=true;
+        }
+        affectedId=data.insertedIds?.[0]||null;
+      }catch(e){
+        console.error("[undo_vacation] exception:",e);
+        errorMsg=e.message||"unknown";
+        ok=false;
+      }
     }
     if(ok){
       // 寫入歷史紀錄：還原操作
@@ -1305,7 +1539,9 @@ function MainApp({authMaster,onLogout}){
         await saveEditLog(affectedId,editorName,`【還原】${top.desc}（${nowStr}）`);
       }
       setUndoStack(rest);msg(`✅ 已還原：${top.desc}`);loadBk();
-    }else msg("還原失敗",true);
+    }else{
+      msg(errorMsg?`還原失敗：${errorMsg}`:"還原失敗",true);
+    }
   };
 
   const getDayStats=(d)=>{
@@ -1332,7 +1568,14 @@ function MainApp({authMaster,onLogout}){
       <td key={dayIdx} data-cellkey={cellKey}
         onMouseDown={e=>d&&onCellMouseDown(d,t,e)}
         onMouseEnter={()=>d&&onCellMouseEnter(d,t)}
-        onClick={()=>{if(isDragging)return;if(b){setEditLogs([]);setShowEditLogs(false);setCellHistory(null);sb.from("bookings").select("*").eq("id",b.id).single().then(({data})=>{setCpMode({booking:data||b});if(data){
+        onClick={(e)=>{
+          if(isDragging)return;
+          // 休假模式：點擊 = toggle（空格→加選休假；已休假→加選移除）
+          if(dragMode){
+            if(d)toggleVacationCell(d,t);
+            return;
+          }
+          if(b){setEditLogs([]);setShowEditLogs(false);setCellHistory(null);sb.from("bookings").select("*").eq("id",b.id).single().then(({data})=>{setCpMode({booking:data||b});if(data){
           const dateStr=fmtDate(year,month,d);
           Promise.all([getEditLogs(data.id),getEditLogsByCell(master.id,dateStr,t)]).then(([bkLogs,cellLogs])=>{
             const seen=new Set();
@@ -1344,7 +1587,9 @@ function MainApp({authMaster,onLogout}){
         className={isDragSel?"drag-select":(b?`c-${b.color_tag}`:"")}
         style={{padding:"1px 3px",borderBottom:"1px solid var(--border)",borderRight:"1px solid var(--border)",height:rh,width:cw,minWidth:cw,maxWidth:cw,
           background:isDragSel?"rgba(162,155,254,0.4)":isR&&!b?"var(--bg-rest)":"",
-          cursor:!b&&d?"pointer":"default",verticalAlign:"middle",userSelect:"none",touchAction:isDragActive?"none":"auto"}}>
+          cursor:!b&&d||(dragMode&&isVac)?"pointer":"default",verticalAlign:"middle",userSelect:"none",touchAction:isDragActive?"none":"auto",
+          outline:dragMode&&isVac&&removeVacCells.has(cellKey)?"2px dashed #f5a623":"none",
+          outlineOffset:dragMode&&isVac&&removeVacCells.has(cellKey)?-2:0}}>
         {b&&b.guest_count>0&&!isVac&&(
           <div className="draggable-card" draggable
             onDragStart={e=>{e.dataTransfer.setData("app/bk",JSON.stringify(b));e.dataTransfer.effectAllowed="move";}}
@@ -1365,7 +1610,7 @@ function MainApp({authMaster,onLogout}){
             {canDelete&&<span onClick={e=>{e.stopPropagation();delBk(b.id);}} style={{fontSize:9,color:"var(--text-muted)",padding:"2px 4px",flexShrink:0}}>✕</span>}
           </div>
         )}
-        {isVac&&b&&<div style={{fontSize:FS.s,color:"#e94560",fontWeight:700,textAlign:"center"}}>休</div>}
+        {isVac&&b&&<div style={{fontSize:FS.s,fontWeight:700,textAlign:"center",color:dragMode&&removeVacCells.has(cellKey)?"#f5a623":"#e94560",textDecoration:dragMode&&removeVacCells.has(cellKey)?"line-through":"none"}}>{dragMode&&removeVacCells.has(cellKey)?"取消":"休"}</div>}
       </td>
     );
   };
@@ -1413,7 +1658,7 @@ function MainApp({authMaster,onLogout}){
     {/* Nav */}
     <div style={{display:"flex",background:"var(--bg-header)",borderBottom:"1px solid var(--border2)",overflowX:"auto",flexShrink:0}}>
       {[["schedule","📅 排班"],["overview","🗓 全覽"],...(canViewCRM?[["crm","👥 客戶"]]:[]),["analytics","📊 數據"],["pending",`📋 待確認${pendingCount>0?` (${pendingCount})`:""}`],...(isAdmin?[["settings","⚙️ 設定"]]:[])].map(([k,l])=>(
-        <button key={k} className={`tab-btn${tab===k?" active":""}`} onClick={()=>{setTab(k);if(k==="crm")setCrmKey(p=>p+1);if(k==="pending")loadPendingCount();}}>{l}</button>
+        <button key={k} className={`tab-btn${tab===k?" active":""}`} onClick={()=>{goTab(k);if(k==="crm")setCrmKey(p=>p+1);if(k==="pending")loadPendingCount();}}>{l}</button>
       ))}
     </div>
 
@@ -1504,9 +1749,17 @@ function MainApp({authMaster,onLogout}){
         <div style={{display:"flex",flexWrap:"wrap",gap:4}}>{todaySlots.map(t=><button key={t} onClick={()=>{openDlg(today.getDate(),t);setShowSlots(false);}} style={{padding:"2px 7px",background:"#00b89415",border:"1px solid #00b89440",color:"#00b894",borderRadius:4,fontSize:10,cursor:"pointer"}}>{t}</button>)}</div></>}
       </div>}
 
-      {(dragMode||isDragging)&&<div style={{background:"rgba(233,69,96,0.12)",borderBottom:"1px solid #e94560",padding:"4px 12px",fontSize:11,color:"#e94560",display:"flex",justifyContent:"space-between",flexShrink:0}}>
-        <span>🔴 休假標記模式 {isDragging&&dragCells.size>0?`— 已選 ${dragCells.size} 格`:""}</span>
-        <span style={{fontSize:10,color:"var(--text-dim)"}}>電腦：Shift+拖曳　手機：滑動格子　放開即儲存</span>
+      {dragMode&&<div style={{background:"rgba(233,69,96,0.12)",borderBottom:"1px solid #e94560",padding:"6px 12px",fontSize:11,color:"#e94560",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexShrink:0,flexWrap:"wrap"}}>
+        <span style={{fontWeight:700}}>🔴 休假模式 {dragCells.size>0||removeVacCells.size>0?<span style={{fontSize:10,fontWeight:400}}>　{dragCells.size>0&&`新增 ${dragCells.size}`}{dragCells.size>0&&removeVacCells.size>0&&"｜"}{removeVacCells.size>0&&<span style={{color:"#f5a623"}}>取消 {removeVacCells.size}</span>}</span>:"— 點空格新增、點已休假取消"}</span>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          <button onClick={()=>{setDragMode(false);setDragCells(new Set());setRemoveVacCells(new Set());setIsDragging(false);}} style={{padding:"3px 10px",borderRadius:6,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-dim)",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>✕ 退出</button>
+          {(dragCells.size>0||removeVacCells.size>0)&&<button onClick={()=>{setDragCells(new Set());setRemoveVacCells(new Set());}} style={{padding:"3px 10px",borderRadius:6,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-dim)",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>清除選取</button>}
+          <button onClick={()=>{const total=dragCells.size+removeVacCells.size;if(total===0){msg("請先點選格子",true);return;}saveDragVacation(dragCells);}} disabled={dragCells.size===0&&removeVacCells.size===0} style={{padding:"3px 12px",borderRadius:6,border:"none",background:dragCells.size>0||removeVacCells.size>0?"#e94560":"#444",color:"#fff",fontSize:11,fontWeight:700,cursor:dragCells.size>0||removeVacCells.size>0?"pointer":"not-allowed",fontFamily:"inherit"}}>✓ 確認</button>
+        </div>
+      </div>}
+      {isDragging&&!dragMode&&<div style={{background:"rgba(233,69,96,0.12)",borderBottom:"1px solid #e94560",padding:"4px 12px",fontSize:11,color:"#e94560",display:"flex",justifyContent:"space-between",flexShrink:0}}>
+        <span>🔴 拖曳中 — 已選 {dragCells.size} 格</span>
+        <span style={{fontSize:10,color:"var(--text-dim)"}}>放開即儲存</span>
       </div>}
 
       <div style={{display:"flex",alignItems:"center",padding:"5px 12px",background:"var(--bg-header)",borderBottom:"1px solid var(--border)",flexShrink:0}}>
@@ -1614,7 +1867,7 @@ function MainApp({authMaster,onLogout}){
     {tab==="pending"&&<PendingBookings masters={masters} currentMaster={loginMaster||master} isAdmin={isAdmin} onConfirmed={()=>{loadBk();loadPendingCount();}} />}
 
     {/* Dialog */}
-    {cellHistory&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:100}} onClick={()=>setCellHistory(null)}>
+    {cellHistory&&<div data-modal-backdrop="true" style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:100}} onClick={()=>setCellHistory(null)}>
       <div style={{background:"var(--bg-header)",border:"1px solid var(--border2)",borderRadius:"16px 16px 0 0",padding:"16px 16px 32px",width:"100%",maxWidth:480}} onClick={e=>e.stopPropagation()}>
         <div style={{fontWeight:700,fontSize:15,marginBottom:4}}>📋 格子歷史紀錄</div>
         <div style={{fontSize:12,color:"var(--text-muted)",marginBottom:12}}>{cellHistory.dateStr} {cellHistory.time}</div>
@@ -1630,7 +1883,7 @@ function MainApp({authMaster,onLogout}){
         </div>
       </div>
     </div>}
-    {dialog&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:100}} onClick={()=>setDialog(null)}>
+    {dialog&&<div data-modal-backdrop="true" style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:100}} onClick={()=>setDialog(null)}>
       <div style={{background:"var(--bg-header)",border:"1px solid var(--border2)",borderRadius:"16px 16px 0 0",padding:16,width:"100%",maxWidth:480}} onClick={e=>e.stopPropagation()}>
         <div style={{display:"flex",gap:6,marginBottom:6}}>
           <input type="date" value={dialog.dateStr} onChange={e=>setDialog(d=>({...d,dateStr:e.target.value}))} style={{flex:1,background:"var(--input-bg)",color:"var(--text-main)",border:"1px solid var(--border2)",borderRadius:5,padding:6}} />
@@ -1755,8 +2008,8 @@ function MainApp({authMaster,onLogout}){
     </div>}
 
     {/* Copy dialog */}
-    {cpMode&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:100}} onClick={()=>setCpMode(null)}>
-      <div style={{background:"var(--bg-header)",border:"1px solid var(--border2)",borderRadius:"20px 20px 0 0",padding:"20px 16px 36px",width:"100%",maxWidth:560}} onClick={e=>e.stopPropagation()}>
+    {cpMode&&<div data-modal-backdrop="true" style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:100}} onClick={()=>setCpMode(null)}>
+      <div style={{background:"var(--bg-header)",border:"1px solid var(--border2)",borderRadius:"20px 20px 0 0",padding:"20px 16px 36px",width:"100%",maxWidth:560,maxHeight:"85vh",overflowY:"auto",overflowX:"hidden",boxSizing:"border-box"}} onClick={e=>e.stopPropagation()}>
         {/* 頂部拖曳條 */}
         <div style={{width:40,height:4,background:"var(--border2)",borderRadius:2,margin:"0 auto 16px"}}></div>
         <div style={{fontWeight:800,fontSize:16,marginBottom:12,color:"var(--text-main)"}}>預約詳情</div>
@@ -1785,15 +2038,18 @@ function MainApp({authMaster,onLogout}){
           </div>}
         </div>
         {/* 複製到其他時段 */}
-        <div style={{display:"flex",gap:8,marginBottom:14}}>
-          <input type="date" value={cpTarget.date} onClick={e=>e.target.showPicker&&e.target.showPicker()} onChange={e=>setCpTarget(t=>({...t,date:e.target.value}))} style={{flex:1,background:"var(--input-bg)",border:"1px solid var(--border2)",borderRadius:10,padding:"10px 10px",color:"var(--text-main)",fontSize:14}} />
-          <select value={cpTarget.time} onChange={e=>setCpTarget(t=>({...t,time:e.target.value}))} style={{flex:1,background:"var(--input-bg)",border:"1px solid var(--border2)",borderRadius:10,padding:"10px 8px",color:"var(--text-main)",fontSize:14}}>
-            <option value="">選擇時間</option>
-            {TIMES.map(t=>{const taken=cpTarget.date&&bookings[`${cpTarget.date}__${t}`];return<option key={t} value={t} disabled={!!taken} style={{color:taken?"#e94560":"inherit"}}>{t}{taken?" ✕已佔":""}</option>;})}
-          </select>
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:11,color:"var(--text-dim)",marginBottom:6,fontWeight:700}}>📋 複製到其他時段</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+            <input type="date" value={cpTarget.date} onClick={e=>e.target.showPicker&&e.target.showPicker()} onChange={e=>setCpTarget(t=>({...t,date:e.target.value}))} style={{minWidth:0,background:"var(--input-bg)",border:"1px solid var(--border2)",borderRadius:10,padding:"10px",color:"var(--text-main)",fontSize:14,boxSizing:"border-box",width:"100%"}} />
+            <select value={cpTarget.time} onChange={e=>setCpTarget(t=>({...t,time:e.target.value}))} style={{minWidth:0,background:"var(--input-bg)",border:"1px solid var(--border2)",borderRadius:10,padding:"10px",color:"var(--text-main)",fontSize:14,boxSizing:"border-box",width:"100%"}}>
+              <option value="">選擇時間</option>
+              {TIMES.map(t=>{const taken=cpTarget.date&&bookings[`${cpTarget.date}__${t}`];return<option key={t} value={t} disabled={!!taken} style={{color:taken?"#e94560":"inherit"}}>{t}{taken?" ✕已佔":""}</option>;})}
+            </select>
+          </div>
           <button onClick={copyBk} disabled={!cpTarget.date||!cpTarget.time||saving}
-            style={{flexShrink:0,padding:"10px 16px",borderRadius:10,background:cpTarget.date&&cpTarget.time?"#a29bfe":"var(--border2)",border:"none",color:cpTarget.date&&cpTarget.time?"#fff":"var(--text-dim)",fontWeight:700,cursor:"pointer",fontSize:13}}>
-            {saving?"複製中...":"複製"}
+            style={{width:"100%",padding:"10px 16px",borderRadius:10,background:cpTarget.date&&cpTarget.time?"#a29bfe":"var(--border2)",border:"none",color:cpTarget.date&&cpTarget.time?"#fff":"var(--text-dim)",fontWeight:700,cursor:cpTarget.date&&cpTarget.time?"pointer":"not-allowed",fontSize:13}}>
+            {saving?"複製中...":"複製到此時段"}
           </button>
         </div>
         {/* 主要操作按鈕 */}
@@ -1815,7 +2071,7 @@ function MainApp({authMaster,onLogout}){
     </div>}
 
     {/* 編輯預約 Modal */}
-    {editForm&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}} onClick={()=>setEditForm(null)}>
+    {editForm&&<div data-modal-backdrop="true" style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}} onClick={()=>setEditForm(null)}>
       <div style={{background:"var(--bg-header)",border:"1px solid var(--border2)",borderRadius:16,padding:18,width:"92%",maxWidth:420}} onClick={e=>e.stopPropagation()}>
         <div style={{fontWeight:700,fontSize:15,marginBottom:12,color:"#74b9ff"}}>✏️ 編輯預約</div>
         <div style={{marginBottom:10}}>
@@ -2009,8 +2265,17 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
   const[ovMoveMode,setOvMoveMode]=useState(false); // 🔀 手機移動模式
   const[ovIsDraggingVac,setOvIsDraggingVac]=useState(false);
   const[ovDragCells,setOvDragCells]=useState(new Set());
+  const[ovRemoveVacCells,setOvRemoveVacCells]=useState(new Set()); // 休假模式下要取消的休假格
   const[ovShowSlots,setOvShowSlots]=useState(false);
   const[ovSlotDate,setOvSlotDate]=useState(null);
+
+  // 註冊彈窗到全域 stack — 左滑時優先關彈窗
+  useModalBackClose(!!dialog,React.useCallback(()=>setDialog(null),[]));
+  useModalBackClose(!!editForm,React.useCallback(()=>setEditForm(null),[]));
+  useModalBackClose(!!cpMode,React.useCallback(()=>setCpMode(null),[]));
+  useModalBackClose(ovShowEditLogs,React.useCallback(()=>setOvShowEditLogs(false),[]));
+  useModalBackClose(!!ovCellHistory,React.useCallback(()=>setOvCellHistory(null),[]));
+  useModalBackClose(ovShowSlots,React.useCallback(()=>{setOvShowSlots(false);setOvSlotDate(null);},[]));
   const[ovShowSearch,setOvShowSearch]=useState(false);
   const[ovSearchQ,setOvSearchQ]=useState("");
   const[ovSearchResults,setOvSearchResults]=useState([]);
@@ -2297,24 +2562,82 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
   // ── Overview vacation drag ──
   const ovSaveDragVacation=async(cells)=>{
     const cellSet=cells||ovDragCells;
-    if(!cellSet.size)return;
+    const removeSet=ovRemoveVacCells;
+    if(!cellSet.size&&!removeSet.size)return;
     const rows=[...cellSet].map(key=>{const[mid,dateStr,timeStr]=key.split("__");return{master_id:mid,raw_input:"休假",customer_name:"休假",customer_phone:null,date:dateStr,start_time:timeStr+":00",guest_count:0,color_tag:"vacation",note:null,status:"confirmed"};});
+    // 收集要移除的休假
+    const removedVacations=[];
+    if(removeSet.size>0){
+      for(const key of removeSet){
+        const[mid,dateStr,timeStr]=key.split("__");
+        const{data}=await sb.from("bookings").select("*").eq("master_id",mid).eq("date",dateStr).eq("start_time",timeStr+":00").eq("color_tag","vacation").neq("status","cancelled");
+        if(data&&data.length>0)removedVacations.push(...data);
+      }
+      if(removedVacations.length>0){
+        await sb.from("bookings").delete().in("id",removedVacations.map(v=>v.id));
+      }
+    }
+    // 收集要被覆蓋的客人資料
+    const overwritten=[];
     for(const row of rows){
+      const{data:existing}=await sb.from("bookings").select("*").eq("master_id",row.master_id).eq("date",row.date).eq("start_time",row.start_time).neq("status","cancelled");
+      if(existing&&existing.length>0)overwritten.push(...existing);
       await sb.from("bookings").delete().eq("master_id",row.master_id).eq("date",row.date).eq("start_time",row.start_time).neq("status","cancelled");
     }
-    const{error}=await sb.from("bookings").insert(rows);
-    setOvDragCells(new Set());setOvIsDraggingVac(false);
-    if(!error){msg(`已標記 ${rows.length} 格休假`);loadBk();}
-    else{msg("休假標記失敗",true);}
+    let inserted=[];
+    if(rows.length>0){
+      const{data,error}=await sb.from("bookings").insert(rows).select();
+      if(error){msg("休假標記失敗",true);setOvDragCells(new Set());setOvRemoveVacCells(new Set());setOvIsDraggingVac(false);return;}
+      inserted=data||[];
+    }
+    setOvDragCells(new Set());setOvRemoveVacCells(new Set());setOvIsDraggingVac(false);
+    const descParts=[];
+    if(rows.length>0)descParts.push(`新增 ${rows.length} 格`);
+    if(removedVacations.length>0)descParts.push(`取消 ${removedVacations.length} 格`);
+    if(pushUndo){
+      pushUndo(`休假：${descParts.join("、")}`,{
+        action:"undo_vacation",
+        insertedIds:inserted.map(r=>r.id),
+        overwritten:overwritten.map(b=>{const{id,...rest}=b;return rest;}),
+        restoredVacations:removedVacations.map(b=>{const{id,...rest}=b;return rest;})
+      });
+    }
+    msg(`✅ ${descParts.join("、")}`);
+    loadBk();
   };
   const onOvCellMouseDown=(cellKey,e)=>{
-    if(e.shiftKey||ovDragMode){e.preventDefault();setOvIsDraggingVac(true);setOvDragCells(new Set([cellKey]));}
+    if(e.shiftKey){e.preventDefault();setOvIsDraggingVac(true);setOvDragCells(new Set([cellKey]));}
   };
   const onOvCellMouseEnter=(cellKey)=>{if(ovIsDraggingVac&&cellKey)setOvDragCells(prev=>new Set(prev).add(cellKey));};
   const onOvMouseUp=()=>{
     if(ovIsDraggingVac){
       if(ovDragCells.size>0)ovSaveDragVacation(ovDragCells);
       else{setOvIsDraggingVac(false);setOvDragCells(new Set());}
+    }
+  };
+
+  // ── 共覽休假模式：點選 toggle ──
+  // 點空格 = 加選新增；點已休假 = 加選移除
+  const ovToggleVacationCell=(cellKey,b)=>{
+    if(!cellKey)return;
+    // 已是休假 → toggle 待移除集合
+    if(b&&b.color_tag==="vacation"){
+      setOvRemoveVacCells(prev=>{
+        const next=new Set(prev);
+        if(next.has(cellKey))next.delete(cellKey);
+        else next.add(cellKey);
+        return next;
+      });
+      return;
+    }
+    // 空格 → toggle 加選
+    if(!b){
+      setOvDragCells(prev=>{
+        const next=new Set(prev);
+        if(next.has(cellKey))next.delete(cellKey);
+        else next.add(cellKey);
+        return next;
+      });
     }
   };
 
@@ -2337,7 +2660,7 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
       </div>
       <div style={{display:"flex",alignItems:"center",gap:5,background:"var(--bg-sub)",borderRadius:8,padding:"4px 8px",flexShrink:0,marginLeft:"auto"}}>
         {executeUndo&&(undoStack?.length>0
-          ?<button onClick={executeUndo} className="nb" title={`還原：${undoStack[0]?.desc||""}`} style={{color:"#a29bfe",borderColor:"#a29bfe",fontWeight:700,marginRight:4}}>↩ 還原</button>
+          ?<button onClick={async()=>{await executeUndo();await loadBk();}} className="nb" title={`還原：${undoStack[0]?.desc||""}`} style={{color:"#a29bfe",borderColor:"#a29bfe",fontWeight:700,marginRight:4}}>↩ 還原</button>
           :<button className="nb" disabled title="目前沒有可還原的操作" style={{color:"var(--text-dim)",borderColor:"var(--border2)",opacity:0.5,cursor:"not-allowed",marginRight:4}}>↩ 還原</button>
         )}
         <button onClick={()=>{setOvShowSlots(s=>{const next=!s;if(!next)setOvSlotDate(null);return next;});}} className="nb" style={{color:ovShowSlots?"#00b894":"var(--nav-color)",borderColor:ovShowSlots?"#00b894":"var(--border2)"}}>⚡ 選日</button>
@@ -2411,9 +2734,17 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
       })}
     </div>}
 
-    {(ovDragMode||ovIsDraggingVac)&&<div style={{background:"rgba(233,69,96,0.12)",borderBottom:"1px solid #e94560",padding:"4px 12px",fontSize:11,color:"#e94560",display:"flex",justifyContent:"space-between",flexShrink:0}}>
-      <span>🔴 休假標記模式 {ovIsDraggingVac&&ovDragCells.size>0?`— 已選 ${ovDragCells.size} 格`:""}</span>
-      <span style={{fontSize:10,color:"var(--text-dim)"}}>電腦：Shift+拖曳　手機：滑動格子　放開即儲存</span>
+    {ovDragMode&&<div style={{background:"rgba(233,69,96,0.12)",borderBottom:"1px solid #e94560",padding:"6px 12px",fontSize:11,color:"#e94560",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexShrink:0,flexWrap:"wrap"}}>
+      <span style={{fontWeight:700}}>🔴 休假模式 {ovDragCells.size>0||ovRemoveVacCells.size>0?<span style={{fontSize:10,fontWeight:400}}>　{ovDragCells.size>0&&`新增 ${ovDragCells.size}`}{ovDragCells.size>0&&ovRemoveVacCells.size>0&&"｜"}{ovRemoveVacCells.size>0&&<span style={{color:"#f5a623"}}>取消 {ovRemoveVacCells.size}</span>}</span>:"— 點空格新增、點已休假取消"}</span>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        <button onClick={()=>{setOvDragMode(false);setOvDragCells(new Set());setOvRemoveVacCells(new Set());setOvIsDraggingVac(false);}} style={{padding:"3px 10px",borderRadius:6,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-dim)",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>✕ 退出</button>
+        {(ovDragCells.size>0||ovRemoveVacCells.size>0)&&<button onClick={()=>{setOvDragCells(new Set());setOvRemoveVacCells(new Set());}} style={{padding:"3px 10px",borderRadius:6,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-dim)",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>清除選取</button>}
+        <button onClick={()=>{const total=ovDragCells.size+ovRemoveVacCells.size;if(total===0){msg("請先點選格子",true);return;}ovSaveDragVacation(ovDragCells);}} disabled={ovDragCells.size===0&&ovRemoveVacCells.size===0} style={{padding:"3px 12px",borderRadius:6,border:"none",background:ovDragCells.size>0||ovRemoveVacCells.size>0?"#e94560":"#444",color:"#fff",fontSize:11,fontWeight:700,cursor:ovDragCells.size>0||ovRemoveVacCells.size>0?"pointer":"not-allowed",fontFamily:"inherit"}}>✓ 確認</button>
+      </div>
+    </div>}
+    {ovIsDraggingVac&&!ovDragMode&&<div style={{background:"rgba(233,69,96,0.12)",borderBottom:"1px solid #e94560",padding:"4px 12px",fontSize:11,color:"#e94560",display:"flex",justifyContent:"space-between",flexShrink:0}}>
+      <span>🔴 拖曳中 — 已選 {ovDragCells.size} 格</span>
+      <span style={{fontSize:10,color:"var(--text-dim)"}}>放開即儲存</span>
     </div>}
 
     {sel.length>0&&<div className="scroll-container" ref={ovScrollRef}
@@ -2491,7 +2822,13 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
                       onDragOver={e=>{e.preventDefault();const td=e.currentTarget;if(ovDragOverRef.current&&ovDragOverRef.current!==td){ovDragOverRef.current.classList.remove("drag-over-cell");}td.classList.add("drag-over-cell");ovDragOverRef.current=td;ovDragOverKeyRef.current=cellKey;}}
                       onDragLeave={e=>{e.currentTarget.classList.remove("drag-over-cell");if(ovDragOverRef.current===e.currentTarget){ovDragOverRef.current=null;ovDragOverKeyRef.current=null;}}}
                       onDrop={e=>{e.preventDefault();e.stopPropagation();e.currentTarget.classList.remove("drag-over-cell");if(ovDragOverRef.current===e.currentTarget){ovDragOverRef.current=null;ovDragOverKeyRef.current=null;}const bs=e.dataTransfer.getData("ov/bk");if(bs&&d&&cellKey){try{const bkg=JSON.parse(bs);ovProcessDrop(bkg,m.id,fmtDate(yr,mo,d),t);}catch(err){}}}}
-                      onClick={()=>{if(b){setOvEditLogs([]);setOvShowEditLogs(false);setOvCellHistory(null);sb.from("bookings").select("*").eq("id",b.id).single().then(({data})=>{setCpMode({booking:data||b});if(data){
+                      onClick={()=>{
+                        // 休假模式：點擊 = toggle（空格→新增；已休假→取消）
+                        if(ovDragMode){
+                          if(cellKey)ovToggleVacationCell(cellKey,b);
+                          return;
+                        }
+                        if(b){setOvEditLogs([]);setOvShowEditLogs(false);setOvCellHistory(null);sb.from("bookings").select("*").eq("id",b.id).single().then(({data})=>{setCpMode({booking:data||b});if(data){
                         const dateStr=fmtDate(yr,mo,d);
                         Promise.all([getEditLogs(data.id),getEditLogsByCell(m.id,dateStr,t)]).then(([bkLogs,cellLogs])=>{
                           const seen=new Set();
@@ -2522,7 +2859,7 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
                         {b.color_tag==="new_customer"&&<span style={{fontSize:FS.s-2,marginRight:1,color:"#f5c842"}}>★</span>}
                         {displayName(b.customer_name)}
                       </div>}
-                      {isVac&&<div style={{fontSize:FS.s,color:"#fff",fontWeight:800,textAlign:"center"}}>休</div>}
+                      {isVac&&<div style={{fontSize:FS.s,fontWeight:800,textAlign:"center",color:ovDragMode&&ovRemoveVacCells.has(cellKey)?"#f5a623":"#fff",textDecoration:ovDragMode&&ovRemoveVacCells.has(cellKey)?"line-through":"none"}}>{ovDragMode&&ovRemoveVacCells.has(cellKey)?"取消":"休"}</div>}
                     </td>;
                   }))}
                 </tr>
@@ -2559,7 +2896,7 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
     </div>}
 
     {/* Overview dialogs */}
-    {ovCellHistory&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:200}} onClick={()=>setOvCellHistory(null)}>
+    {ovCellHistory&&<div data-modal-backdrop="true" style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:200}} onClick={()=>setOvCellHistory(null)}>
       <div style={{background:"var(--bg-header)",border:"1px solid var(--border2)",borderRadius:"16px 16px 0 0",padding:"16px 16px 32px",width:"100%",maxWidth:480}} onClick={e=>e.stopPropagation()}>
         <div style={{fontWeight:700,fontSize:15,marginBottom:4}}>📋 格子歷史紀錄</div>
         <div style={{fontSize:12,color:"var(--text-muted)",marginBottom:12}}>{ovCellHistory.masterName} · {ovCellHistory.dateStr} {ovCellHistory.time}</div>
@@ -2575,7 +2912,7 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
         </div>
       </div>
     </div>}
-    {dialog&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:200}} onClick={()=>setDialog(null)}>
+    {dialog&&<div data-modal-backdrop="true" style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:200}} onClick={()=>setDialog(null)}>
       <div style={{background:"var(--bg-header)",border:"1px solid var(--border2)",borderRadius:"16px 16px 0 0",padding:16,width:"100%",maxWidth:480}} onClick={e=>e.stopPropagation()}>
         {/* 日期、時間、師傅 */}
         <div style={{display:"flex",gap:6,marginBottom:6}}>
@@ -2701,8 +3038,8 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
         </div>
       </div>
     </div>}
-    {cpMode&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:200}} onClick={()=>setCpMode(null)}>
-      <div style={{background:"var(--bg-header)",border:"1px solid var(--border2)",borderRadius:"20px 20px 0 0",padding:"20px 16px 36px",width:"100%",maxWidth:560}} onClick={e=>e.stopPropagation()}>
+    {cpMode&&<div data-modal-backdrop="true" style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:200}} onClick={()=>setCpMode(null)}>
+      <div style={{background:"var(--bg-header)",border:"1px solid var(--border2)",borderRadius:"20px 20px 0 0",padding:"20px 16px 36px",width:"100%",maxWidth:560,maxHeight:"85vh",overflowY:"auto",overflowX:"hidden",boxSizing:"border-box"}} onClick={e=>e.stopPropagation()}>
         <div style={{width:40,height:4,background:"var(--border2)",borderRadius:2,margin:"0 auto 16px"}}></div>
         <div style={{fontWeight:800,fontSize:16,marginBottom:12,color:"var(--text-main)"}}>預約詳情</div>
         <div style={{background:"var(--bg-sub)",borderRadius:12,padding:"14px 16px",marginBottom:14}}>
@@ -2728,14 +3065,17 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
             </div>)}
           </div>}
         </div>
-        <div style={{display:"flex",gap:8,marginBottom:14}}>
-          <input type="date" value={cpTarget.date} onClick={e=>e.target.showPicker&&e.target.showPicker()} onChange={e=>setCpTarget(t=>({...t,date:e.target.value}))} style={{flex:1,background:"var(--input-bg)",border:"1px solid var(--border2)",borderRadius:10,padding:"10px 10px",color:"var(--text-main)",fontSize:14}} />
-          <select value={cpTarget.time} onChange={e=>setCpTarget(t=>({...t,time:e.target.value}))} style={{flex:1,background:"var(--input-bg)",border:"1px solid var(--border2)",borderRadius:10,padding:"10px 8px",color:"var(--text-main)",fontSize:14}}>
-            <option value="">選擇時間</option>{TIMES.map(t=>{const taken=cpTarget.date&&cpMode&&bks[`${cpMode.booking.master_id}__${cpTarget.date}__${t}`];return<option key={t} value={t} disabled={!!taken} style={{color:taken?"#e94560":"inherit"}}>{t}{taken?" ✕已佔":""}</option>;})}
-          </select>
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:11,color:"var(--text-dim)",marginBottom:6,fontWeight:700}}>📋 複製到其他時段</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+            <input type="date" value={cpTarget.date} onClick={e=>e.target.showPicker&&e.target.showPicker()} onChange={e=>setCpTarget(t=>({...t,date:e.target.value}))} style={{minWidth:0,background:"var(--input-bg)",border:"1px solid var(--border2)",borderRadius:10,padding:"10px",color:"var(--text-main)",fontSize:14,boxSizing:"border-box",width:"100%"}} />
+            <select value={cpTarget.time} onChange={e=>setCpTarget(t=>({...t,time:e.target.value}))} style={{minWidth:0,background:"var(--input-bg)",border:"1px solid var(--border2)",borderRadius:10,padding:"10px",color:"var(--text-main)",fontSize:14,boxSizing:"border-box",width:"100%"}}>
+              <option value="">選擇時間</option>{TIMES.map(t=>{const taken=cpTarget.date&&cpMode&&bks[`${cpMode.booking.master_id}__${cpTarget.date}__${t}`];return<option key={t} value={t} disabled={!!taken} style={{color:taken?"#e94560":"inherit"}}>{t}{taken?" ✕已佔":""}</option>;})}
+            </select>
+          </div>
           <button onClick={copyBk} disabled={!cpTarget.date||!cpTarget.time||saving}
-            style={{flexShrink:0,padding:"10px 16px",borderRadius:10,background:cpTarget.date&&cpTarget.time?"#a29bfe":"var(--border2)",border:"none",color:cpTarget.date&&cpTarget.time?"#fff":"var(--text-dim)",fontWeight:700,cursor:"pointer",fontSize:13}}>
-            {saving?"複製中...":"複製"}
+            style={{width:"100%",padding:"10px 16px",borderRadius:10,background:cpTarget.date&&cpTarget.time?"#a29bfe":"var(--border2)",border:"none",color:cpTarget.date&&cpTarget.time?"#fff":"var(--text-dim)",fontWeight:700,cursor:cpTarget.date&&cpTarget.time?"pointer":"not-allowed",fontSize:13}}>
+            {saving?"複製中...":"複製到此時段"}
           </button>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
@@ -2756,7 +3096,7 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
     </div>}
 
     {/* 編輯預約 Modal (Overview) */}
-    {editForm&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300}} onClick={()=>setEditForm(null)}>
+    {editForm&&<div data-modal-backdrop="true" style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300}} onClick={()=>setEditForm(null)}>
       <div style={{background:"var(--bg-header)",border:"1px solid var(--border2)",borderRadius:16,padding:18,width:"92%",maxWidth:420}} onClick={e=>e.stopPropagation()}>
         <div style={{fontWeight:700,fontSize:15,marginBottom:12,color:"#74b9ff"}}>✏️ 編輯預約</div>
         <div style={{marginBottom:10}}>
@@ -2809,7 +3149,7 @@ function NoteEditModal({editor,onSave,onClose,saving}){
   useEffect(()=>{setVal(editor.initValue||"");},[editor]);
   const dirty=val!==(editor.initValue||"");
   return(
-    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:1000,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+    <div onClick={onClose} data-modal-backdrop="true" style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:1000,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div onClick={e=>e.stopPropagation()} style={{background:"var(--bg-header)",borderRadius:"16px 16px 0 0",padding:"18px 16px 30px",width:"100%",maxWidth:480,borderTop:`3px solid ${editor.accent}`}}>
         <div style={{width:36,height:4,background:"var(--border)",borderRadius:2,margin:"0 auto 14px"}}></div>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
@@ -2917,6 +3257,11 @@ function CRMModule({masters,FS}){
   const[crmToast,setCrmToast]=useState(null);
   const msgCrm=(m,err)=>{setCrmToast({m,err});setTimeout(()=>setCrmToast(null),2800);};
 
+  // 註冊彈窗到全域 stack — 左滑時優先關彈窗
+  useModalBackClose(!!sel,React.useCallback(()=>setSel(null),[]));
+  useModalBackClose(!!noShowEdit,React.useCallback(()=>setNoShowEdit(null),[]));
+  useModalBackClose(renameModal,React.useCallback(()=>setRenameModal(false),[]));
+
   const reloadNoShow=async()=>{
     let ns=[],from=0;
     while(true){
@@ -2935,6 +3280,7 @@ function CRMModule({masters,FS}){
   const[savingInfo,setSavingInfo]=useState(false);
   // 備註/症狀編輯彈窗
   const[noteEditor,setNoteEditor]=useState(null);
+  useModalBackClose(!!noteEditor,React.useCallback(()=>setNoteEditor(null),[]));
 
   // 取得客戶 key（優先用 phone；無 phone 則用 name 當 key）
   const getCustKey=(c)=>{
@@ -3393,7 +3739,7 @@ function CRMModule({masters,FS}){
         </div>
 
         {/* 改名 Modal */}
-        {renameModal&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,padding:"0 20px"}} onClick={()=>{if(!renameSaving){setRenameModal(false);setRenameNew("");}}}>
+        {renameModal&&<div data-modal-backdrop="true" style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,padding:"0 20px"}} onClick={()=>{if(!renameSaving){setRenameModal(false);setRenameNew("");}}}>
           <div style={{background:"var(--bg-header)",border:"1px solid var(--border2)",borderRadius:18,padding:22,width:"100%",maxWidth:400}} onClick={e=>e.stopPropagation()}>
             <div style={{fontWeight:800,fontSize:16,marginBottom:4,color:"#74b9ff"}}>✏️ 客戶改名</div>
             <div style={{fontSize:12,color:"var(--text-dim)",marginBottom:16}}>將會更新此客戶的所有預約紀錄（共 {sel.bks.length} 筆）</div>
@@ -3502,7 +3848,7 @@ function CRMModule({masters,FS}){
             </div>
           </div>
         ))}
-        {noShowEdit&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}} onClick={()=>setNoShowEdit(null)}>
+        {noShowEdit&&<div data-modal-backdrop="true" style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}} onClick={()=>setNoShowEdit(null)}>
           <div style={{background:"var(--bg-header)",border:"1px solid var(--border2)",borderRadius:16,padding:18,width:"92%",maxWidth:420}} onClick={e=>e.stopPropagation()}>
             <div style={{fontWeight:700,fontSize:15,marginBottom:12,color:"#e94560"}}>🐦 編輯放鳥記錄</div>
             {[["customer_name","姓名"],["customer_phone","電話"],["note","備註"]].map(([k,l])=>(
@@ -3700,6 +4046,7 @@ function AnalyticsModule({masters,FS,currentMaster}){
 
 
   const[debugInfo,setDebugInfo]=useState(null);
+  useModalBackClose(!!debugInfo,React.useCallback(()=>setDebugInfo(null),[]));
   const showDebug=(masterId,y,m)=>{
     const prefix=`${y}-${String(m+1).padStart(2,"0")}`;
     const all=allData.filter(b=>b.master_id===masterId&&b.date.startsWith(prefix));
@@ -3777,7 +4124,7 @@ function AnalyticsModule({masters,FS,currentMaster}){
         </div>
 
         {/* 🔍 診斷視窗 */}
-        {debugInfo&&<div onClick={()=>setDebugInfo(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:999,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+        {debugInfo&&<div onClick={()=>setDebugInfo(null)} data-modal-backdrop="true" style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:999,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
           <div onClick={e=>e.stopPropagation()} style={{background:"var(--bg-sub)",borderRadius:"16px 16px 0 0",padding:"20px 16px 30px",width:"100%",maxWidth:560,maxHeight:"75vh",display:"flex",flexDirection:"column"}}>
             <div style={{width:36,height:4,background:"var(--border)",borderRadius:2,margin:"0 auto 14px"}}></div>
             <div style={{fontSize:15,fontWeight:900,marginBottom:6}}>🔍 {debugInfo.y}年{debugInfo.m+1}月 — 計入規則檢查</div>
@@ -4066,7 +4413,7 @@ function SettingsModule({masters,setMasters,FS,msg}){
       ))}
     </div>}
 
-    {editMaster&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}} onClick={()=>setEditMaster(null)}>
+    {editMaster&&<div data-modal-backdrop="true" style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200}} onClick={()=>setEditMaster(null)}>
       <div style={{background:"var(--bg-header)",border:"1px solid var(--border2)",borderRadius:16,padding:20,width:"90%",maxWidth:380}} onClick={e=>e.stopPropagation()}>
         <div style={{fontWeight:700,fontSize:15,marginBottom:14}}>編輯：{editMaster.name}</div>
         {[["name","顯示名稱"],["username","登入帳號"]].map(([k,l])=>(
