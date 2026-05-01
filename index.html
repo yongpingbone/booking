@@ -1073,6 +1073,7 @@ function MainApp({authMaster,onLogout}){
   const[cpTarget,setCpTarget]=useState({date:"",time:""});
   const[clipBoard,setClipBoard]=useState(null); // 暫存複製的預約，關掉後可貼上
   const[editForm,setEditForm]=useState(null); // 編輯預約用
+  const[extendRecur,setExtendRecur]=useState(null); // {booking, recurType, recurEndType, recurEndDate, recurEndCount}
   const[editLogs,setEditLogs]=useState([]); // 歷史編輯記錄
   const{suggestions:acSug,showSug:acShow,dismiss:acDismiss}=useCustomerSuggest(form.input,!!dialog,dialog?.masterId||master?.id||null,masters);
   const[showEditLogs,setShowEditLogs]=useState(false);
@@ -1088,6 +1089,7 @@ function MainApp({authMaster,onLogout}){
   // 註冊彈窗到全域 stack — 左滑時優先關彈窗
   useModalBackClose(!!dialog,React.useCallback(()=>setDialog(null),[]));
   useModalBackClose(!!editForm,React.useCallback(()=>setEditForm(null),[]));
+  useModalBackClose(!!extendRecur,React.useCallback(()=>setExtendRecur(null),[]));
   useModalBackClose(showSlots,React.useCallback(()=>{setShowSlots(false);setSlotDate(null);},[]));
   useModalBackClose(!!cellHistory,React.useCallback(()=>setCellHistory(null),[]));
   useModalBackClose(showEditLogs,React.useCallback(()=>setShowEditLogs(false),[]));
@@ -1101,6 +1103,91 @@ function MainApp({authMaster,onLogout}){
   const[dragCells,setDragCells]=useState(new Set());
   const[removeVacCells,setRemoveVacCells]=useState(new Set()); // 休假模式下要取消的休假格
   const[isDragging,setIsDragging]=useState(false);
+  // 休假模式框選（拖曳）— 用 ref 存即時值，state 觸發重繪
+  const boxSelStartRef=useRef(null); // {dayIdx, t, isRemoving}
+  const boxSelCurRef=useRef(null); // {dayIdx, t}
+  const[boxSelTick,setBoxSelTick]=useState(0); // 觸發 re-render
+  
+  // 全域 pointermove / pointerup 監聽（最簡版，效能最佳化）
+  const dragBufferRef=useRef(new Set()); // 拖曳時的暫存（不重渲染）
+  const dragDOMRef=useRef([]); // 直接改過 style 的 cell DOM（pointerup 時還原給 React 接管）
+  useEffect(()=>{
+    let rafScheduled=false;
+    let lastEvent=null;
+    const processMove=()=>{
+      rafScheduled=false;
+      if(!boxSelStartRef.current||!lastEvent)return;
+      const e=lastEvent;
+      const el=document.elementFromPoint(e.clientX,e.clientY);
+      const cell=el&&el.closest&&el.closest("td[data-cellkey]");
+      if(!cell)return;
+      const k=cell.dataset.cellkey;
+      if(!k||dragBufferRef.current.has(k))return;
+      const start=boxSelStartRef.current;
+      if(start.isRemoving){
+        if(cell.dataset.vac==="1"){
+          dragBufferRef.current.add(k);
+          cell.style.background="rgba(245,166,35,0.45)";
+          dragDOMRef.current.push(cell);
+        }
+      }else{
+        if(cell.dataset.empty==="1"){
+          dragBufferRef.current.add(k);
+          cell.style.background="rgba(162,155,254,0.45)";
+          dragDOMRef.current.push(cell);
+        }
+      }
+    };
+    const moveHandler=(e)=>{
+      if(!boxSelStartRef.current)return;
+      lastEvent=e;
+      // 用 requestAnimationFrame 對齊瀏覽器渲染（最多 60fps）
+      if(!rafScheduled){
+        rafScheduled=true;
+        requestAnimationFrame(processMove);
+      }
+      e.preventDefault();
+    };
+    const endHandler=()=>{
+      if(!boxSelStartRef.current)return;
+      const start=boxSelStartRef.current;
+      const buffer=dragBufferRef.current;
+      // 一次性 setState
+      if(buffer.size>0){
+        if(start.isRemoving){
+          setRemoveVacCells(prev=>{const n=new Set(prev);buffer.forEach(k=>n.add(k));return n;});
+        }else{
+          setDragCells(prev=>{const n=new Set(prev);buffer.forEach(k=>n.add(k));return n;});
+        }
+      }
+      // 還原直接改的 DOM style，讓 React re-render 接管
+      dragDOMRef.current.forEach(el=>{el.style.background="";});
+      dragBufferRef.current=new Set();
+      dragDOMRef.current=[];
+      boxSelStartRef.current=null;
+    };
+    document.addEventListener("pointermove",moveHandler);
+    document.addEventListener("pointerup",endHandler);
+    document.addEventListener("pointercancel",endHandler);
+    return ()=>{
+      document.removeEventListener("pointermove",moveHandler);
+      document.removeEventListener("pointerup",endHandler);
+      document.removeEventListener("pointercancel",endHandler);
+    };
+  },[]);
+  
+  // 休假模式時禁用整頁觸控（避免拖曳時頁面捲動/縮放）
+  useEffect(()=>{
+    if(dragMode){
+      const prev=document.body.style.touchAction;
+      document.body.style.touchAction="none";
+      document.body.style.userSelect="none";
+      return ()=>{
+        document.body.style.touchAction=prev||"";
+        document.body.style.userSelect="";
+      };
+    }
+  },[dragMode]);
   const dragOverRef=useRef(null);
   const[isDragActive,setIsDragActive]=useState(false);
   const longPressTimer=useRef(null);
@@ -1717,14 +1804,42 @@ function MainApp({authMaster,onLogout}){
     const cellKey=d?`${fmtDate(year,month,d)}__${t}`:"";
     const isDragSel=dragCells.has(cellKey);
     return(
-      <td key={dayIdx} data-cellkey={cellKey}
-        onMouseDown={e=>d&&onCellMouseDown(d,t,e)}
-        onMouseEnter={()=>d&&onCellMouseEnter(d,t)}
+      <td key={dayIdx} data-cellkey={cellKey} data-day-idx={dayIdx} data-time={t} data-empty={!b?"1":"0"} data-vac={isVac?"1":"0"}
+        onMouseDown={e=>{
+          // Pointer 事件已處理 dragMode；這裡只保留 Shift+drag 給滑鼠
+          if(d&&!dragMode)onCellMouseDown(d,t,e);
+        }}
+        onMouseEnter={()=>{
+          if(d&&!dragMode)onCellMouseEnter(d,t);
+        }}
+        onMouseUp={()=>{}}
+        onPointerDown={e=>{
+          if(dragMode&&d){
+            const isRemoving=b&&b.color_tag==="vacation";
+            boxSelStartRef.current={dayIdx,t,isRemoving};
+            const cell=e.currentTarget;
+            // 立刻處理第一格（buffer + DOM，不 setState）
+            if(isRemoving){
+              dragBufferRef.current.add(cellKey);
+              cell.style.background="rgba(245,166,35,0.45)";
+              dragDOMRef.current.push(cell);
+            }else if(!b){
+              dragBufferRef.current.add(cellKey);
+              cell.style.background="rgba(162,155,254,0.45)";
+              dragDOMRef.current.push(cell);
+            }
+            // 釋放 pointer capture，讓拖曳時 elementFromPoint 能找到實際所在元素
+            try{e.currentTarget.releasePointerCapture(e.pointerId);}catch(err){}
+            e.preventDefault();
+          }
+        }}
+        onTouchStart={e=>{}}
+        onTouchMove={e=>{}}
+        onTouchEnd={e=>{}}
         onClick={(e)=>{
           if(isDragging)return;
-          // 休假模式：點擊 = toggle（空格→加選休假；已休假→加選移除）
           if(dragMode){
-            if(d)toggleVacationCell(d,t);
+            // 行動裝置已用 touchEnd 處理；滑鼠單擊也已用 mouseUp 處理 → 這裡跳過
             return;
           }
           if(b){setEditLogs([]);setShowEditLogs(false);setCellHistory(null);sb.from("bookings").select("*").eq("id",b.id).single().then(({data})=>{setCpMode({booking:data||b});if(data){
@@ -1738,14 +1853,27 @@ function MainApp({authMaster,onLogout}){
         }});}else if(d&&!isVac){if(clipBoard){pasteClipBoard(d,t);}else{openDlg(d,t);}}}}
         className={isDragSel?"drag-select":(b?`c-${b.color_tag}`:"")}
         style={{padding:"1px 3px",borderBottom:"1px solid var(--border)",borderRight:"1px solid var(--border)",height:rh,width:cw,minWidth:cw,maxWidth:cw,
-          background:isDragSel?"rgba(162,155,254,0.4)":isR&&!b?"var(--bg-rest)":"",
-          cursor:!b&&d||(dragMode&&isVac)?"pointer":"default",verticalAlign:"middle",userSelect:"none",touchAction:isDragActive?"none":"auto",
+          background:(()=>{
+            // 即時顯示框選範圍
+            const start=boxSelStartRef.current,cur=boxSelCurRef.current;
+            if(dragMode&&start&&cur){
+              const minD=Math.min(start.dayIdx,cur.dayIdx),maxD=Math.max(start.dayIdx,cur.dayIdx);
+              const minTi=Math.min(TIMES.indexOf(start.t),TIMES.indexOf(cur.t)),maxTi=Math.max(TIMES.indexOf(start.t),TIMES.indexOf(cur.t));
+              const myTi=TIMES.indexOf(t);
+              if(dayIdx>=minD&&dayIdx<=maxD&&myTi>=minTi&&myTi<=maxTi){
+                return start.isRemoving?"rgba(245,166,35,0.4)":"rgba(162,155,254,0.5)";
+              }
+            }
+            return isDragSel?"rgba(162,155,254,0.4)":isR&&!b?"var(--bg-rest)":"";
+          })(),
+          cursor:!b&&d||(dragMode&&isVac)?"pointer":"default",verticalAlign:"middle",userSelect:"none",touchAction:dragMode?"none":(isDragActive?"none":"auto"),
           outline:dragMode&&isVac&&removeVacCells.has(cellKey)?"2px dashed #f5a623":"none",
           outlineOffset:dragMode&&isVac&&removeVacCells.has(cellKey)?-2:0}}>
         {b&&b.guest_count>0&&!isVac&&(
-          <div className="draggable-card" draggable
+          <div className="draggable-card" draggable={!dragMode}
             onDragStart={e=>{e.dataTransfer.setData("app/bk",JSON.stringify(b));e.dataTransfer.effectAllowed="move";}}
             onTouchStart={e=>{
+              if(dragMode)return; // 休假模式不攔截 touch
               handleTouchStart(e,b);
               // 長按600ms複製姓名
               const name=displayName(b.customer_name);
@@ -1755,14 +1883,14 @@ function MainApp({authMaster,onLogout}){
             onTouchEnd={e=>{clearTimeout(longPressTimer.current);clearTimeout(e.currentTarget._cpTimer);}}
             onTouchMove={e=>{clearTimeout(e.currentTarget._cpTimer);}}
             onContextMenu={e=>{e.preventDefault();const name=displayName(b.customer_name);navigator.clipboard.writeText(name).then(()=>{const el=e.currentTarget;const orig=el.style.opacity;el.style.opacity="0.4";setTimeout(()=>el.style.opacity=orig,600);});}}
-            style={{justifyContent:"space-between",overflow:"hidden",WebkitUserSelect:"none"}}>
+            style={{justifyContent:"space-between",overflow:"hidden",WebkitUserSelect:"none",pointerEvents:dragMode?"none":undefined}}>
             <span style={{fontSize:FS.n-1,color:b.color_tag==="new_customer"?"#f5c842":b.color_tag==="reserved"?"#22d3ee":"var(--text-main)",fontWeight:b.color_tag==="new_customer"?900:700,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis",flex:1,minWidth:0,opacity:b.status==="cancellation_requested"?0.6:1}}>
               {b.status==="cancellation_requested"&&<span title="客人申請取消" style={{fontSize:FS.s-1,marginRight:2,color:"#e94560"}}>❌</span>}{b.color_tag==="new_customer"&&<span style={{fontSize:FS.s-1,marginRight:2}}>★</span>}{displayName(b.customer_name)}
             </span>
             {canDelete&&<span onClick={e=>{e.stopPropagation();delBk(b.id);}} style={{fontSize:9,color:"var(--text-muted)",padding:"2px 4px",flexShrink:0}}>✕</span>}
           </div>
         )}
-        {isVac&&b&&<div style={{fontSize:FS.s,fontWeight:700,textAlign:"center",color:dragMode&&removeVacCells.has(cellKey)?"#f5a623":"#e94560",textDecoration:dragMode&&removeVacCells.has(cellKey)?"line-through":"none"}}>{dragMode&&removeVacCells.has(cellKey)?"取消":"休"}</div>}
+        {isVac&&b&&<div style={{fontSize:FS.s,fontWeight:700,textAlign:"center",color:dragMode&&removeVacCells.has(cellKey)?"#f5a623":"#e94560",textDecoration:dragMode&&removeVacCells.has(cellKey)?"line-through":"none",pointerEvents:"none"}}>{dragMode&&removeVacCells.has(cellKey)?"取消":"休"}</div>}
       </td>
     );
   };
@@ -1902,7 +2030,7 @@ function MainApp({authMaster,onLogout}){
       </div>}
 
       {dragMode&&<div style={{background:"rgba(233,69,96,0.12)",borderBottom:"1px solid #e94560",padding:"6px 12px",fontSize:11,color:"#e94560",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexShrink:0,flexWrap:"wrap"}}>
-        <span style={{fontWeight:700}}>🔴 休假模式 {dragCells.size>0||removeVacCells.size>0?<span style={{fontSize:10,fontWeight:400}}>　{dragCells.size>0&&`新增 ${dragCells.size}`}{dragCells.size>0&&removeVacCells.size>0&&"｜"}{removeVacCells.size>0&&<span style={{color:"#f5a623"}}>取消 {removeVacCells.size}</span>}</span>:"— 點空格新增、點已休假取消"}</span>
+        <span style={{fontWeight:700}}>🔴 休假模式 {dragCells.size>0||removeVacCells.size>0?<span style={{fontSize:10,fontWeight:400}}>　{dragCells.size>0&&`新增 ${dragCells.size}`}{dragCells.size>0&&removeVacCells.size>0&&"｜"}{removeVacCells.size>0&&<span style={{color:"#f5a623"}}>取消 {removeVacCells.size}</span>}</span>:"— 拖曳經過即加選/點時間整列/點日期整欄"}</span>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           <button onClick={()=>{setDragMode(false);setDragCells(new Set());setRemoveVacCells(new Set());setIsDragging(false);}} style={{padding:"3px 10px",borderRadius:6,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-dim)",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>✕ 退出</button>
           {(dragCells.size>0||removeVacCells.size>0)&&<button onClick={()=>{setDragCells(new Set());setRemoveVacCells(new Set());}} style={{padding:"3px 10px",borderRadius:6,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-dim)",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>清除選取</button>}
@@ -1954,8 +2082,23 @@ function MainApp({authMaster,onLogout}){
                   {wk.map((d,i)=>{
                     const isT=d===today.getDate()&&month===today.getMonth()&&year===today.getFullYear();
                     const isSun=ACTIVE_DAYS[i]==="日";
-                    return<td key={i} style={{padding:"2px 3px",textAlign:"center",borderBottom:"1px solid var(--border)",borderRight:"1px solid var(--border)",borderTop:"1px solid var(--border-week)",background:"var(--bg-week)",color:isT?"#e94560":isSun?"rgba(233,69,96,0.7)":"var(--text-muted)",width:cw,minWidth:cw,maxWidth:cw}}>
-                      {d&&<div style={{cursor:"pointer"}} onClick={()=>{setShowSlots(true);setSlotDate({y:year,m:month,d});}}>
+                    return<td key={i} style={{padding:"2px 3px",textAlign:"center",borderBottom:"1px solid var(--border)",borderRight:"1px solid var(--border)",borderTop:"1px solid var(--border-week)",background:dragMode?"rgba(233,69,96,0.06)":"var(--bg-week)",color:isT?"#e94560":isSun?"rgba(233,69,96,0.7)":"var(--text-muted)",width:cw,minWidth:cw,maxWidth:cw}}>
+                      {d&&<div style={{cursor:"pointer"}} onClick={()=>{
+                        if(dragMode){
+                          // 休假模式：點日期 = 整天加選/取消
+                          const cellsInCol=[];
+                          TIMES.forEach(t=>{const k=`${fmtDate(year,month,d)}__${t}`;cellsInCol.push({d,t,k,b:bk(d,t)});});
+                          const hasEmpty=cellsInCol.some(c=>!c.b);
+                          const allVacation=cellsInCol.every(c=>c.b&&c.b.color_tag==="vacation");
+                          if(hasEmpty){
+                            setDragCells(prev=>{const next=new Set(prev);cellsInCol.forEach(c=>{if(!c.b)next.add(c.k);});return next;});
+                          }else if(allVacation){
+                            setRemoveVacCells(prev=>{const next=new Set(prev);cellsInCol.forEach(c=>{if(c.b&&c.b.color_tag==="vacation")next.add(c.k);});return next;});
+                          }
+                        }else{
+                          setShowSlots(true);setSlotDate({y:year,m:month,d});
+                        }
+                      }}>
                         <div style={{fontWeight:700,fontSize:FS.s}}>週{ACTIVE_DAYS[i]}</div>
                         <div style={{fontSize:FS.s}}>{month+1}/{d}</div>
                       </div>}
@@ -1964,7 +2107,21 @@ function MainApp({authMaster,onLogout}){
                 </tr>}
                 {TIMES.map(t=>(
                   <tr key={t} className="cv-row">
-                    <td style={{...thTime(FS.t),borderBottom:"1px solid var(--border)"}}>{t}</td>
+                    <td onClick={dragMode?()=>{
+                      // 休假模式下點時間欄 = 切換整列（整週同時段）的休假狀態
+                      // 規則：如果該列有任何空格 → 全選；如果都是已休假 → 全部加入待移除
+                      const cellsInRow=[];
+                      wk.forEach(d=>{if(d){const k=`${fmtDate(year,month,d)}__${t}`;cellsInRow.push({d,t,k,b:bk(d,t)});}});
+                      const hasEmpty=cellsInRow.some(c=>!c.b);
+                      const allVacation=cellsInRow.every(c=>c.b&&c.b.color_tag==="vacation");
+                      if(hasEmpty){
+                        // 全選為休假
+                        setDragCells(prev=>{const next=new Set(prev);cellsInRow.forEach(c=>{if(!c.b)next.add(c.k);});return next;});
+                      }else if(allVacation){
+                        // 整列都是休假，加入待移除
+                        setRemoveVacCells(prev=>{const next=new Set(prev);cellsInRow.forEach(c=>{if(c.b&&c.b.color_tag==="vacation")next.add(c.k);});return next;});
+                      }
+                    }:undefined} style={{...thTime(FS.t),borderBottom:"1px solid var(--border)",cursor:dragMode?"pointer":"default",background:dragMode?"rgba(233,69,96,0.06)":undefined}}>{t}</td>
                     {wk.map((d,i)=>renderCell(d,t,bk(d,t),i))}
                   </tr>
                 ))}
@@ -2198,7 +2355,7 @@ function MainApp({authMaster,onLogout}){
         <div style={{background:"var(--bg-sub)",borderRadius:12,padding:"14px 16px",marginBottom:14}}>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
             <div style={{fontSize:22,fontWeight:800,color:"var(--text-main)"}}>{displayName(cpMode.booking.customer_name)}</div>
-            <button onClick={()=>{const b=cpMode.booking;(async()=>{const _raw=b.raw_input||"";const _parsedRaw=parseInput(_raw);const _parsedName=parseInput(b.customer_name||"");let _phone=b.customer_phone||_parsedRaw.phone||_parsedName.phone||"";const _cleanName=_phone?(_parsedRaw.phone?_parsedRaw.name:(_parsedName.phone?_parsedName.name:displayName(b.customer_name||""))):displayName(b.customer_name||"");if(!_phone&&_cleanName){try{const{data:cust}=await sb.from("customers").select("phone").ilike("name",_cleanName).limit(1);if(cust&&cust[0]?.phone)_phone=cust[0].phone;}catch(e){}}setEditForm({id:b.id,customer_name:_cleanName,customer_phone:_phone,note:b.note||"",guest_count:b.guest_count||1,color_tag:b.color_tag||"none",_editorName:(loginMaster||master)?.name||""});})();setCpMode(null);}} style={{padding:"3px 8px",borderRadius:7,border:"1px solid #74b9ff",background:"rgba(116,185,255,0.1)",color:"#74b9ff",cursor:"pointer",fontSize:12,fontWeight:700,flexShrink:0}}>✏️ 編輯</button>
+            <button onClick={()=>{const b=cpMode.booking;(async()=>{const _raw=b.raw_input||"";const _parsedRaw=parseInput(_raw);const _parsedName=parseInput(b.customer_name||"");let _phone=b.customer_phone||_parsedRaw.phone||_parsedName.phone||"";const _cleanName=_phone?(_parsedRaw.phone?_parsedRaw.name:(_parsedName.phone?_parsedName.name:displayName(b.customer_name||""))):displayName(b.customer_name||"");if(!_phone&&_cleanName){try{const{data:cust}=await sb.from("customers").select("phone").ilike("name",_cleanName).limit(1);if(cust&&cust[0]?.phone)_phone=cust[0].phone;}catch(e){}}setEditForm({id:b.id,customer_name:_cleanName,customer_phone:_phone,note:b.note||"",guest_count:b.guest_count||1,color_tag:b.color_tag||"none",_editorName:(loginMaster||master)?.name||"",_booking:b});})();setCpMode(null);}} style={{padding:"3px 8px",borderRadius:7,border:"1px solid #74b9ff",background:"rgba(116,185,255,0.1)",color:"#74b9ff",cursor:"pointer",fontSize:12,fontWeight:700,flexShrink:0}}>✏️ 編輯</button>
           </div>
           <div style={{display:"flex",gap:16,flexWrap:"wrap",fontSize:13,color:"var(--text-muted)"}}>
             {(()=>{const _ph=cpMode.booking.customer_phone||parseInput(cpMode.booking.raw_input||cpMode.booking.customer_name||"").phone;return _ph?<span>{_ph}</span>:null;})()}
@@ -2217,6 +2374,15 @@ function MainApp({authMaster,onLogout}){
               {l.changes_summary&&<span style={{color:"var(--text-dim)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.changes_summary}</span>}
             </div>)}
           </div>}
+        </div>
+        {/* 套用到未來重複按鈕 */}
+        <div style={{marginBottom:10}}>
+          <button onClick={()=>{
+            const b=cpMode.booking;
+            const d=new Date(b.date+"T00:00:00");d.setMonth(d.getMonth()+3);
+            setExtendRecur({booking:b,recurType:"weekly",recurEndType:"date",recurEndDate:d.toISOString().slice(0,10),recurEndCount:12});
+            setCpMode(null);
+          }} style={{width:"100%",padding:"10px",borderRadius:10,border:"1px solid #a29bfe",background:"rgba(162,155,254,0.1)",color:"#a29bfe",fontSize:13,fontWeight:700,cursor:"pointer"}}>🔁 套用到未來重複（每週/每月固定）</button>
         </div>
         {/* 複製到其他時段 */}
         <div style={{marginBottom:14}}>
@@ -2239,7 +2405,7 @@ function MainApp({authMaster,onLogout}){
             style={{padding:"13px 0",borderRadius:12,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-muted)",cursor:"pointer",fontSize:13,fontWeight:700}}>返回</button>
           <button onClick={()=>{const b=cpMode.booking;const dateStr=b.date;const t=b.start_time?.slice(0,5);getEditLogsByCell(b.master_id,dateStr,t).then(logs=>{if(logs.length>0)setCellHistory({dateStr,time:t,masterId:b.master_id,logs});else msg("此格沒有操作紀錄");});}}
             style={{padding:"13px 0",borderRadius:12,border:"1px solid #a29bfe",background:"rgba(162,155,254,0.1)",color:"#a29bfe",cursor:"pointer",fontSize:13,fontWeight:700}}>歷史</button>
-          <button onClick={()=>{const b=cpMode.booking;(async()=>{const _raw=b.raw_input||"";const _parsedRaw=parseInput(_raw);const _parsedName=parseInput(b.customer_name||"");let _phone=b.customer_phone||_parsedRaw.phone||_parsedName.phone||"";const _cleanName=_phone?(_parsedRaw.phone?_parsedRaw.name:(_parsedName.phone?_parsedName.name:displayName(b.customer_name||""))):displayName(b.customer_name||"");if(!_phone&&_cleanName){try{const{data:cust}=await sb.from("customers").select("phone").ilike("name",_cleanName).limit(1);if(cust&&cust[0]?.phone)_phone=cust[0].phone;}catch(e){}}setEditForm({id:b.id,customer_name:_cleanName,customer_phone:_phone,note:b.note||"",guest_count:b.guest_count||1,color_tag:b.color_tag||"none",_editorName:(loginMaster||master)?.name||""});})();setCpMode(null);}}
+          <button onClick={()=>{const b=cpMode.booking;(async()=>{const _raw=b.raw_input||"";const _parsedRaw=parseInput(_raw);const _parsedName=parseInput(b.customer_name||"");let _phone=b.customer_phone||_parsedRaw.phone||_parsedName.phone||"";const _cleanName=_phone?(_parsedRaw.phone?_parsedRaw.name:(_parsedName.phone?_parsedName.name:displayName(b.customer_name||""))):displayName(b.customer_name||"");if(!_phone&&_cleanName){try{const{data:cust}=await sb.from("customers").select("phone").ilike("name",_cleanName).limit(1);if(cust&&cust[0]?.phone)_phone=cust[0].phone;}catch(e){}}setEditForm({id:b.id,customer_name:_cleanName,customer_phone:_phone,note:b.note||"",guest_count:b.guest_count||1,color_tag:b.color_tag||"none",_editorName:(loginMaster||master)?.name||"",_booking:b});})();setCpMode(null);}}
             style={{padding:"13px 0",borderRadius:12,border:"1px solid #74b9ff",background:"rgba(116,185,255,0.1)",color:"#74b9ff",cursor:"pointer",fontSize:13,fontWeight:700}}>編輯</button>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:8}}>
@@ -2279,6 +2445,15 @@ function MainApp({authMaster,onLogout}){
             {COLORS.map(cc=>{const isSel=editForm.color_tag===cc.key;const colorMap={"none":"#888","new_customer":"#f5a623","vacation":"#e94560","reserved":"#22d3ee","custom":"#a29bfe","aftercare":"#00d09c"};const col=colorMap[cc.key]||"#888";return<button key={cc.key} onClick={()=>setEditForm(f=>({...f,color_tag:cc.key}))} style={{flex:1,padding:"7px 2px",borderRadius:8,border:`2px solid ${isSel?col:"#44444466"}`,background:isSel?col:"var(--bg-sub)",color:isSel?"#fff":"var(--text-muted)",cursor:"pointer",fontSize:11,fontWeight:isSel?800:500,boxShadow:isSel?`0 0 8px ${col}88`:"none",transition:"all 0.15s"}}>{cc.label}</button>;})}
           </div>
         </div>
+        <div style={{marginBottom:10}}>
+          <button onClick={()=>{
+            const b=editForm._booking;
+            if(!b){msg("無法取得預約資料",true);return;}
+            const d=new Date(b.date+"T00:00:00");d.setMonth(d.getMonth()+3);
+            setExtendRecur({booking:b,recurType:"weekly",recurEndType:"date",recurEndDate:d.toISOString().slice(0,10),recurEndCount:12});
+            setEditForm(null);
+          }} style={{width:"100%",padding:10,borderRadius:8,border:"1px solid #a29bfe",background:"rgba(162,155,254,0.1)",color:"#a29bfe",fontSize:13,fontWeight:700,cursor:"pointer"}}>🔁 套用到未來重複</button>
+        </div>
         <div style={{display:"flex",gap:8}}>
           <button onClick={()=>setEditForm(null)} style={{flex:1,padding:10,borderRadius:8,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-muted)",fontSize:13,cursor:"pointer"}}>取消</button>
           <button onClick={async()=>{
@@ -2291,6 +2466,83 @@ function MainApp({authMaster,onLogout}){
             const {error}=await sb.from("bookings").update({customer_name:editForm.customer_name,customer_phone:editForm.customer_phone||null,raw_input:editForm.customer_phone?(editForm.customer_name+(editForm.customer_phone?" "+editForm.customer_phone:"")):editForm.customer_name,note:editForm.note||null,guest_count:editForm.guest_count,color_tag:finalColorTag,last_edited_by:(loginMaster||master)?.name||"系統",last_edited_at:new Date().toISOString()}).eq("id",editForm.id);
             if(!error){await saveEditLog(editForm.id,(loginMaster||master)?.name||"系統",`${editForm.customer_name} ${finalColorTag}${finalColorTag!==editForm.color_tag?"（卡位→自動分類）":""}`);if(editForm.customer_phone){const todayStr=getTaipeiDateStr();await sb.from("customers").upsert({phone:editForm.customer_phone,name:editForm.customer_name,last_visit_date:todayStr,total_visits:1},{onConflict:"phone",ignoreDuplicates:false});await sb.from("customers").update({name:editForm.customer_name}).eq("phone",editForm.customer_phone);}msg(finalColorTag!==editForm.color_tag?(finalColorTag==="new_customer"?"已更新（卡位→新客）":"已更新（卡位→舊客）"):"已更新");setEditForm(null);loadBk();}else msg("更新失敗",true);
           }} style={{flex:2,padding:10,borderRadius:8,background:"#74b9ff",border:"none",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>儲存變更 ✓</button>
+        </div>
+      </div>
+    </div>}
+
+    {/* 🔁 套用到未來重複 modal */}
+    {extendRecur&&<div data-modal-backdrop="true" style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:250}} onClick={()=>setExtendRecur(null)}>
+      <div style={{background:"var(--bg-header)",border:"1px solid #a29bfe",borderRadius:16,padding:18,width:"92%",maxWidth:440,maxHeight:"85vh",overflowY:"auto",boxSizing:"border-box"}} onClick={e=>e.stopPropagation()}>
+        <div style={{fontWeight:800,fontSize:16,marginBottom:14,color:"#a29bfe"}}>🔁 套用到未來重複</div>
+        <div style={{background:"var(--bg-sub)",borderRadius:10,padding:"10px 12px",marginBottom:14,fontSize:12,color:"var(--text-muted)"}}>
+          以 <span style={{fontWeight:800,color:"var(--text-main)"}}>{extendRecur.booking.customer_name||"-"}</span> 在 <span style={{color:"#74b9ff"}}>{extendRecur.booking.date} {extendRecur.booking.start_time?.slice(0,5)}</span> 為起點，建立未來重複預約（不影響原本這筆）
+        </div>
+        <div style={{marginBottom:10}}>
+          <div style={{fontSize:11,color:"var(--text-muted)",marginBottom:6,fontWeight:700}}>重複週期</div>
+          <div style={{display:"flex",gap:5}}>
+            {[{k:"weekly",l:"每週"},{k:"biweekly",l:"每兩週"},{k:"monthly",l:"每月"}].map(opt=>{
+              const sel=extendRecur.recurType===opt.k;
+              return<button key={opt.k} onClick={()=>setExtendRecur(p=>({...p,recurType:opt.k}))} style={{flex:1,padding:"8px 4px",borderRadius:6,border:`1px solid ${sel?"#a29bfe":"var(--border2)"}`,background:sel?"rgba(162,155,254,0.2)":"transparent",color:sel?"#a29bfe":"var(--text-muted)",fontSize:13,fontWeight:sel?800:500,cursor:"pointer"}}>{opt.l}</button>;
+            })}
+          </div>
+          {extendRecur.recurType==="monthly"&&<div style={{fontSize:10,color:"#a29bfe",marginTop:4}}>📌 每月{describeMonthlyNth(extendRecur.booking.date)}</div>}
+        </div>
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:11,color:"var(--text-muted)",marginBottom:6,fontWeight:700}}>結束方式</div>
+          <div style={{display:"flex",gap:5,marginBottom:6}}>
+            <button onClick={()=>setExtendRecur(p=>({...p,recurEndType:"date"}))} style={{flex:1,padding:"6px 2px",borderRadius:6,border:`1px solid ${extendRecur.recurEndType==="date"?"#a29bfe":"var(--border2)"}`,background:extendRecur.recurEndType==="date"?"rgba(162,155,254,0.15)":"transparent",color:extendRecur.recurEndType==="date"?"#a29bfe":"var(--text-muted)",fontSize:12,fontWeight:extendRecur.recurEndType==="date"?700:400,cursor:"pointer"}}>到指定日期</button>
+            <button onClick={()=>setExtendRecur(p=>({...p,recurEndType:"count"}))} style={{flex:1,padding:"6px 2px",borderRadius:6,border:`1px solid ${extendRecur.recurEndType==="count"?"#a29bfe":"var(--border2)"}`,background:extendRecur.recurEndType==="count"?"rgba(162,155,254,0.15)":"transparent",color:extendRecur.recurEndType==="count"?"#a29bfe":"var(--text-muted)",fontSize:12,fontWeight:extendRecur.recurEndType==="count"?700:400,cursor:"pointer"}}>重複 N 次</button>
+          </div>
+          {extendRecur.recurEndType==="date"
+            ?<input type="date" value={extendRecur.recurEndDate} min={extendRecur.booking.date} onChange={e=>setExtendRecur(p=>({...p,recurEndDate:e.target.value}))} style={{width:"100%",background:"var(--input-bg)",border:"1px solid var(--border2)",borderRadius:6,padding:"8px 10px",color:"var(--text-main)",fontSize:13,boxSizing:"border-box"}} />
+            :<input type="number" min={1} max={100} value={extendRecur.recurEndCount} onChange={e=>setExtendRecur(p=>({...p,recurEndCount:parseInt(e.target.value)||1}))} placeholder="次數" style={{width:"100%",background:"var(--input-bg)",border:"1px solid var(--border2)",borderRadius:6,padding:"8px 10px",color:"var(--text-main)",fontSize:13,boxSizing:"border-box"}} />
+          }
+          <div style={{fontSize:10,color:"var(--text-dim)",marginTop:6}}>
+            {(()=>{
+              try{
+                if(extendRecur.recurEndType==="date"&&!extendRecur.recurEndDate)return "請選擇結束日期";
+                const ds=computeRecurDates(extendRecur.booking.date,extendRecur.recurType,extendRecur.recurEndType,extendRecur.recurEndType==="date"?extendRecur.recurEndDate:extendRecur.recurEndCount);
+                const future=ds.slice(1);
+                if(future.length===0)return "❗ 沒有產生未來日期";
+                return `📋 將建立 ${future.length} 筆未來預約（${future[0]} ~ ${future[future.length-1]}）`;
+              }catch(e){return "請填寫結束日期/次數";}
+            })()}
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>setExtendRecur(null)} style={{flex:1,padding:11,borderRadius:8,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-muted)",fontSize:13,cursor:"pointer"}}>取消</button>
+          <button onClick={async()=>{
+            try{
+              if(extendRecur.recurEndType==="date"&&!extendRecur.recurEndDate){msg("請選擇結束日期",true);return;}
+              const allDates=computeRecurDates(extendRecur.booking.date,extendRecur.recurType,extendRecur.recurEndType,extendRecur.recurEndType==="date"?extendRecur.recurEndDate:extendRecur.recurEndCount);
+              const futureDates=allDates.slice(1);
+              if(futureDates.length===0){msg("沒有未來日期可建立",true);return;}
+              if(futureDates.length>100){if(!window.confirm(`即將建立 ${futureDates.length} 筆預約，數量很多，確定嗎？`))return;}
+              const b=extendRecur.booking;
+              const timeStr=b.start_time?.slice(0,5);
+              const{data:existing}=await sb.from("bookings").select("id,date,customer_name,color_tag").eq("master_id",b.master_id).eq("start_time",b.start_time).in("date",futureDates).neq("status","cancelled");
+              const cmap={};(existing||[]).forEach(c=>{cmap[c.date]=c;});
+              const skipDates=new Set(),overrideIds=[];
+              for(const ds of futureDates){
+                const c=cmap[ds];if(!c)continue;
+                if(window.confirm(`${ds} ${timeStr} 已有「${c.customer_name||c.color_tag}」\n\n按【確定】= 覆蓋\n按【取消】= 跳過此日期`))overrideIds.push(c.id);
+                else skipDates.add(ds);
+              }
+              if(overrideIds.length>0)await sb.from("bookings").delete().in("id",overrideIds);
+              const toIns=futureDates.filter(ds=>!skipDates.has(ds)).map(ds=>({master_id:b.master_id,raw_input:b.raw_input,customer_name:b.customer_name,customer_phone:b.customer_phone,date:ds,start_time:b.start_time,guest_count:b.guest_count||1,color_tag:b.color_tag||"none",note:b.note,booking_source:"internal",status:"confirmed"}));
+              if(toIns.length===0){msg("所有日期都被跳過",true);setExtendRecur(null);return;}
+              const{data:ins,error}=await sb.from("bookings").insert(toIns).select();
+              if(error){msg("建立失敗："+error.message,true);return;}
+              if(ins&&ins.length>0){
+                pushUndo(`重複套用 ${b.customer_name} 共 ${ins.length} 筆`,{action:"delete_ids",ids:ins.map(r=>r.id)});
+                const editorName=(loginMaster||master)?.name||"系統";
+                const nowStr=new Date().toLocaleString("zh-TW",{timeZone:"Asia/Taipei",hour:"2-digit",minute:"2-digit"});
+                await saveEditLog(ins[0].id,editorName,`【重複套用】${b.customer_name} ${timeStr} 共 ${ins.length} 筆（${nowStr}）`,{master_id:b.master_id,date:b.date,start_time:b.start_time});
+              }
+              msg(`✅ 成功建立 ${ins.length} 筆${skipDates.size>0?`（跳過 ${skipDates.size} 筆）`:""}`);
+              setExtendRecur(null);loadBk();
+            }catch(e){console.error(e);msg("錯誤："+e.message,true);}
+          }} style={{flex:2,padding:11,borderRadius:8,background:"#a29bfe",border:"none",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>確認建立 ✓</button>
         </div>
       </div>
     </div>}
@@ -2438,6 +2690,7 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
   const[cpTarget,setCpTarget]=useState({date:"",time:""});
   const[clipBoard,setClipBoard]=useState(null); // 暫存複製的預約，關掉後可貼上
   const[editForm,setEditForm]=useState(null); // 編輯預約用
+  const[extendRecur,setExtendRecur]=useState(null); // {booking, recurType, recurEndType, recurEndDate, recurEndCount}
   const[ovEditLogs,setOvEditLogs]=useState([]);
   const{suggestions:acSug,showSug:acShow,dismiss:acDismiss}=useCustomerSuggest(form.input,!!dialog,dialog?.masterId||null,masters);
   const[ovShowEditLogs,setOvShowEditLogs]=useState(false);
@@ -2453,6 +2706,7 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
   // 註冊彈窗到全域 stack — 左滑時優先關彈窗
   useModalBackClose(!!dialog,React.useCallback(()=>setDialog(null),[]));
   useModalBackClose(!!editForm,React.useCallback(()=>setEditForm(null),[]));
+  useModalBackClose(!!extendRecur,React.useCallback(()=>setExtendRecur(null),[]));
   useModalBackClose(!!cpMode,React.useCallback(()=>setCpMode(null),[]));
   useModalBackClose(ovShowEditLogs,React.useCallback(()=>setOvShowEditLogs(false),[]));
   useModalBackClose(!!ovCellHistory,React.useCallback(()=>setOvCellHistory(null),[]));
@@ -2989,7 +3243,7 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
     </div>}
 
     {ovDragMode&&<div style={{background:"rgba(233,69,96,0.12)",borderBottom:"1px solid #e94560",padding:"6px 12px",fontSize:11,color:"#e94560",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexShrink:0,flexWrap:"wrap"}}>
-      <span style={{fontWeight:700}}>🔴 休假模式 {ovDragCells.size>0||ovRemoveVacCells.size>0?<span style={{fontSize:10,fontWeight:400}}>　{ovDragCells.size>0&&`新增 ${ovDragCells.size}`}{ovDragCells.size>0&&ovRemoveVacCells.size>0&&"｜"}{ovRemoveVacCells.size>0&&<span style={{color:"#f5a623"}}>取消 {ovRemoveVacCells.size}</span>}</span>:"— 點空格新增、點已休假取消"}</span>
+      <span style={{fontWeight:700}}>🔴 休假模式 {ovDragCells.size>0||ovRemoveVacCells.size>0?<span style={{fontSize:10,fontWeight:400}}>　{ovDragCells.size>0&&`新增 ${ovDragCells.size}`}{ovDragCells.size>0&&ovRemoveVacCells.size>0&&"｜"}{ovRemoveVacCells.size>0&&<span style={{color:"#f5a623"}}>取消 {ovRemoveVacCells.size}</span>}</span>:"— 拖曳經過即加選/點時間整列/點日期整欄"}</span>
       <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
         <button onClick={()=>{setOvDragMode(false);setOvDragCells(new Set());setOvRemoveVacCells(new Set());setOvIsDraggingVac(false);}} style={{padding:"3px 10px",borderRadius:6,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-dim)",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>✕ 退出</button>
         {(ovDragCells.size>0||ovRemoveVacCells.size>0)&&<button onClick={()=>{setOvDragCells(new Set());setOvRemoveVacCells(new Set());}} style={{padding:"3px 10px",borderRadius:6,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-dim)",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>清除選取</button>}
@@ -3328,7 +3582,7 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
         <div style={{background:"var(--bg-sub)",borderRadius:12,padding:"14px 16px",marginBottom:14}}>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
             <div style={{fontSize:22,fontWeight:800,color:"var(--text-main)"}}>{displayName(cpMode.booking.customer_name)}</div>
-            <button onClick={()=>{const b=cpMode.booking;(async()=>{const _raw=b.raw_input||"";const _parsedRaw=parseInput(_raw);const _parsedName=parseInput(b.customer_name||"");let _phone=b.customer_phone||_parsedRaw.phone||_parsedName.phone||"";const _cleanName=_phone?(_parsedRaw.phone?_parsedRaw.name:(_parsedName.phone?_parsedName.name:displayName(b.customer_name||""))):displayName(b.customer_name||"");if(!_phone&&_cleanName){try{const{data:cust}=await sb.from("customers").select("phone").ilike("name",_cleanName).limit(1);if(cust&&cust[0]?.phone)_phone=cust[0].phone;}catch(e){}}setEditForm({id:b.id,customer_name:_cleanName,customer_phone:_phone,note:b.note||"",guest_count:b.guest_count||1,color_tag:b.color_tag||"none",_editorName:loginMaster?.name||""});})();setCpMode(null);}} style={{padding:"3px 8px",borderRadius:7,border:"1px solid #74b9ff",background:"rgba(116,185,255,0.1)",color:"#74b9ff",cursor:"pointer",fontSize:12,fontWeight:700,flexShrink:0}}>✏️ 編輯</button>
+            <button onClick={()=>{const b=cpMode.booking;(async()=>{const _raw=b.raw_input||"";const _parsedRaw=parseInput(_raw);const _parsedName=parseInput(b.customer_name||"");let _phone=b.customer_phone||_parsedRaw.phone||_parsedName.phone||"";const _cleanName=_phone?(_parsedRaw.phone?_parsedRaw.name:(_parsedName.phone?_parsedName.name:displayName(b.customer_name||""))):displayName(b.customer_name||"");if(!_phone&&_cleanName){try{const{data:cust}=await sb.from("customers").select("phone").ilike("name",_cleanName).limit(1);if(cust&&cust[0]?.phone)_phone=cust[0].phone;}catch(e){}}setEditForm({id:b.id,customer_name:_cleanName,customer_phone:_phone,note:b.note||"",guest_count:b.guest_count||1,color_tag:b.color_tag||"none",_editorName:loginMaster?.name||"",_booking:b});})();setCpMode(null);}} style={{padding:"3px 8px",borderRadius:7,border:"1px solid #74b9ff",background:"rgba(116,185,255,0.1)",color:"#74b9ff",cursor:"pointer",fontSize:12,fontWeight:700,flexShrink:0}}>✏️ 編輯</button>
           </div>
           <div style={{display:"flex",gap:16,flexWrap:"wrap",fontSize:13,color:"var(--text-muted)"}}>
             {(()=>{const _ph=cpMode.booking.customer_phone||parseInput(cpMode.booking.raw_input||cpMode.booking.customer_name||"").phone;return _ph?<span>{_ph}</span>:null;})()}
@@ -3348,6 +3602,15 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
             </div>)}
           </div>}
         </div>
+        {/* 套用到未來重複按鈕（共覽） */}
+        <div style={{marginBottom:10}}>
+          <button onClick={()=>{
+            const b=cpMode.booking;
+            const d=new Date(b.date+"T00:00:00");d.setMonth(d.getMonth()+3);
+            setExtendRecur({booking:b,recurType:"weekly",recurEndType:"date",recurEndDate:d.toISOString().slice(0,10),recurEndCount:12});
+            setCpMode(null);
+          }} style={{width:"100%",padding:"10px",borderRadius:10,border:"1px solid #a29bfe",background:"rgba(162,155,254,0.1)",color:"#a29bfe",fontSize:13,fontWeight:700,cursor:"pointer"}}>🔁 套用到未來重複（每週/每月固定）</button>
+        </div>
         <div style={{marginBottom:14}}>
           <div style={{fontSize:11,color:"var(--text-dim)",marginBottom:6,fontWeight:700}}>📋 複製到其他時段</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
@@ -3366,7 +3629,7 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
             style={{padding:"13px 0",borderRadius:12,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-muted)",cursor:"pointer",fontSize:13,fontWeight:700}}>返回</button>
           <button onClick={()=>{const b=cpMode.booking;const dateStr=b.date;const t=b.start_time?.slice(0,5);getEditLogsByCell(b.master_id,dateStr,t).then(logs=>{if(logs.length>0)setOvCellHistory({dateStr,time:t,masterId:b.master_id,masterName:masters.find(m=>m.id===b.master_id)?.name||"",logs});else msg("此格沒有操作紀錄");});}}
             style={{padding:"13px 0",borderRadius:12,border:"1px solid #a29bfe",background:"rgba(162,155,254,0.1)",color:"#a29bfe",cursor:"pointer",fontSize:13,fontWeight:700}}>歷史</button>
-          <button onClick={()=>{const b=cpMode.booking;(async()=>{const _raw=b.raw_input||"";const _parsedRaw=parseInput(_raw);const _parsedName=parseInput(b.customer_name||"");let _phone=b.customer_phone||_parsedRaw.phone||_parsedName.phone||"";const _cleanName=_phone?(_parsedRaw.phone?_parsedRaw.name:(_parsedName.phone?_parsedName.name:displayName(b.customer_name||""))):displayName(b.customer_name||"");if(!_phone&&_cleanName){try{const{data:cust}=await sb.from("customers").select("phone").ilike("name",_cleanName).limit(1);if(cust&&cust[0]?.phone)_phone=cust[0].phone;}catch(e){}}setEditForm({id:b.id,customer_name:_cleanName,customer_phone:_phone,note:b.note||"",guest_count:b.guest_count||1,color_tag:b.color_tag||"none",_editorName:loginMaster?.name||""});})();setCpMode(null);}}
+          <button onClick={()=>{const b=cpMode.booking;(async()=>{const _raw=b.raw_input||"";const _parsedRaw=parseInput(_raw);const _parsedName=parseInput(b.customer_name||"");let _phone=b.customer_phone||_parsedRaw.phone||_parsedName.phone||"";const _cleanName=_phone?(_parsedRaw.phone?_parsedRaw.name:(_parsedName.phone?_parsedName.name:displayName(b.customer_name||""))):displayName(b.customer_name||"");if(!_phone&&_cleanName){try{const{data:cust}=await sb.from("customers").select("phone").ilike("name",_cleanName).limit(1);if(cust&&cust[0]?.phone)_phone=cust[0].phone;}catch(e){}}setEditForm({id:b.id,customer_name:_cleanName,customer_phone:_phone,note:b.note||"",guest_count:b.guest_count||1,color_tag:b.color_tag||"none",_editorName:loginMaster?.name||"",_booking:b});})();setCpMode(null);}}
             style={{padding:"13px 0",borderRadius:12,border:"1px solid #74b9ff",background:"rgba(116,185,255,0.1)",color:"#74b9ff",cursor:"pointer",fontSize:13,fontWeight:700}}>編輯</button>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:8}}>
@@ -3406,6 +3669,15 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
             {COLORS.map(cc=>{const isSel=editForm.color_tag===cc.key;const colorMap={"none":"#888","new_customer":"#f5a623","vacation":"#e94560","reserved":"#22d3ee","custom":"#a29bfe","aftercare":"#00d09c"};const col=colorMap[cc.key]||"#888";return<button key={cc.key} onClick={()=>setEditForm(f=>({...f,color_tag:cc.key}))} style={{flex:1,padding:"7px 2px",borderRadius:8,border:`2px solid ${isSel?col:"#44444466"}`,background:isSel?col:"var(--bg-sub)",color:isSel?"#fff":"var(--text-muted)",cursor:"pointer",fontSize:11,fontWeight:isSel?800:500,boxShadow:isSel?`0 0 8px ${col}88`:"none",transition:"all 0.15s"}}>{cc.label}</button>;})}
           </div>
         </div>
+        <div style={{marginBottom:10}}>
+          <button onClick={()=>{
+            const b=editForm._booking;
+            if(!b){msg("無法取得預約資料",true);return;}
+            const d=new Date(b.date+"T00:00:00");d.setMonth(d.getMonth()+3);
+            setExtendRecur({booking:b,recurType:"weekly",recurEndType:"date",recurEndDate:d.toISOString().slice(0,10),recurEndCount:12});
+            setEditForm(null);
+          }} style={{width:"100%",padding:10,borderRadius:8,border:"1px solid #a29bfe",background:"rgba(162,155,254,0.1)",color:"#a29bfe",fontSize:13,fontWeight:700,cursor:"pointer"}}>🔁 套用到未來重複</button>
+        </div>
         <div style={{display:"flex",gap:8}}>
           <button onClick={()=>setEditForm(null)} style={{flex:1,padding:10,borderRadius:8,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-muted)",fontSize:13,cursor:"pointer"}}>取消</button>
           <button onClick={async()=>{
@@ -3418,6 +3690,83 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
             const{error}=await sb.from("bookings").update({customer_name:editForm.customer_name,customer_phone:editForm.customer_phone||null,raw_input:editForm.customer_phone?(editForm.customer_name+(editForm.customer_phone?" "+editForm.customer_phone:"")):editForm.customer_name,note:editForm.note||null,guest_count:editForm.guest_count,color_tag:finalColorTag,last_edited_by:editForm._editorName||loginMaster?.name||"系統",last_edited_at:new Date().toISOString()}).eq("id",editForm.id);
             if(!error){await saveEditLog(editForm.id,editForm._editorName||loginMaster?.name||"系統",`${editForm.customer_name} ${finalColorTag}${finalColorTag!==editForm.color_tag?"（卡位→自動分類）":""}`);if(editForm.customer_phone){const todayStr=getTaipeiDateStr();await sb.from("customers").upsert({phone:editForm.customer_phone,name:editForm.customer_name,last_visit_date:todayStr,total_visits:1},{onConflict:"phone",ignoreDuplicates:false});await sb.from("customers").update({name:editForm.customer_name}).eq("phone",editForm.customer_phone);}msg(finalColorTag!==editForm.color_tag?(finalColorTag==="new_customer"?"已更新（卡位→新客）":"已更新（卡位→舊客）"):"已更新");setEditForm(null);loadBk();if(onBookingAdded)onBookingAdded();}else msg("更新失敗",true);
           }} style={{flex:2,padding:10,borderRadius:8,background:"#74b9ff",border:"none",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>儲存變更 ✓</button>
+        </div>
+      </div>
+    </div>}
+
+    {/* 🔁 套用到未來重複 modal */}
+    {extendRecur&&<div data-modal-backdrop="true" style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:250}} onClick={()=>setExtendRecur(null)}>
+      <div style={{background:"var(--bg-header)",border:"1px solid #a29bfe",borderRadius:16,padding:18,width:"92%",maxWidth:440,maxHeight:"85vh",overflowY:"auto",boxSizing:"border-box"}} onClick={e=>e.stopPropagation()}>
+        <div style={{fontWeight:800,fontSize:16,marginBottom:14,color:"#a29bfe"}}>🔁 套用到未來重複</div>
+        <div style={{background:"var(--bg-sub)",borderRadius:10,padding:"10px 12px",marginBottom:14,fontSize:12,color:"var(--text-muted)"}}>
+          以 <span style={{fontWeight:800,color:"var(--text-main)"}}>{extendRecur.booking.customer_name||"-"}</span> 在 <span style={{color:"#74b9ff"}}>{extendRecur.booking.date} {extendRecur.booking.start_time?.slice(0,5)}</span> 為起點，建立未來重複預約（不影響原本這筆）
+        </div>
+        <div style={{marginBottom:10}}>
+          <div style={{fontSize:11,color:"var(--text-muted)",marginBottom:6,fontWeight:700}}>重複週期</div>
+          <div style={{display:"flex",gap:5}}>
+            {[{k:"weekly",l:"每週"},{k:"biweekly",l:"每兩週"},{k:"monthly",l:"每月"}].map(opt=>{
+              const sel=extendRecur.recurType===opt.k;
+              return<button key={opt.k} onClick={()=>setExtendRecur(p=>({...p,recurType:opt.k}))} style={{flex:1,padding:"8px 4px",borderRadius:6,border:`1px solid ${sel?"#a29bfe":"var(--border2)"}`,background:sel?"rgba(162,155,254,0.2)":"transparent",color:sel?"#a29bfe":"var(--text-muted)",fontSize:13,fontWeight:sel?800:500,cursor:"pointer"}}>{opt.l}</button>;
+            })}
+          </div>
+          {extendRecur.recurType==="monthly"&&<div style={{fontSize:10,color:"#a29bfe",marginTop:4}}>📌 每月{describeMonthlyNth(extendRecur.booking.date)}</div>}
+        </div>
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:11,color:"var(--text-muted)",marginBottom:6,fontWeight:700}}>結束方式</div>
+          <div style={{display:"flex",gap:5,marginBottom:6}}>
+            <button onClick={()=>setExtendRecur(p=>({...p,recurEndType:"date"}))} style={{flex:1,padding:"6px 2px",borderRadius:6,border:`1px solid ${extendRecur.recurEndType==="date"?"#a29bfe":"var(--border2)"}`,background:extendRecur.recurEndType==="date"?"rgba(162,155,254,0.15)":"transparent",color:extendRecur.recurEndType==="date"?"#a29bfe":"var(--text-muted)",fontSize:12,fontWeight:extendRecur.recurEndType==="date"?700:400,cursor:"pointer"}}>到指定日期</button>
+            <button onClick={()=>setExtendRecur(p=>({...p,recurEndType:"count"}))} style={{flex:1,padding:"6px 2px",borderRadius:6,border:`1px solid ${extendRecur.recurEndType==="count"?"#a29bfe":"var(--border2)"}`,background:extendRecur.recurEndType==="count"?"rgba(162,155,254,0.15)":"transparent",color:extendRecur.recurEndType==="count"?"#a29bfe":"var(--text-muted)",fontSize:12,fontWeight:extendRecur.recurEndType==="count"?700:400,cursor:"pointer"}}>重複 N 次</button>
+          </div>
+          {extendRecur.recurEndType==="date"
+            ?<input type="date" value={extendRecur.recurEndDate} min={extendRecur.booking.date} onChange={e=>setExtendRecur(p=>({...p,recurEndDate:e.target.value}))} style={{width:"100%",background:"var(--input-bg)",border:"1px solid var(--border2)",borderRadius:6,padding:"8px 10px",color:"var(--text-main)",fontSize:13,boxSizing:"border-box"}} />
+            :<input type="number" min={1} max={100} value={extendRecur.recurEndCount} onChange={e=>setExtendRecur(p=>({...p,recurEndCount:parseInt(e.target.value)||1}))} placeholder="次數" style={{width:"100%",background:"var(--input-bg)",border:"1px solid var(--border2)",borderRadius:6,padding:"8px 10px",color:"var(--text-main)",fontSize:13,boxSizing:"border-box"}} />
+          }
+          <div style={{fontSize:10,color:"var(--text-dim)",marginTop:6}}>
+            {(()=>{
+              try{
+                if(extendRecur.recurEndType==="date"&&!extendRecur.recurEndDate)return "請選擇結束日期";
+                const ds=computeRecurDates(extendRecur.booking.date,extendRecur.recurType,extendRecur.recurEndType,extendRecur.recurEndType==="date"?extendRecur.recurEndDate:extendRecur.recurEndCount);
+                const future=ds.slice(1);
+                if(future.length===0)return "❗ 沒有產生未來日期";
+                return `📋 將建立 ${future.length} 筆未來預約（${future[0]} ~ ${future[future.length-1]}）`;
+              }catch(e){return "請填寫結束日期/次數";}
+            })()}
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>setExtendRecur(null)} style={{flex:1,padding:11,borderRadius:8,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-muted)",fontSize:13,cursor:"pointer"}}>取消</button>
+          <button onClick={async()=>{
+            try{
+              if(extendRecur.recurEndType==="date"&&!extendRecur.recurEndDate){msg("請選擇結束日期",true);return;}
+              const allDates=computeRecurDates(extendRecur.booking.date,extendRecur.recurType,extendRecur.recurEndType,extendRecur.recurEndType==="date"?extendRecur.recurEndDate:extendRecur.recurEndCount);
+              const futureDates=allDates.slice(1);
+              if(futureDates.length===0){msg("沒有未來日期可建立",true);return;}
+              if(futureDates.length>100){if(!window.confirm(`即將建立 ${futureDates.length} 筆預約，數量很多，確定嗎？`))return;}
+              const b=extendRecur.booking;
+              const timeStr=b.start_time?.slice(0,5);
+              const{data:existing}=await sb.from("bookings").select("id,date,customer_name,color_tag").eq("master_id",b.master_id).eq("start_time",b.start_time).in("date",futureDates).neq("status","cancelled");
+              const cmap={};(existing||[]).forEach(c=>{cmap[c.date]=c;});
+              const skipDates=new Set(),overrideIds=[];
+              for(const ds of futureDates){
+                const c=cmap[ds];if(!c)continue;
+                if(window.confirm(`${ds} ${timeStr} 已有「${c.customer_name||c.color_tag}」\n\n按【確定】= 覆蓋\n按【取消】= 跳過此日期`))overrideIds.push(c.id);
+                else skipDates.add(ds);
+              }
+              if(overrideIds.length>0)await sb.from("bookings").delete().in("id",overrideIds);
+              const toIns=futureDates.filter(ds=>!skipDates.has(ds)).map(ds=>({master_id:b.master_id,raw_input:b.raw_input,customer_name:b.customer_name,customer_phone:b.customer_phone,date:ds,start_time:b.start_time,guest_count:b.guest_count||1,color_tag:b.color_tag||"none",note:b.note,booking_source:"internal",status:"confirmed"}));
+              if(toIns.length===0){msg("所有日期都被跳過",true);setExtendRecur(null);return;}
+              const{data:ins,error}=await sb.from("bookings").insert(toIns).select();
+              if(error){msg("建立失敗："+error.message,true);return;}
+              if(ins&&ins.length>0){
+                pushUndo(`重複套用 ${b.customer_name} 共 ${ins.length} 筆`,{action:"delete_ids",ids:ins.map(r=>r.id)});
+                const editorName=(loginMaster||master)?.name||"系統";
+                const nowStr=new Date().toLocaleString("zh-TW",{timeZone:"Asia/Taipei",hour:"2-digit",minute:"2-digit"});
+                await saveEditLog(ins[0].id,editorName,`【重複套用】${b.customer_name} ${timeStr} 共 ${ins.length} 筆（${nowStr}）`,{master_id:b.master_id,date:b.date,start_time:b.start_time});
+              }
+              msg(`✅ 成功建立 ${ins.length} 筆${skipDates.size>0?`（跳過 ${skipDates.size} 筆）`:""}`);
+              setExtendRecur(null);loadBk();
+            }catch(e){console.error(e);msg("錯誤："+e.message,true);}
+          }} style={{flex:2,padding:11,borderRadius:8,background:"#a29bfe",border:"none",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>確認建立 ✓</button>
         </div>
       </div>
     </div>}
