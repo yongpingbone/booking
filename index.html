@@ -1239,6 +1239,13 @@ function MainApp({authMaster,onLogout}){
     setBookings(map);setLoading(false);
   },[master,year,month]);
   useEffect(()=>{loadBk();},[loadBk]);
+  
+  // 監聽客戶改名/合併等事件，自動 reload
+  useEffect(()=>{
+    const h=()=>loadBk();
+    window.addEventListener("yp:bookings_changed",h);
+    return ()=>window.removeEventListener("yp:bookings_changed",h);
+  },[loadBk]);
 
   // 自動跳轉到今日：切換到排班 tab、切換視圖、或載入當月時觸發
   useEffect(()=>{
@@ -2750,6 +2757,13 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
     setBks(m);setL(false);
   },[ovMasters,yr,mo]);
   useEffect(()=>{loadBk();},[loadBk]);
+  
+  // 監聽客戶改名/合併等事件，自動 reload
+  useEffect(()=>{
+    const h=()=>loadBk();
+    window.addEventListener("yp:bookings_changed",h);
+    return ()=>window.removeEventListener("yp:bookings_changed",h);
+  },[loadBk]);
 
   // 自動跳轉到今日：掛載時及切換回當月時觸發
   useEffect(()=>{
@@ -4062,17 +4076,27 @@ function CRMModule({masters,FS}){
   const[mergeProcessing,setMergeProcessing]=useState({});
   const[mergeRefreshKey,setMergeRefreshKey]=useState(0);
 
-  // 嘗試從 DB 載入忽略清單
+  // 嘗試從 DB 載入忽略清單（30天內有效）
   useEffect(()=>{
     (async()=>{
-      const{data,error}=await sb.from("merge_ignored").select("source_name,target_phone").limit(5000);
+      const{data,error}=await sb.from("merge_ignored").select("source_name,target_phone,created_at").limit(5000);
       if(error){
         // 表不存在或無權限，退回 sessionStorage
         setMergeIgnoredHasTable(false);
         return;
       }
-      const set=new Set((data||[]).map(r=>`${r.target_phone}__${r.source_name}`));
+      // 只保留 30 天內的（超過 30 天的視為過期、重新顯示）
+      const cutoff=Date.now()-30*86400000;
+      const set=new Set((data||[]).filter(r=>{
+        if(!r.created_at)return true; // 沒 created_at 視為新的
+        return new Date(r.created_at).getTime()>=cutoff;
+      }).map(r=>`${r.target_phone}__${r.source_name}`));
       setMergeIgnored(set);
+      // 順便清除過期的（不影響當下顯示）
+      const expired=(data||[]).filter(r=>r.created_at&&new Date(r.created_at).getTime()<cutoff);
+      if(expired.length>0){
+        sb.from("merge_ignored").delete().lt("created_at",new Date(cutoff).toISOString()).then(()=>{});
+      }
     })();
   },[]);
 
@@ -4085,8 +4109,51 @@ function CRMModule({masters,FS}){
     if(!s)return true;
     const t=s.trim();
     if(t.length===1)return true;
-    // 兩字但第二字也是「先生/小姐/太太」之類
     return false;
+  };
+
+  // 相似度計算（編輯距離，雙字以上才比）
+  const levenshtein=(a,b)=>{
+    if(!a||!b)return Math.max((a||"").length,(b||"").length);
+    const m=a.length,n=b.length;
+    if(m===0)return n;
+    if(n===0)return m;
+    const dp=Array(n+1).fill(0).map((_,i)=>i);
+    for(let i=1;i<=m;i++){
+      let prev=dp[0];dp[0]=i;
+      for(let j=1;j<=n;j++){
+        const tmp=dp[j];
+        dp[j]=a[i-1]===b[j-1]?prev:Math.min(prev,dp[j],dp[j-1])+1;
+        prev=tmp;
+      }
+    }
+    return dp[n];
+  };
+  // 計算相似度比率（0~1）
+  const nameSimilarity=(a,b)=>{
+    a=stripParen(a||"").trim();b=stripParen(b||"").trim();
+    if(!a||!b)return 0;
+    const maxLen=Math.max(a.length,b.length);
+    if(maxLen<=1)return a===b?1:0;
+    return 1-levenshtein(a,b)/maxLen;
+  };
+  // 首字相同 + 帶 r/s/m/媽/姐/姨 等後綴的可能同一人
+  const SUFFIX_TAGS=["r","R","s","S","m","M","媽","姐","姨","哥","姊","母","爸","父","妹","弟","兒"];
+  const sharesPrefix=(a,b)=>{
+    a=stripParen(a||"").trim();b=stripParen(b||"").trim();
+    if(!a||!b||a===b)return false;
+    if(a[0]!==b[0])return false;
+    // 兩個都有 1~2 字 + 可能帶後綴
+    const stripSuffix=(s)=>{
+      let x=s;
+      for(const sfx of SUFFIX_TAGS){if(x.endsWith(sfx))x=x.slice(0,-sfx.length);}
+      return x;
+    };
+    const a2=stripSuffix(a),b2=stripSuffix(b);
+    // 去後綴後若至少一邊縮成 1 字、且首字相同，視為相似
+    if(a2.length<=1||b2.length<=1)return a[0]===b[0];
+    // 否則檢查相似度
+    return nameSimilarity(a,b)>=0.5;
   };
 
   // 對照建議：每筆 = {sourceCard, targetCard, reason}
@@ -4110,7 +4177,12 @@ function CRMModule({masters,FS}){
           const sName=src.name.trim(), tName=tgt.name.trim();
           if(!sName||!tName)return;
           if(sName===tName){matches.push({tgt,reason:"完全相同"});return;}
-          if(stripParen(sName)===stripParen(tName) && stripParen(sName)){matches.push({tgt,reason:"去括號相同"});return;}
+          if(stripParen(sName)===stripParen(tName) && stripParen(sName)){
+            const sParen=(sName.match(/[（(]([^）)]*)[）)]/)||[])[1]||"";
+            const tParen=(tName.match(/[（(]([^）)]*)[）)]/)||[])[1]||"";
+            const tag=sParen||tParen?`本體相同 (${sParen||"無"} vs ${tParen||"無"})`:"本體相同";
+            matches.push({tgt,reason:tag});return;
+          }
           // 包含關係：tgt 包含 src，且 src 至少 2 字、不是單姓
           if(sName.length>=2 && !isSingleSurname(sName) && tName.includes(sName)){
             matches.push({tgt,reason:"包含關係"});return;
@@ -4118,6 +4190,15 @@ function CRMModule({masters,FS}){
           // 反向包含：src 包含 tgt（少見但保留）
           if(tName.length>=2 && !isSingleSurname(tName) && sName.includes(tName)){
             matches.push({tgt,reason:"包含關係"});return;
+          }
+          // 首字相同 + 後綴/縮寫
+          if(sharesPrefix(sName,tName)){
+            matches.push({tgt,reason:"首字相同"});return;
+          }
+          // 高相似度（編輯距離），如「葉玟」vs「葉玟玟」
+          const sim=nameSimilarity(sName,tName);
+          if(sim>=0.8){
+            matches.push({tgt,reason:`相似 ${Math.round(sim*100)}%`});return;
           }
         });
         if(!matches.length)return;
@@ -4156,6 +4237,7 @@ function CRMModule({masters,FS}){
       setBks(prev=>prev.map(b=>ids.includes(b.id)?{...b,customer_phone:targetCard.phone}:b));
       if(failCount===0)msgCrm(`✅ 已合併 ${okCount} 筆預約到「${targetCard.name}」`);
       else msgCrm(`⚠️ 合併完成：成功 ${okCount}、失敗 ${failCount}`,true);
+      try{window.dispatchEvent(new CustomEvent("yp:bookings_changed",{detail:{ids,merged:true}}));}catch(_){}
     }catch(e){
       msgCrm("合併失敗，請重試",true);
     }
@@ -4213,9 +4295,12 @@ function CRMModule({masters,FS}){
     setRenameSaving(false);
     if(failed===0){
       msgCrm(`✅ 已將 ${updated} 筆預約改名為「${newName}」`);
-      setSel(prev=>({...prev,name:newName,bks:prev.bks.map(b=>({...b,customer_name:newName}))}));
+      // 不更新 sel，直接關閉避免 state 殘留導致全覽蹦掛
       setBks(prev=>prev.map(b=>ids.includes(b.id)?{...b,customer_name:newName}:b));
       setRenameModal(false);setRenameNew("");
+      setSel(null); // 關閉詳情頁，回到列表
+      // 廣播：通知其他元件（個人視圖、全覽）重新載入預約資料
+      try{window.dispatchEvent(new CustomEvent("yp:bookings_changed",{detail:{ids,newName}}));}catch(_){}
     }else{
       msgCrm(`⚠️ 部分失敗（${failed}筆），請重試`,true);
     }
@@ -4308,6 +4393,7 @@ function CRMModule({masters,FS}){
                             }
                             setSel(prev=>({...prev,name:lineName,bks:prev.bks.map(b=>({...b,customer_name:lineName}))}));
                             setBks(prev=>prev.map(b=>ids.includes(b.id)?{...b,customer_name:lineName}:b));
+                            try{window.dispatchEvent(new CustomEvent("yp:bookings_changed",{detail:{ids}}));}catch(_){}
                             msgCrm("✅ 已改為 LINE 名稱："+lineName);
                           }} style={{fontSize:11,padding:"4px 10px",borderRadius:7,background:"rgba(34,211,238,0.15)",border:"1px solid rgba(34,211,238,0.4)",color:"#22d3ee",cursor:"pointer"}}>
                             用 LINE 名稱「{lineName}」
@@ -4334,6 +4420,7 @@ function CRMModule({masters,FS}){
                     }
                     setSel(prev=>({...prev,name:newName,bks:prev.bks.map(b=>({...b,customer_name:newName}))}));
                     setBks(prev=>prev.map(b=>ids.includes(b.id)?{...b,customer_name:newName}:b));
+                    try{window.dispatchEvent(new CustomEvent("yp:bookings_changed",{detail:{ids}}));}catch(_){}
                     msgCrm("✅ 已更新為："+newName);
                   }}/>;
                 })()}
