@@ -1111,6 +1111,11 @@ function MainApp({authMaster,onLogout}){
   // 全域 pointermove / pointerup 監聽（最簡版，效能最佳化）
   const dragBufferRef=useRef(new Set()); // 拖曳時的暫存（不重渲染）
   const dragDOMRef=useRef([]); // 直接改過 style 的 cell DOM（pointerup 時還原給 React 接管）
+  
+  // 用 ref 存 dragMode 給 native event 用
+  const dragModeRef=useRef(false);
+  useEffect(()=>{dragModeRef.current=dragMode;},[dragMode]);
+  
   useEffect(()=>{
     let rafScheduled=false;
     let lastEvent=null;
@@ -1138,10 +1143,33 @@ function MainApp({authMaster,onLogout}){
         }
       }
     };
+    
+    // 原生 touchstart：在 td 上偵測拖曳起點
+    const startHandler=(e)=>{
+      if(!dragModeRef.current)return;
+      const cell=e.target&&e.target.closest&&e.target.closest("td[data-cellkey]");
+      if(!cell)return;
+      const k=cell.dataset.cellkey;
+      if(!k)return;
+      const dayIdxStr=cell.dataset.dayIdx;
+      const ti=cell.dataset.time;
+      if(dayIdxStr==null||ti==null)return;
+      const isVacCell=cell.dataset.vac==="1";
+      const isEmpty=cell.dataset.empty==="1";
+      if(!isVacCell&&!isEmpty)return; // 客人格不處理
+      
+      const isRemoving=isVacCell;
+      boxSelStartRef.current={dayIdx:parseInt(dayIdxStr),t:ti,isRemoving};
+      // 立刻處理第一格
+      dragBufferRef.current.add(k);
+      cell.style.background=isRemoving?"rgba(245,166,35,0.45)":"rgba(162,155,254,0.45)";
+      dragDOMRef.current.push(cell);
+      e.preventDefault();
+    };
     const moveHandler=(e)=>{
       if(!boxSelStartRef.current)return;
-      lastEvent=e;
-      // 用 requestAnimationFrame 對齊瀏覽器渲染（最多 60fps）
+      const touch=e.touches?e.touches[0]:e;
+      lastEvent={clientX:touch.clientX,clientY:touch.clientY};
       if(!rafScheduled){
         rafScheduled=true;
         requestAnimationFrame(processMove);
@@ -1152,7 +1180,6 @@ function MainApp({authMaster,onLogout}){
       if(!boxSelStartRef.current)return;
       const start=boxSelStartRef.current;
       const buffer=dragBufferRef.current;
-      // 一次性 setState
       if(buffer.size>0){
         if(start.isRemoving){
           setRemoveVacCells(prev=>{const n=new Set(prev);buffer.forEach(k=>n.add(k));return n;});
@@ -1160,19 +1187,27 @@ function MainApp({authMaster,onLogout}){
           setDragCells(prev=>{const n=new Set(prev);buffer.forEach(k=>n.add(k));return n;});
         }
       }
-      // 還原直接改的 DOM style，讓 React re-render 接管
       dragDOMRef.current.forEach(el=>{el.style.background="";});
       dragBufferRef.current=new Set();
       dragDOMRef.current=[];
       boxSelStartRef.current=null;
     };
-    document.addEventListener("pointermove",moveHandler);
-    document.addEventListener("pointerup",endHandler);
-    document.addEventListener("pointercancel",endHandler);
+    // 同時監聽 touch + mouse + pointer
+    document.addEventListener("touchstart",startHandler,{passive:false});
+    document.addEventListener("touchmove",moveHandler,{passive:false});
+    document.addEventListener("touchend",endHandler);
+    document.addEventListener("touchcancel",endHandler);
+    document.addEventListener("mousedown",startHandler);
+    document.addEventListener("mousemove",moveHandler);
+    document.addEventListener("mouseup",endHandler);
     return ()=>{
-      document.removeEventListener("pointermove",moveHandler);
-      document.removeEventListener("pointerup",endHandler);
-      document.removeEventListener("pointercancel",endHandler);
+      document.removeEventListener("touchstart",startHandler,{passive:false});
+      document.removeEventListener("touchmove",moveHandler,{passive:false});
+      document.removeEventListener("touchend",endHandler);
+      document.removeEventListener("touchcancel",endHandler);
+      document.removeEventListener("mousedown",startHandler);
+      document.removeEventListener("mousemove",moveHandler);
+      document.removeEventListener("mouseup",endHandler);
     };
   },[]);
   
@@ -1820,26 +1855,7 @@ function MainApp({authMaster,onLogout}){
           if(d&&!dragMode)onCellMouseEnter(d,t);
         }}
         onMouseUp={()=>{}}
-        onPointerDown={e=>{
-          if(dragMode&&d){
-            const isRemoving=b&&b.color_tag==="vacation";
-            boxSelStartRef.current={dayIdx,t,isRemoving};
-            const cell=e.currentTarget;
-            // 立刻處理第一格（buffer + DOM，不 setState）
-            if(isRemoving){
-              dragBufferRef.current.add(cellKey);
-              cell.style.background="rgba(245,166,35,0.45)";
-              dragDOMRef.current.push(cell);
-            }else if(!b){
-              dragBufferRef.current.add(cellKey);
-              cell.style.background="rgba(162,155,254,0.45)";
-              dragDOMRef.current.push(cell);
-            }
-            // 釋放 pointer capture，讓拖曳時 elementFromPoint 能找到實際所在元素
-            try{e.currentTarget.releasePointerCapture(e.pointerId);}catch(err){}
-            e.preventDefault();
-          }
-        }}
+        onPointerDown={e=>{}}
         onTouchStart={e=>{}}
         onTouchMove={e=>{}}
         onTouchEnd={e=>{}}
@@ -1860,19 +1876,7 @@ function MainApp({authMaster,onLogout}){
         }});}else if(d&&!isVac){if(clipBoard){pasteClipBoard(d,t);}else{openDlg(d,t);}}}}
         className={isDragSel?"drag-select":(b?`c-${b.color_tag}`:"")}
         style={{padding:"1px 3px",borderBottom:"1px solid var(--border)",borderRight:"1px solid var(--border)",height:rh,width:cw,minWidth:cw,maxWidth:cw,
-          background:(()=>{
-            // 即時顯示框選範圍
-            const start=boxSelStartRef.current,cur=boxSelCurRef.current;
-            if(dragMode&&start&&cur){
-              const minD=Math.min(start.dayIdx,cur.dayIdx),maxD=Math.max(start.dayIdx,cur.dayIdx);
-              const minTi=Math.min(TIMES.indexOf(start.t),TIMES.indexOf(cur.t)),maxTi=Math.max(TIMES.indexOf(start.t),TIMES.indexOf(cur.t));
-              const myTi=TIMES.indexOf(t);
-              if(dayIdx>=minD&&dayIdx<=maxD&&myTi>=minTi&&myTi<=maxTi){
-                return start.isRemoving?"rgba(245,166,35,0.4)":"rgba(162,155,254,0.5)";
-              }
-            }
-            return isDragSel?"rgba(162,155,254,0.4)":isR&&!b?"var(--bg-rest)":"";
-          })(),
+          background:isDragSel?"rgba(162,155,254,0.4)":isR&&!b?"var(--bg-rest)":"",
           cursor:!b&&d||(dragMode&&isVac)?"pointer":"default",verticalAlign:"middle",userSelect:"none",touchAction:dragMode?"none":(isDragActive?"none":"auto"),
           outline:dragMode&&isVac&&removeVacCells.has(cellKey)?"2px dashed #f5a623":"none",
           outlineOffset:dragMode&&isVac&&removeVacCells.has(cellKey)?-2:0}}>
@@ -3941,9 +3945,13 @@ function CRMModule({masters,FS}){
   useEffect(()=>{
     setLoading(true);
     const fetchAll=async()=>{
+      // 抓全部 booking（只取必要欄位，速度仍可接受）
       let all=[],from=0;
       while(true){
-        const{data,error}=await sb.from("bookings").select("*").neq("status","cancelled").neq("status","no_show").neq("color_tag","vacation").range(from,from+999);
+        const{data,error}=await sb.from("bookings")
+          .select("id,master_id,customer_name,customer_phone,date,start_time,color_tag,status,guest_count")
+          .neq("status","cancelled").neq("status","no_show").neq("color_tag","vacation")
+          .range(from,from+999);
         if(error||!data||data.length===0)break;
         all=[...all,...data];
         if(data.length<1000)break;
@@ -4161,18 +4169,41 @@ function CRMModule({masters,FS}){
     if(!clientCards.length)return[];
     // 按師傅分桶
     const bySrc={}; // master -> 無電話卡片[]
-    const byTgt={}; // master -> 有電話卡片[]
+    const byTgtByFirstChar={}; // master -> 首字 -> 有電話卡片[]（首字索引大幅加速）
     clientCards.forEach(c=>{
       if(!c.name||c.name==="休假")return;
-      if(c.phone) (byTgt[c.masterId]=byTgt[c.masterId]||[]).push(c);
-      else (bySrc[c.masterId]=bySrc[c.masterId]||[]).push(c);
+      if(c.phone){
+        const fc=stripParen(c.name||"").trim()[0]||"_";
+        if(!byTgtByFirstChar[c.masterId])byTgtByFirstChar[c.masterId]={};
+        if(!byTgtByFirstChar[c.masterId][fc])byTgtByFirstChar[c.masterId][fc]=[];
+        byTgtByFirstChar[c.masterId][fc].push(c);
+      }else{
+        (bySrc[c.masterId]=bySrc[c.masterId]||[]).push(c);
+      }
     });
     const out=[];
     Object.keys(bySrc).forEach(mid=>{
       const sources=bySrc[mid];
-      const targets=byTgt[mid]||[];
+      const tgtIndex=byTgtByFirstChar[mid]||{};
       sources.forEach(src=>{
         const matches=[];
+        // 收集 src 名字中可能成為 tgt 首字的字符（包含 src 首字 + 內含字符）
+        const sStripped=stripParen(src.name||"").trim();
+        const candidateFirsts=new Set();
+        if(sStripped[0])candidateFirsts.add(sStripped[0]);
+        // 從第 2 個字起，每個都可能是 tgt 首字（用於反向包含 Wilson 吳 r → 吳 r）
+        for(let i=1;i<Math.min(sStripped.length,8);i++){
+          if(sStripped[i])candidateFirsts.add(sStripped[i]);
+        }
+        const targets=[];
+        const seen=new Set();
+        candidateFirsts.forEach(fc=>{
+          (tgtIndex[fc]||[]).forEach(t=>{
+            if(seen.has(t.key))return;
+            seen.add(t.key);
+            targets.push(t);
+          });
+        });
         // 「關係詞」：含這些字眼代表是另一個人，不可合併
         // 例：「王小明媽媽」「陳小姐朋友」「李大華同事」
         const RELATION_KEYWORDS=["友","媽","媽媽","媽咪","爸","爸爸","爸比","哥","哥哥","姊","姊姊","弟","妹","老公","老婆","兒子","女兒","同事","老闆","朋友","表哥","表姊","表弟","表妹","堂哥","堂姊","學長","學姐","學弟","學妹","師兄","師姐","親戚","鄰居","客戶","介紹","推薦","小孩","孩子","姪女","姪子","外甥","老師","學生","員工"];
