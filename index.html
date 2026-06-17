@@ -1283,9 +1283,6 @@ function MainApp({authMaster,onLogout}){
   const canDelete=isAdmin||master.can_delete;
   const canViewOthers=isAdmin||(loginMaster||master).can_view_others;
   const canViewCRM=isAdmin||(loginMaster||master).can_view_crm;
-  // 報表權限：麒和Hanna永遠可看可編輯，其他人需要 can_view_report 權限（唯讀）
-  const isReportAdmin=loginMaster.name==="麒"||loginMaster.name==="Hanna"||loginMaster.username==="hanna"||loginMaster.role==="admin";
-  const canViewReport=isReportAdmin||loginMaster.can_view_report;
   const reserveColor=master.reserve_color||"#a29bfe";
 
   const msg=(m,err)=>{setToast({m,err});setTimeout(()=>setToast(null),2500);};
@@ -1925,7 +1922,7 @@ function MainApp({authMaster,onLogout}){
 
     {/* Nav */}
     <div style={{display:"flex",background:"var(--bg-header)",borderBottom:"1px solid var(--border2)",overflowX:"auto",flexShrink:0}}>
-      {[["schedule","📅 排班"],["overview","🗓 全覽"],...(canViewCRM?[["crm","👥 客戶"]]:[]),["analytics","📊 數據"],...(canViewReport?[["report","💰 報表"]]:[]),["pending",`📋 待確認${pendingCount>0?` (${pendingCount})`:""}`],...(isAdmin?[["settings","⚙️ 設定"]]:[])].map(([k,l])=>(
+      {[["schedule","📅 排班"],["overview","🗓 全覽"],...(canViewCRM?[["crm","👥 客戶"]]:[]),["analytics","📊 數據"],["pending",`📋 待確認${pendingCount>0?` (${pendingCount})`:""}`],...(isAdmin?[["settings","⚙️ 設定"]]:[])].map(([k,l])=>(
         <button key={k} className={`tab-btn${tab===k?" active":""}`} onClick={()=>{goTab(k);if(k==="crm")setCrmKey(p=>p+1);if(k==="pending")loadPendingCount();}}>{l}</button>
       ))}
     </div>
@@ -2160,7 +2157,6 @@ function MainApp({authMaster,onLogout}){
     {tab==="overview"&&<div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column"}}><OverviewMonth masters={masters} ovMasters={ovMasters} setOvMasters={setOvMasters} FS={FS} ovColW={parseInt(ovColW)} setOvColW={setOvColW} ovRowH={parseInt(ovRowH)} setOvRowH={setOvRowH} onBookingAdded={loadBk} loginMaster={loginMaster||master} undoStack={undoStack} pushUndo={pushUndo} executeUndo={executeUndo} /></div>}
     {tab==="crm"&&canViewCRM&&<CRMModule key={crmKey} masters={masters} FS={FS} />}
     {tab==="analytics"&&<AnalyticsModule masters={masters} FS={FS} currentMaster={master} />}
-    {tab==="report"&&canViewReport&&<ReportModule masters={masters} FS={FS} authMaster={loginMaster} isReportAdmin={isReportAdmin} msg={msg} />}
     {tab==="settings"&&isAdmin&&<SettingsModule masters={masters} setMasters={setMasters} FS={FS} msg={msg} />}
     {tab==="pending"&&<PendingBookings masters={masters} currentMaster={loginMaster||master} isAdmin={isAdmin} onConfirmed={()=>{loadBk();loadPendingCount();}} />}
 
@@ -5160,379 +5156,6 @@ function AnalyticsModule({masters,FS,currentMaster}){
 }
 
 // ═══════════════════════════════════════════
-// REPORT MODULE — 每月收支總和 + 每週結賬
-// ═══════════════════════════════════════════
-function ReportModule({masters,FS,authMaster,isReportAdmin,msg}){
-  const today=getTaipeiNow();
-  const[year,setYear]=useState(today.getFullYear());
-  const[month,setMonth]=useState(today.getMonth());
-  const[bookings,setBookings]=useState([]);
-  const[records,setRecords]=useState({});
-  const[loading,setLoading]=useState(false);
-  const[savingKey,setSavingKey]=useState(null);
-  const[editVal,setEditVal]=useState({});
-  const[tableMissing,setTableMissing]=useState(false);
-  const PRICE=800;
-
-  const ORDER_NAMES=["麒","治","泓文","哲瑋"];
-  const orderedMasters=useMemo(()=>
-    ORDER_NAMES.map(n=>masters.find(m=>m.name===n)).filter(Boolean)
-  ,[masters]);
-
-  const lastDay=new Date(year,month+1,0).getDate();
-  const days=useMemo(()=>Array.from({length:lastDay},(_,i)=>i+1),[lastDay]);
-
-  useEffect(()=>{
-    let cancelled=false;
-    (async()=>{
-      const start=fmtDate(year,month,1);
-      const end=fmtDate(year,month,lastDay);
-      setLoading(true);
-      setTableMissing(false);
-      // Load bookings (paginated)
-      let allBks=[],from=0;
-      while(true){
-        const{data}=await sb.from("bookings").select("master_id,date,guest_count,color_tag,customer_name,status")
-          .gte("date",start).lte("date",end)
-          .neq("status","cancelled").neq("status","no_show").range(from,from+999);
-        if(!data||data.length===0)break;
-        allBks=[...allBks,...data];
-        if(data.length<1000)break;
-        from+=1000;
-      }
-      // Load records
-      const{data:recs,error}=await sb.from("daily_payment_records").select("*").gte("date",start).lte("date",end);
-      if(cancelled)return;
-      if(error){
-        const em=(error.message||"").toLowerCase();
-        if(em.includes("does not exist")||em.includes("relation")||em.includes("schema cache")){
-          setTableMissing(true);
-        }else{
-          msg("資料表載入失敗: "+error.message,true);
-        }
-      }
-      const recMap={};
-      (recs||[]).forEach(r=>{recMap[r.date]=r;});
-      setBookings(allBks);
-      setRecords(recMap);
-      setLoading(false);
-    })();
-    return()=>{cancelled=true;};
-  },[year,month,lastDay]);
-
-  // ── Per-day helpers ──
-  const dayDate=(d)=>fmtDate(year,month,d);
-  const dayTotal=(d)=>{const date=dayDate(d);return bookings.filter(b=>b.date===date&&isCountable(b)).reduce((s,b)=>s+(b.guest_count||1),0);};
-  const masterDayCount=(masterId,d)=>{const date=dayDate(d);return bookings.filter(b=>b.master_id===masterId&&b.date===date&&isCountable(b)).reduce((s,b)=>s+(b.guest_count||1),0);};
-  const dayRecord=(d)=>records[dayDate(d)]||{transfer_count:0,card_count:0,card_fee_cash:0,card_fee_transfer:0};
-  const transferTotal=(d)=>{const r=dayRecord(d);return Math.max(0,dayTotal(d)-(r.card_count||0))*PRICE+(r.card_fee_cash||0)+(r.card_fee_transfer||0);};
-  const cashTotal=(d)=>{const r=dayRecord(d);return Math.max(0,dayTotal(d)-(r.transfer_count||0)-(r.card_count||0))*PRICE;};
-
-  // ── Week helpers (Sun-Sat weeks within month) ──
-  const dow=(d)=>new Date(year,month,d).getDay();
-  const isSat=(d)=>dow(d)===6;
-  const weekRange=(endDay)=>{const sunStart=endDay-dow(endDay);return[Math.max(1,sunStart),endDay];};
-  const weekCashTotal=(endDay)=>{const[s,e]=weekRange(endDay);let sum=0;for(let d=s;d<=e;d++)sum+=cashTotal(d);return sum;};
-  const weekMasterAmount=(m,endDay)=>{
-    if(m.name==="麒")return weekCashTotal(endDay);
-    const[s,e]=weekRange(endDay);let cnt=0;
-    for(let d=s;d<=e;d++)cnt+=masterDayCount(m.id,d);
-    return cnt*PRICE;
-  };
-  const settlementDays=useMemo(()=>{
-    const list=[];
-    for(let d=1;d<=lastDay;d++)if(isSat(d))list.push(d);
-    if(!isSat(lastDay))list.push(lastDay);
-    return list;
-  },[year,month,lastDay]);
-
-  // ── Input edit state ──
-  const inputKey=(d,field)=>`${dayDate(d)}__${field}`;
-  const getInputVal=(d,field)=>{const k=inputKey(d,field);if(k in editVal)return editVal[k];const v=dayRecord(d)[field];return v?String(v):"";};
-  const onInputChange=(d,field,val)=>{const v=val.replace(/[^\d]/g,"");setEditVal(prev=>({...prev,[inputKey(d,field)]:v}));};
-  const onInputBlur=async(d,field)=>{
-    const k=inputKey(d,field);
-    if(!(k in editVal))return;
-    const raw=editVal[k];
-    const numVal=Math.max(0,parseInt(raw)||0);
-    const date=dayDate(d);
-    const existing=records[date];
-    if((existing?.[field]||0)===numVal){
-      setEditVal(prev=>{const n={...prev};delete n[k];return n;});
-      return;
-    }
-    setSavingKey(k);
-    const payload={
-      date,
-      transfer_count:existing?.transfer_count||0,
-      card_count:existing?.card_count||0,
-      card_fee_cash:existing?.card_fee_cash||0,
-      card_fee_transfer:existing?.card_fee_transfer||0,
-      [field]:numVal,
-      updated_at:new Date().toISOString(),
-      updated_by:authMaster.name
-    };
-    const{data,error}=await sb.from("daily_payment_records").upsert(payload,{onConflict:"date"}).select().single();
-    if(error){msg("儲存失敗: "+error.message,true);}
-    else{setRecords(prev=>({...prev,[date]:data}));}
-    setEditVal(prev=>{const n={...prev};delete n[k];return n;});
-    setSavingKey(null);
-  };
-
-  // ── Monthly totals ──
-  const monthTotals=useMemo(()=>{
-    let totalPpl=0,totalTransfer=0,totalCash=0,totalFeeCash=0,totalFeeTransfer=0;
-    for(let d=1;d<=lastDay;d++){
-      totalPpl+=dayTotal(d);
-      totalTransfer+=transferTotal(d);
-      totalCash+=cashTotal(d);
-      const r=dayRecord(d);
-      totalFeeCash+=r.card_fee_cash||0;
-      totalFeeTransfer+=r.card_fee_transfer||0;
-    }
-    // 月總收入 = 總人數 × 800 + 卡費現金 + 卡費轉帳（真實營收）
-    const grand=totalPpl*PRICE+totalFeeCash+totalFeeTransfer;
-    return{totalPpl,totalTransfer,totalCash,totalFeeCash,totalFeeTransfer,grand};
-  },[bookings,records,lastDay]);
-
-  const fmt=(n)=>Math.round(n||0).toLocaleString("zh-TW");
-  const inputCell=(d,field)=>{
-    const k=inputKey(d,field);
-    const saving=savingKey===k;
-    const isFee=field==="card_fee_cash"||field==="card_fee_transfer";
-    if(!isReportAdmin){
-      const v=dayRecord(d)[field];
-      return<span style={{color:v?"#e94560":"var(--text-dim)",fontWeight:v?700:400}}>{v?(isFee?fmt(v):v):""}</span>;
-    }
-    return<input
-      type="text" inputMode="numeric" pattern="[0-9]*"
-      value={getInputVal(d,field)}
-      onChange={e=>onInputChange(d,field,e.target.value)}
-      onBlur={()=>onInputBlur(d,field)}
-      onFocus={e=>e.target.select()}
-      disabled={saving}
-      style={{width:"100%",minWidth:32,maxWidth:isFee?80:60,padding:"3px 4px",border:"1px solid var(--border2)",borderRadius:4,background:saving?"var(--bg-sub)":"var(--input-bg)",color:saving?"var(--text-dim)":"#e94560",fontSize:FS.n,fontWeight:700,textAlign:"center"}}
-    />;
-  };
-
-  const TC={fontSize:FS.n,padding:"5px 4px",textAlign:"center",border:"1px solid var(--border)",color:"var(--text-main)",whiteSpace:"nowrap"};
-  const TH={...TC,background:"var(--bg-sub)",fontWeight:700,color:"var(--text-muted)",fontSize:FS.s};
-
-  return(
-  <div style={{flex:1,overflow:"auto",paddingBottom:60}}>
-    {/* Header: month nav */}
-    <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",background:"var(--bg-header)",borderBottom:"1px solid var(--border)",flexWrap:"wrap"}}>
-      <button onClick={()=>{if(month===0){setYear(y=>y-1);setMonth(11);}else setMonth(m=>m-1);}} className="nb">◀</button>
-      <span style={{fontWeight:700,fontSize:FS.b+2,color:"var(--text-main)"}}>{year}年 {month+1}月</span>
-      <button onClick={()=>{if(month===11){setYear(y=>y+1);setMonth(0);}else setMonth(m=>m+1);}} className="nb">▶</button>
-      <button onClick={()=>{setYear(today.getFullYear());setMonth(today.getMonth());}} className="nb" style={{color:"#00b894",borderColor:"#00b894"}}>本月</button>
-      <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:8}}>
-        {!isReportAdmin&&<span style={{fontSize:FS.s,color:"#f5a623",background:"rgba(245,166,35,0.12)",border:"1px solid rgba(245,166,35,0.4)",padding:"2px 8px",borderRadius:6,fontWeight:700}}>👁 唯讀</span>}
-        {loading&&<span style={{fontSize:FS.s,color:"var(--text-dim)"}}>載入中...</span>}
-      </div>
-    </div>
-
-    {/* Table-missing notice for admin */}
-    {tableMissing&&<div style={{margin:"10px 12px",padding:"12px 14px",background:"rgba(233,69,96,0.10)",border:"1px solid rgba(233,69,96,0.4)",borderRadius:10,color:"var(--text-main)",fontSize:FS.n,lineHeight:1.7}}>
-      <div style={{fontWeight:700,color:"#e94560",marginBottom:6}}>⚠️ 尚未建立資料表 daily_payment_records</div>
-      <div style={{color:"var(--text-muted)",fontSize:FS.s}}>請到 Supabase 後台 → SQL Editor 執行下方 SQL（管理員一次性設定）：</div>
-      <pre style={{marginTop:8,padding:10,background:"var(--bg-main)",border:"1px solid var(--border2)",borderRadius:6,fontSize:11,color:"#9ee6c1",overflow:"auto",fontFamily:"monospace",lineHeight:1.5,whiteSpace:"pre-wrap"}}>{`CREATE TABLE daily_payment_records (
-  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  date date NOT NULL UNIQUE,
-  transfer_count int DEFAULT 0,
-  card_count int DEFAULT 0,
-  card_fee_cash int DEFAULT 0,
-  card_fee_transfer int DEFAULT 0,
-  note text,
-  updated_at timestamptz DEFAULT now(),
-  updated_by text
-);
-ALTER TABLE daily_payment_records ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "auth_all" ON daily_payment_records FOR ALL TO authenticated USING (true) WITH CHECK (true);
-
-ALTER TABLE masters ADD COLUMN IF NOT EXISTS can_view_report boolean DEFAULT false;`}</pre>
-    </div>}
-
-    <div style={{display:"flex",gap:12,padding:"10px 12px",flexWrap:"wrap",alignItems:"flex-start"}}>
-      {/* ── 每月收支總和 ── */}
-      <div style={{flex:"2 1 560px",minWidth:0}}>
-        <div style={{overflowX:"auto",border:"1px solid var(--border2)",borderRadius:10,background:"var(--bg-header)"}}>
-          <table style={{width:"100%",borderCollapse:"collapse",minWidth:560}}>
-            <thead>
-              <tr>
-                <th colSpan={9} style={{...TH,background:"rgba(116,185,255,0.18)",color:"#74b9ff",fontSize:FS.b,padding:"8px 0",borderTop:"none"}}>每月收支總和</th>
-              </tr>
-              <tr>
-                <th style={TH}>日期</th>
-                <th style={TH}>總人數</th>
-                <th style={TH}>轉帳<span style={{color:"var(--text-dim)",fontWeight:400,marginLeft:2}}>(人)</span></th>
-                <th style={TH}>用卡<span style={{color:"var(--text-dim)",fontWeight:400,marginLeft:2}}>(人)</span></th>
-                <th style={TH}>卡費現金<span style={{color:"var(--text-dim)",fontWeight:400,marginLeft:2}}>($)</span></th>
-                <th style={TH}>卡費轉帳<span style={{color:"var(--text-dim)",fontWeight:400,marginLeft:2}}>($)</span></th>
-                <th style={TH}>轉帳總額</th>
-                <th style={TH}>現金總額</th>
-                <th style={TH}>週結算</th>
-              </tr>
-            </thead>
-            <tbody>
-              {days.map(d=>{
-                const isSettleDay=settlementDays.includes(d);
-                const isWeekend=dow(d)===0||dow(d)===6;
-                const total=dayTotal(d);
-                const tt=transferTotal(d),ct=cashTotal(d);
-                const wkSettle=isSettleDay?weekCashTotal(d):null;
-                return(
-                  <tr key={d} style={{background:isSettleDay?"rgba(0,184,148,0.10)":isWeekend?"rgba(255,255,255,0.02)":"transparent"}}>
-                    <td style={{...TC,fontWeight:700,color:isSettleDay?"#00b894":"var(--text-main)",textAlign:"left",paddingLeft:8}}>{month+1}/{d}<span style={{color:"var(--text-dim)",fontWeight:400,marginLeft:4,fontSize:FS.s}}>({["日","一","二","三","四","五","六"][dow(d)]})</span></td>
-                    <td style={{...TC,fontWeight:700,color:total?"var(--text-main)":"var(--text-dim)"}}>{total||""}</td>
-                    <td style={TC}>{inputCell(d,"transfer_count")}</td>
-                    <td style={TC}>{inputCell(d,"card_count")}</td>
-                    <td style={TC}>{inputCell(d,"card_fee_cash")}</td>
-                    <td style={TC}>{inputCell(d,"card_fee_transfer")}</td>
-                    <td style={{...TC,color:tt?"var(--text-main)":"var(--text-dim)",fontWeight:tt?700:400}}>{tt?fmt(tt):"0"}</td>
-                    <td style={{...TC,color:ct?"var(--text-main)":"var(--text-dim)",fontWeight:ct?700:400}}>{ct?fmt(ct):"0"}</td>
-                    <td style={{...TC,color:wkSettle?"#e94560":"var(--text-dim)",fontWeight:700,background:isSettleDay?"rgba(233,69,96,0.06)":"transparent"}}>{wkSettle?fmt(wkSettle):""}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td style={{...TH,textAlign:"left",paddingLeft:8,color:"#74b9ff"}}>本月小計</td>
-                <td style={{...TH,color:"#74b9ff"}}>{monthTotals.totalPpl}</td>
-                <td colSpan={4} style={{...TH,color:"var(--text-dim)"}}>—</td>
-                <td style={{...TH,color:"#74b9ff"}}>{fmt(monthTotals.totalTransfer)}</td>
-                <td style={{...TH,color:"#74b9ff"}}>{fmt(monthTotals.totalCash)}</td>
-                <td style={{...TH,color:"#e94560",fontSize:FS.n}}>{fmt(monthTotals.grand)}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
-
-      {/* ── 每週結賬 ── */}
-      <div style={{flex:"1 1 320px",minWidth:280}}>
-        <div style={{overflowX:"auto",border:"1px solid var(--border2)",borderRadius:10,background:"var(--bg-header)"}}>
-          <table style={{width:"100%",borderCollapse:"collapse"}}>
-            <thead>
-              <tr>
-                <th colSpan={2+orderedMasters.length} style={{...TH,background:"rgba(245,166,35,0.18)",color:"#f5a623",fontSize:FS.b,padding:"8px 0",borderTop:"none"}}>每週結賬</th>
-              </tr>
-              <tr>
-                <th style={TH}>週末</th>
-                {orderedMasters.map(m=><th key={m.id} style={{...TH,color:m.display_color||"var(--text-muted)"}}>{m.name}</th>)}
-                <th style={{...TH,color:"#e94560"}}>總額</th>
-              </tr>
-            </thead>
-            <tbody>
-              {settlementDays.map(endDay=>{
-                const amounts=orderedMasters.map(m=>weekMasterAmount(m,endDay));
-                const total=amounts.reduce((s,n)=>s+n,0);
-                const isPartial=!isSat(endDay);
-                return(
-                  <tr key={endDay} style={{background:"rgba(0,184,148,0.06)"}}>
-                    <td style={{...TC,fontWeight:700,color:"#00b894"}}>{month+1}/{endDay}{isPartial?<span style={{fontSize:9,color:"var(--text-dim)",marginLeft:3}}>(末)</span>:""}</td>
-                    {orderedMasters.map((m,i)=><td key={m.id} style={{...TC,color:amounts[i]?"var(--text-main)":"var(--text-dim)",fontWeight:amounts[i]?700:400}}>{fmt(amounts[i])}</td>)}
-                    <td style={{...TC,color:"#e94560",fontWeight:700}}>{fmt(total)}</td>
-                  </tr>
-                );
-              })}
-              {settlementDays.length===0&&<tr><td colSpan={2+orderedMasters.length} style={{...TC,padding:20,color:"var(--text-dim)"}}>本月尚無結賬週</td></tr>}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td style={{...TH,textAlign:"left",paddingLeft:8,color:"#f5a623"}}>本月</td>
-                {orderedMasters.map(m=>{
-                  const sum=settlementDays.reduce((s,ed)=>s+weekMasterAmount(m,ed),0);
-                  return<td key={m.id} style={{...TH,color:"#f5a623"}}>{fmt(sum)}</td>;
-                })}
-                <td style={{...TH,color:"#e94560",fontSize:FS.n}}>{fmt(settlementDays.reduce((s,ed)=>s+orderedMasters.reduce((ss,m)=>ss+weekMasterAmount(m,ed),0),0))}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-
-        {/* ── 月結 ── */}
-        <div style={{marginTop:10,border:"1px solid var(--border2)",borderRadius:10,background:"var(--bg-header)",overflow:"hidden"}}>
-          <div style={{padding:"8px 0",background:"rgba(162,155,254,0.18)",color:"#a29bfe",fontSize:FS.b,fontWeight:700,textAlign:"center",borderBottom:"1px solid var(--border)"}}>📅 {month+1}月 月結</div>
-
-          {/* 月總收入總覽 */}
-          <div style={{padding:"12px 14px",background:"var(--bg-sub)",borderBottom:"1px solid var(--border)"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
-              <span style={{fontSize:FS.s,color:"var(--text-muted)",fontWeight:700}}>月總收入</span>
-              <span style={{fontSize:FS.b+5,fontWeight:700,color:"#e94560",letterSpacing:"-0.5px"}}>${fmt(monthTotals.grand)}</span>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,fontSize:FS.s}}>
-              <div style={{textAlign:"center",padding:"6px 4px",background:"var(--bg-header)",borderRadius:6,border:"1px solid var(--border)"}}>
-                <div style={{color:"var(--text-dim)",fontSize:9,marginBottom:2}}>轉帳總額</div>
-                <div style={{color:"#74b9ff",fontWeight:700}}>{fmt(monthTotals.totalTransfer)}</div>
-              </div>
-              <div style={{textAlign:"center",padding:"6px 4px",background:"var(--bg-header)",borderRadius:6,border:"1px solid var(--border)"}}>
-                <div style={{color:"var(--text-dim)",fontSize:9,marginBottom:2}}>現金總額</div>
-                <div style={{color:"#00b894",fontWeight:700}}>{fmt(monthTotals.totalCash)}</div>
-              </div>
-              <div style={{textAlign:"center",padding:"6px 4px",background:"var(--bg-header)",borderRadius:6,border:"1px solid var(--border)"}}>
-                <div style={{color:"var(--text-dim)",fontSize:9,marginBottom:2}}>總人數</div>
-                <div style={{color:"var(--text-main)",fontWeight:700}}>{monthTotals.totalPpl}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* 各師傅月結明細 */}
-          <table style={{width:"100%",borderCollapse:"collapse"}}>
-            <thead>
-              <tr>
-                <th style={TH}>師傅</th>
-                <th style={TH}>月客數</th>
-                <th style={TH}>月金額</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(()=>{
-                const rows=orderedMasters.map(m=>{
-                  const cnt=days.reduce((s,d)=>s+masterDayCount(m.id,d),0);
-                  const isQi=m.name==="麒";
-                  const amt=isQi?monthTotals.totalCash:cnt*PRICE;
-                  return{m,cnt,amt,isQi};
-                });
-                const totalCnt=rows.reduce((s,r)=>s+r.cnt,0);
-                const totalAmt=rows.reduce((s,r)=>s+r.amt,0);
-                return[
-                  ...rows.map(({m,cnt,amt,isQi})=>(
-                    <tr key={m.id}>
-                      <td style={{...TC,fontWeight:700,color:m.display_color||"var(--text-main)",textAlign:"left",paddingLeft:12}}>{m.name}{isQi&&<span style={{fontSize:9,color:"var(--text-dim)",marginLeft:4,fontWeight:400}}>(現金總額)</span>}</td>
-                      <td style={{...TC,color:cnt?"var(--text-main)":"var(--text-dim)",fontWeight:cnt?700:400}}>{cnt}</td>
-                      <td style={{...TC,fontWeight:700,color:amt?"var(--text-main)":"var(--text-dim)"}}>{fmt(amt)}</td>
-                    </tr>
-                  )),
-                  <tr key="total" style={{background:"rgba(162,155,254,0.10)"}}>
-                    <td style={{...TH,textAlign:"left",paddingLeft:12,color:"#a29bfe"}}>合計</td>
-                    <td style={{...TH,color:"#a29bfe"}}>{totalCnt}</td>
-                    <td style={{...TH,color:"#e94560",fontSize:FS.n}}>{fmt(totalAmt)}</td>
-                  </tr>
-                ];
-              })()}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Legend / formulas */}
-        <div style={{marginTop:10,padding:"10px 12px",background:"var(--bg-header)",border:"1px solid var(--border)",borderRadius:8,fontSize:FS.s,color:"var(--text-muted)",lineHeight:1.7}}>
-          <div style={{fontWeight:700,color:"var(--text-main)",marginBottom:4}}>📐 計算公式</div>
-          <div>• 轉帳總額 = (總人數 − 用卡) × 800 + 卡費現金 + 卡費轉帳</div>
-          <div>• 現金總額 = (總人數 − 轉帳 − 用卡) × 800</div>
-          <div>• 月總收入 = 總人數 × 800 + 卡費現金 + 卡費轉帳</div>
-          <div style={{marginTop:6,color:"var(--text-dim)",fontSize:10}}>轉帳/用卡 = 客數（×800）；卡費現金/卡費轉帳 = 金額（元，直接相加）</div>
-          <div style={{marginTop:2,color:"var(--text-dim)",fontSize:10}}>麒的週結 = 當週現金總額；其他人 = 各自當週客數 × 800</div>
-          {!isReportAdmin&&<div style={{marginTop:6,paddingTop:6,borderTop:"1px solid var(--border)",color:"#f5a623",fontSize:10}}>👁 你目前是唯讀權限，僅麒和Hanna可編輯</div>}
-        </div>
-      </div>
-    </div>
-  </div>
-  );
-}
-
-// ═══════════════════════════════════════════
 // SETTINGS MODULE
 // ═══════════════════════════════════════════
 function SettingsModule({masters,setMasters,FS,msg}){
@@ -5546,6 +5169,8 @@ function SettingsModule({masters,setMasters,FS,msg}){
   const[histDate,setHistDate]=useState(getTaipeiDateStr());
   const[restSet,setRestSet]=useState(()=>new Set([...REST]));
   const[restSaved,setRestSaved]=useState(false);
+  const[onlineSettings,setOnlineSettings]=useState([]);
+  const[onlineLoading,setOnlineLoading]=useState(false);
 
   const loadHistory=async()=>{
     setHistLoading(true);
@@ -5555,6 +5180,33 @@ function SettingsModule({masters,setMasters,FS,msg}){
     const{data}=await q;
     setHistLogs(data||[]);
     setHistLoading(false);
+  };
+
+  const loadOnlineSettings=async()=>{
+    setOnlineLoading(true);
+    const{data}=await sb.from("online_booking_settings").select("*").order("year_month",{ascending:false});
+    setOnlineSettings(data||[]);
+    setOnlineLoading(false);
+  };
+
+  const toggleOnlineMonth=async(yearMonth)=>{
+    const setting=onlineSettings.find(s=>s.year_month===yearMonth);
+    if(!setting)return;
+    const newVal=!setting.is_open;
+    await sb.from("online_booking_settings").update({is_open:newVal}).eq("year_month",yearMonth);
+    setOnlineSettings(prev=>prev.map(s=>s.year_month===yearMonth?{...s,is_open:newVal}:s));
+    msg(newVal?"✓ 已開放":"✓ 已關閉");
+  };
+
+  const addNewMonth=async()=>{
+    const now=new Date();
+    const next=new Date(now.getFullYear(),now.getMonth()+1,1);
+    const yearMonth=next.getFullYear()+"-"+String(next.getMonth()+1).padStart(2,"0");
+    const{error}=await sb.from("online_booking_settings").insert([{year_month:yearMonth,is_open:false}]);
+    if(!error){
+      await loadOnlineSettings();
+      msg("✓ 已新增");
+    }else msg("新增失敗",true);
   };
 
   const openEdit=(m)=>{setEditMaster(m);setForm({name:m.name||"",username:m.username||"",role:m.role||"master",display_color:m.display_color||"#74b9ff",reserve_color:m.reserve_color||"#a29bfe"});};
@@ -5571,8 +5223,8 @@ function SettingsModule({masters,setMasters,FS,msg}){
   return(
   <div style={{flex:1,overflow:"auto"}}>
     <div style={{display:"flex",background:"var(--bg-header)",borderBottom:"1px solid var(--border)"}}>
-      {[["masters","帳號管理"],["rest","休息時段"],["export","資料匯出"],["history","歷史紀錄"]].map(([k,l])=>(
-        <button key={k} className={`tab-btn${settTab===k?" active":""}`} onClick={()=>{setSettTab(k);if(k==="history")loadHistory();}}>{l}</button>
+      {[["masters","帳號管理"],["online","線上預約"],["rest","休息時段"],["export","資料匯出"],["history","歷史紀錄"]].map(([k,l])=>(
+        <button key={k} className={`tab-btn${settTab===k?" active":""}`} onClick={()=>{setSettTab(k);if(k==="history")loadHistory();if(k==="online")loadOnlineSettings();}}>{l}</button>
       ))}
     </div>
 
@@ -5585,7 +5237,7 @@ function SettingsModule({masters,setMasters,FS,msg}){
             <div style={{fontSize:11,color:"var(--text-muted)",marginTop:2}}>@{m.username||"未設定"}</div>
           </div>
           <div style={{display:"flex",gap:4,flexShrink:0,flexWrap:"wrap",justifyContent:"flex-end"}}>
-            {[["CRM",m.can_view_crm,"#00b894","can_view_crm"],["刪除",m.can_delete,"#f5a623","can_delete"],["看他人",m.can_view_others,"#74b9ff","can_view_others"],["全數據",m.can_view_all_stats,"#a29bfe","can_view_all_stats"],["報表",m.can_view_report,"#e94560","can_view_report"]].map(([label,active,color,field])=>(
+            {[["CRM",m.can_view_crm,"#00b894","can_view_crm"],["刪除",m.can_delete,"#f5a623","can_delete"],["看他人",m.can_view_others,"#74b9ff","can_view_others"],["全數據",m.can_view_all_stats,"#a29bfe","can_view_all_stats"],["線上",m.allow_online_booking,"#2ed9c3","allow_online_booking"]].map(([label,active,color,field])=>(
               <button key={label} onClick={()=>togglePerm(m,field)} style={{padding:"3px 8px",borderRadius:6,border:`1px solid ${active?color:"var(--border2)"}`,background:active?`${color}20`:"transparent",color:active?color:"var(--text-dim)",fontSize:10,cursor:"pointer"}}>{label}</button>
             ))}
             <button onClick={()=>openEdit(m)} style={{padding:"3px 8px",borderRadius:6,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-muted)",fontSize:10,cursor:"pointer"}}>編輯</button>
@@ -5593,6 +5245,63 @@ function SettingsModule({masters,setMasters,FS,msg}){
           </div>
         </div>
       ))}
+    </div>}
+
+    {settTab==="online"&&<div style={{padding:12}}>
+      <div style={{background:"var(--bg-header)",borderRadius:10,padding:"14px 16px",border:"1px solid var(--border2)",marginBottom:12}}>
+        <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>📅 月份開放管理</div>
+        <div style={{fontSize:12,color:"var(--text-muted)",marginBottom:12,lineHeight:1.6}}>
+          • 管理員可在此開啟/關閉各月份的線上預約<br/>
+          • 同時師傅需在「帳號管理」勾選「線上」才能被客人線上預約<br/>
+          • 線上預約 = 月份開放 ✓ + 師傅允許 ✓
+        </div>
+        <button onClick={async()=>{await loadOnlineSettings();msg("✓ 已重新載入");}} style={{width:"100%",padding:"8px",borderRadius:6,background:"#74b9ff",border:"none",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",marginBottom:12}}>
+          {onlineLoading?"載入中...":"重新載入"}
+        </button>
+      </div>
+
+      {onlineSettings.length===0?
+        <div style={{textAlign:"center",color:"var(--text-dim)",padding:20}}>
+          <div style={{marginBottom:10}}>尚無月份設置</div>
+          <button onClick={addNewMonth} style={{padding:"8px 16px",borderRadius:6,background:"#2ed9c3",border:"none",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>+ 新增下個月</button>
+        </div>
+      :
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {onlineSettings.map(s=>(
+            <div key={s.year_month} style={{background:"var(--bg-header)",borderRadius:10,padding:"12px 14px",border:"1px solid var(--border2)",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div>
+                <div style={{fontWeight:700,fontSize:13}}>{s.year_month}</div>
+                <div style={{fontSize:11,color:"var(--text-muted)",marginTop:2}}>狀態: <span style={{color:s.is_open?"#2ed9c3":"#e94560",fontWeight:700}}>{s.is_open?"✓ 已開放":"✗ 已關閉"}</span></div>
+              </div>
+              <button onClick={()=>toggleOnlineMonth(s.year_month)} style={{padding:"6px 14px",borderRadius:6,border:`2px solid ${s.is_open?"#2ed9c3":"#e94560"}`,background:s.is_open?"#2ed9c320":"#e9456020",color:s.is_open?"#2ed9c3":"#e94560",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+                {s.is_open?"關閉":"開放"}
+              </button>
+            </div>
+          ))}
+          <button onClick={addNewMonth} style={{padding:"10px",borderRadius:6,background:"#a29bfe20",border:"2px dashed #a29bfe",color:"#a29bfe",fontSize:12,fontWeight:700,cursor:"pointer",marginTop:8}}>+ 新增下個月</button>
+        </div>
+      }
+
+      <div style={{background:"var(--bg-header)",borderRadius:10,padding:"14px 16px",border:"1px solid var(--border2)",marginTop:16}}>
+        <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>👥 師傅線上預約權限</div>
+        <div style={{fontSize:12,color:"var(--text-muted)",marginBottom:12}}>在「帳號管理」tab中，點擊師傅卡片上的「線上」按鈕來開啟/關閉各師傅的線上預約權限</div>
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {masters.filter(m=>m.is_active).map(m=>(
+            <div key={m.id} style={{background:"var(--bg-sub)",borderRadius:8,padding:"10px 12px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,flex:1}}>
+                <div style={{width:8,height:8,borderRadius:"50%",background:m.display_color||"#74b9ff"}}></div>
+                <div>
+                  <div style={{fontWeight:700,fontSize:12}}>{m.name}</div>
+                  <div style={{fontSize:10,color:"var(--text-muted)"}}>{m.role}</div>
+                </div>
+              </div>
+              <div style={{padding:"3px 8px",borderRadius:6,fontSize:11,fontWeight:700,border:`1px solid ${m.allow_online_booking?"#2ed9c3":"#e94560"}`,background:m.allow_online_booking?"#2ed9c320":"#e9456020",color:m.allow_online_booking?"#2ed9c3":"#e94560"}}>
+                {m.allow_online_booking?"✓ 可預約":"✗ 不可預約"}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>}
 
     {settTab==="rest"&&<div style={{padding:12}}>
