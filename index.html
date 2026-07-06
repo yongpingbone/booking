@@ -9,9 +9,9 @@
 <link rel="manifest" href="/booking/manifest.json">
 <title>永平整復保健 預約系統</title>
 <script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/booking/sw.js');</script>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{
@@ -1205,7 +1205,30 @@ function MainApp({authMaster,onLogout}){
   const ghostRef=useRef(null);
   const touchDragBookingRef=useRef(null);
 
+  // ✅ 【新增】自動初始化月份開放紀錄函數
+  const ensureMonthsAvailable=useCallback(async()=>{
+    try{
+      const taipeiDate=new Date();taipeiDate.setHours(taipeiDate.getHours()+8);
+      const currentYear=taipeiDate.getFullYear();
+      const currentMonth=taipeiDate.getMonth()+1;
+      const monthsToCreate=[];
+      for(let i=0;i<4;i++){
+        let y=currentYear,m=currentMonth+i;
+        if(m>12){y+=Math.floor((m-1)/12);m=((m-1)%12)+1;}
+        monthsToCreate.push({year:y,month:m});
+      }
+      const{data:existing}=await sb.from("booking_availability").select("year,month").in("month",monthsToCreate.map(x=>x.month)).in("year",monthsToCreate.map(x=>x.year));
+      const existingSet=new Set((existing||[]).map(x=>`${x.year}-${x.month}`));
+      const toInsert=monthsToCreate.filter(x=>!existingSet.has(`${x.year}-${x.month}`)).map(x=>({year:x.year,month:x.month,is_open:true,open_date:getTaipeiDateStr()}));
+      if(toInsert.length>0){
+        await sb.from("booking_availability").insert(toInsert);
+        console.log(`✅ 自動建立 ${toInsert.length} 個月份開放紀錄 - 客人現在可以線上預約`);
+      }
+    }catch(e){console.warn("自動初始化月份失敗:",e);}
+  },[]);
+
   useEffect(()=>{
+    ensureMonthsAvailable();
     sb.from("masters").select("*").eq("is_active",true).then(({data})=>{
       if(!data)return;
       const ORDER_NAMES=["麒","治","泓文","哲瑋"];
@@ -1225,7 +1248,7 @@ function MainApp({authMaster,onLogout}){
       const defs=[hw,zw].filter(Boolean).map(m=>m.id);
       setOvMasters(defs.length?defs:data.filter(m=>m.role!=="editor").slice(0,2).map(m=>m.id));
     });
-  },[]);
+  },[ensureMonthsAvailable]);
 
   const loadBk=useCallback(async()=>{
     if(!master)return;
