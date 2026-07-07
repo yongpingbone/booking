@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>⚡ 快速登記 - 永平整復保健</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bg:#0a0a14;--bg2:#11111e;--bg3:#181828;--border:#252538;
+  --text:#eeeef5;--t2:#777799;--cyan:#00e5e5;--cdim:rgba(0,229,229,.1);
+  --gold:#ffb300;--gdim:rgba(255,179,0,.1);--red:#ff4444;--green:#00d09c;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-serif;display:flex;flex-direction:column}
+.hdr{background:var(--bg2);border-bottom:1px solid var(--border);padding:14px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.hdr-title{font-size:16px;font-weight:900;display:flex;align-items:center;gap:6px}
+.hdr-back{font-size:12px;color:var(--t2);text-decoration:none;border:1px solid var(--border);border-radius:8px;padding:6px 10px}
+.wrap{flex:1;overflow-y:auto;padding:16px;padding-bottom:100px}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px}
+.lbl{font-size:12px;color:var(--t2);font-weight:700;margin-bottom:8px}
+input[type=text],input[type=tel]{width:100%;background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;padding:12px;color:var(--text);font-size:16px;font-family:inherit}
+input:focus{outline:none;border-color:var(--cyan)}
+.hint{font-size:11px;color:var(--t2);margin-top:6px}
+.chip-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.chip{padding:9px 14px;border-radius:20px;border:1.5px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+.chip.on{border-color:var(--cyan);background:var(--cdim);color:var(--cyan)}
+.suggest-box{background:var(--cdim);border:1.5px solid var(--cyan);border-radius:12px;padding:12px;margin-top:10px}
+.suggest-box .st{font-size:12px;color:var(--t2);margin-bottom:6px}
+.suggest-box .sv{font-size:14px;font-weight:700}
+.name-match-item{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;margin-bottom:6px;cursor:pointer}
+.name-match-item:active{border-color:var(--cyan)}
+.name-match-item .nm-name{font-size:14px;font-weight:700}
+.name-match-item .nm-phone{font-size:12px;color:var(--t2)}
+.mgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:8px}
+.mc{padding:12px 8px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg3);color:var(--text);text-align:center;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
+.mc.on{border-color:var(--cyan);background:var(--cdim);color:var(--cyan)}
+.drow{display:flex;gap:8px;overflow-x:auto;padding:4px 0}
+.dc{display:flex;flex-direction:column;align-items:center;min-width:52px;padding:9px 6px;background:var(--bg3);border:1.5px solid var(--border);border-radius:12px;cursor:pointer;flex-shrink:0}
+.dc.on{border-color:var(--cyan);background:var(--cdim)}
+.dc .d-mo{font-size:10px;color:var(--t2)}
+.dc .d-num{font-size:17px;font-weight:900}
+.dc .d-wk{font-size:10px;color:var(--t2)}
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.cal-nav{background:none;border:1.5px solid var(--border);color:var(--text);border-radius:8px;width:34px;height:34px;font-size:16px;cursor:pointer;font-family:inherit}
+.cal-nav:disabled{opacity:.3;cursor:default}
+.cal-title{font-size:15px;font-weight:900}
+.cal-wk-row{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px}
+.cal-wk-lbl{text-align:center;font-size:11px;color:var(--t2);padding:4px 0}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:10px;background:var(--bg3);border:1.5px solid var(--border);cursor:pointer;user-select:none;font-size:14px;font-weight:700}
+.cal-cell.empty{background:none;border:none;cursor:default}
+.cal-cell.on{border-color:var(--cyan);background:var(--cdim);color:var(--cyan)}
+.cal-cell.disabled{opacity:.3;pointer-events:none}
+.fastest-box{background:var(--cdim);border:1.5px solid var(--cyan);border-radius:12px;padding:14px;margin-top:10px}
+.fastest-box .ft{font-size:12px;color:var(--t2);margin-bottom:6px}
+.fastest-box .fv{font-size:16px;font-weight:900;margin-bottom:10px}
+.tgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:10px}
+.ts{padding:11px 4px;border-radius:9px;border:1.5px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+.ts.on{border-color:var(--cyan);background:var(--cdim);color:var(--cyan)}
+.ts.full{opacity:.3;cursor:not-allowed;text-decoration:line-through}
+.footer{position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--border);padding:12px 16px calc(12px + env(safe-area-inset-bottom));display:none}
+.btn{width:100%;padding:15px;border-radius:12px;border:none;background:var(--cyan);color:#00171f;font-size:16px;font-weight:900;cursor:pointer;font-family:inherit}
+.btn:disabled{background:var(--border);color:var(--t2);cursor:wait}
+.btn2{width:100%;padding:14px;border-radius:12px;border:1.5px solid var(--border);background:none;color:var(--text);font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:8px}
+.toast{position:fixed;top:16px;left:50%;transform:translateX(-50%) translateY(-20px);background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:10px 18px;border-radius:10px;font-size:13px;font-weight:700;opacity:0;pointer-events:none;transition:.25s;z-index:999;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.err{border-color:var(--red);color:var(--red)}
+.toast.ok{border-color:var(--green);color:var(--green)}
+.success-wrap{text-align:center;padding:30px 16px}
+.success-icon{font-size:52px;margin-bottom:14px}
+.success-title{font-size:19px;font-weight:900;margin-bottom:8px}
+.success-detail{font-size:14px;color:var(--t2);line-height:1.8;margin-bottom:24px}
+.login-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:24px}
+.login-box{width:100%;max-width:340px}
+.login-box input{margin-bottom:10px}
+.warn-box{background:var(--gdim);border:1.5px solid var(--gold);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--gold);margin-top:10px;line-height:1.6}
+.hidden{display:none !important}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-title">⚡ 快速登記</div>
+  <a class="hdr-back" href="./booking-index.html">← 返回排班表</a>
+</div>
+
+<div id="loginPage" class="login-wrap hidden">
+  <div class="login-box">
+    <div class="card">
+      <div class="lbl">帳號</div>
+      <input type="text" id="li-user" placeholder="帳號" autocomplete="username">
+      <div class="lbl" style="margin-top:10px">密碼</div>
+      <input type="text" id="li-pass" placeholder="密碼" autocomplete="current-password">
+      <button class="btn" style="margin-top:14px" onclick="doLogin()">登入</button>
+      <div id="li-err" class="hint" style="color:var(--red);margin-top:8px"></div>
+    </div>
+  </div>
+</div>
+
+<div id="mainPage" class="wrap hidden">
+
+  <div class="card">
+    <div class="lbl">客人電話</div>
+    <input type="tel" id="f-phone" placeholder="09xxxxxxxx" maxlength="10" inputmode="numeric">
+    <div id="lookupStatus" class="hint"></div>
+    <div id="suggestBox" class="suggest-box hidden">
+      <div class="st">上次：<span id="sg-last"></span></div>
+      <div class="sv" id="sg-name"></div>
+      <div class="chip-row" id="sg-chips"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="lbl">客人姓名</div>
+    <input type="text" id="f-name" placeholder="姓名" autocomplete="off">
+    <div id="nameMatches" class="hidden" style="margin-top:8px"></div>
+    <div id="noShowWarn" class="warn-box hidden"></div>
+  </div>
+
+  <div class="card">
+    <div class="lbl">師傅</div>
+    <div class="mgrid" id="masterGrid"></div>
+  </div>
+
+  <div class="card">
+    <div class="lbl">日期</div>
+    <div id="fastestBox" class="fastest-box hidden">
+      <div class="ft" id="ft-status">尋找最快時段中...</div>
+      <div class="fv" id="fv-result"></div>
+      <button class="btn" id="fastestConfirmBtn" style="display:none" onclick="acceptFastest()">採用這個時段</button>
+    </div>
+    <div class="cal-head">
+      <button class="cal-nav" id="calPrev" onclick="calNav(-1)">‹</button>
+      <div class="cal-title" id="calTitle"></div>
+      <button class="cal-nav" id="calNext" onclick="calNav(1)">›</button>
+    </div>
+    <div class="cal-wk-row" id="calWkRow"></div>
+    <div class="cal-grid" id="calGrid"></div>
+  </div>
+
+  <div class="card" id="timeCard" style="display:none">
+    <div class="lbl">時段</div>
+    <div class="tgrid" id="timeGrid"></div>
+  </div>
+
+  <div class="card">
+    <div class="lbl">備註（選填）</div>
+    <input type="text" id="f-note" placeholder="例：長輩需要輪椅 / 指定房間 等">
+  </div>
+
+</div>
+
+<div id="successPage" class="wrap hidden">
+  <div class="success-wrap">
+    <div class="success-icon">✅</div>
+    <div class="success-title">已登記完成</div>
+    <div class="success-detail" id="successDetail"></div>
+    <button class="btn" onclick="startRepeat()">🔁 幫這位客人現在也排下一次</button>
+    <button class="btn2" onclick="startFresh()">＋ 登記下一位客人</button>
+    <button class="btn2" onclick="location.href='./booking-index.html'">返回排班表</button>
+  </div>
+</div>
+
+<div class="footer" id="footer">
+  <button class="btn" id="submitBtn" onclick="submitBooking()">確認登記</button>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+// ── Supabase ─────────────────────────
+const SB_URL = 'https://ikzyzkhuireqztbhrtna.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlrenl6a2h1aXJlcXp0YmhydG5hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMjI1NjIsImV4cCI6MjA5Mjc5ODU2Mn0.rIXfMsiuYg6HoJaACxvxr1SFS9M3m7XNP57qcoyvRxw';
+const sb = window.supabase.createClient(SB_URL, SB_KEY);
+
+const MASTERS = [
+  {id:'7ae4e5c5-bfa5-46f6-8a90-a96e8721cea5', name:'哲瑋老師'},
+  {id:'b98e3afb-42d1-4149-b278-12d5493885b1', name:'泓文老師'},
+  {id:'13eebe4e-9cee-45ee-aab9-d5b4cb4e6186', name:'許老師'},
+  {id:'e9021367-64c7-476d-a079-2e8e2475988e', name:'魏老師'},
+];
+const MNAME = {}; MASTERS.forEach(m=>MNAME[m.id]=m.name);
+
+const TIMES = [];
+for(let h=8; h<=22; h++){
+  TIMES.push(String(h).padStart(2,'0')+':00');
+  if(h<22) TIMES.push(String(h).padStart(2,'0')+':30');
+}
+TIMES.push('22:30');
+
+let currentMaster = null; // 登入的師傅（用來記錄 editor_name）
+let selMasterId = null;
+let anyMode = false; // 「不指定（最快時段）」模式
+let selActualMasterId = null; // 實際會建立預約的師傅（一般模式跟 selMasterId 相同；不指定模式由使用者挑的時段決定）
+let selDate = null;
+let selTime = null;
+let lastKnown = null; // {date, start_time, master_id} 該客人最近一筆
+let isNewCustomer = true;
+let restCache = {}; // master_id -> Set(times)
+let takenCache = {}; // date -> [{master_id,start_time}]
+
+function toast(msg, type){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show ' + (type||'');
+  setTimeout(()=>{ el.className='toast'; }, 2200);
+}
+
+// ── Auth ─────────────────────────────
+async function init(){
+  const { data: { session } } = await sb.auth.getSession();
+  if(session){
+    const uname = session.user.email.replace('@yongping.com','');
+    const { data } = await sb.from('masters').select('*').eq('username', uname).eq('is_active', true).single();
+    if(data){ currentMaster = data; showMain(); return; }
+  }
+  document.getElementById('loginPage').classList.remove('hidden');
+}
+
+async function doLogin(){
+  const username = document.getElementById('li-user').value.trim();
+  const password = document.getElementById('li-pass').value.trim();
+  const errEl = document.getElementById('li-err');
+  errEl.textContent = '';
+  if(!username || !password){ errEl.textContent='請輸入帳號密碼'; return; }
+  const loginEmail = `${username}@yongping.com`;
+  const { error: authErr } = await sb.auth.signInWithPassword({ email: loginEmail, password });
+  if(authErr){ errEl.textContent = authErr.message.includes('Invalid login') ? '帳號或密碼錯誤' : authErr.message; return; }
+  const { data, error: dbErr } = await sb.from('masters').select('*').eq('username', username).eq('is_active', true).single();
+  if(dbErr || !data){ errEl.textContent='帳號不存在或已停用'; await sb.auth.signOut(); return; }
+  currentMaster = data;
+  document.getElementById('loginPage').classList.add('hidden');
+  showMain();
+}
+
+function showMain(){
+  document.getElementById('mainPage').classList.remove('hidden');
+  buildMasterGrid();
+  buildDateRow();
+}
+
+// ── Master grid ──────────────────────
+function buildMasterGrid(){
+  const grid = document.getElementById('masterGrid');
+  grid.innerHTML = '';
+  MASTERS.forEach(m=>{
+    const b = document.createElement('button');
+    b.className = 'mc';
+    b.textContent = m.name;
+    b.onclick = ()=>pickMaster(m.id);
+    b.id = 'mc-'+m.id;
+    grid.appendChild(b);
+  });
+  const anyBtn = document.createElement('button');
+  anyBtn.className = 'mc';
+  anyBtn.id = 'mc-any';
+  anyBtn.style.gridColumn = '1 / -1';
+  anyBtn.style.borderColor = '#2ed9c3';
+  anyBtn.style.color = '#2ed9c3';
+  anyBtn.textContent = '⚡ 不指定（最快時段）';
+  anyBtn.onclick = ()=>pickAnyMaster();
+  grid.appendChild(anyBtn);
+}
+function pickMaster(mid){
+  anyMode = false;
+  selMasterId = mid; selActualMasterId = mid; selTime = null;
+  document.querySelectorAll('.mc').forEach(el=>el.classList.remove('on'));
+  document.getElementById('mc-'+mid)?.classList.add('on');
+  document.getElementById('fastestBox').classList.add('hidden');
+  loadRestTimes(mid);
+  if(selDate) renderTimeSlots();
+  updateFooter();
+}
+
+async function pickAnyMaster(){
+  anyMode = true;
+  selMasterId = 'any'; selActualMasterId = null; selTime = null;
+  document.querySelectorAll('.mc').forEach(el=>el.classList.remove('on'));
+  document.getElementById('mc-any')?.classList.add('on');
+  await Promise.all(MASTERS.map(m=>loadRestTimes(m.id)));
+  const box = document.getElementById('fastestBox');
+  box.classList.remove('hidden');
+  document.getElementById('ft-status').textContent = '尋找最快時段中...';
+  document.getElementById('fv-result').textContent = '';
+  document.getElementById('fastestConfirmBtn').style.display = 'none';
+  const found = await findFastestSlot();
+  if(!found){
+    document.getElementById('ft-status').textContent = '接下來 14 天都沒有空檔，請手動從下方月曆選擇';
+    if(selDate) renderTimeSlots();
+    updateFooter();
+    return;
+  }
+  fastestResult = found;
+  const d = new Date(found.date+'T00:00:00');
+  const wkArr=['日','一','二','三','四','五','六'];
+  document.getElementById('ft-status').textContent = '找到最快空檔：';
+  document.getElementById('fv-result').textContent = `${d.getMonth()+1}/${d.getDate()}（週${wkArr[d.getDay()]}）${found.time}　${MNAME[found.masterId]}`;
+  document.getElementById('fastestConfirmBtn').style.display = 'block';
+}
+
+let fastestResult = null;
+function acceptFastest(){
+  if(!fastestResult) return;
+  selDate = fastestResult.date;
+  selTime = fastestResult.time;
+  selActualMasterId = fastestResult.masterId;
+  // 同步月曆畫面到那個日期，讓畫面看起來一致
+  const [dy,dm]=fastestResult.date.split('-').map(Number);
+  calYear=dy; calMonth=dm-1;
+  renderCalendar();
+  document.getElementById('timeCard').style.display='block';
+  loadTaken(fastestResult.date).then(()=>renderTimeSlots());
+  updateFooter();
+  toast('已採用推薦時段','ok');
+}
+
+// 從現在開始往後找 14 天內，全師傅最早的空檔（不受客人線上白名單限制，內部工具用）
+async function findFastestSlot(){
+  const now = new Date();
+  const nowMinutes = now.getHours()*60+now.getMinutes();
+  const startStr = fmtD(now);
+  const endD = new Date(now); endD.setDate(endD.getDate()+13);
+  const endStr = fmtD(endD);
+  // 一次把 14 天的預約資料全部撈回來，比逐天查詢快很多（尤其手機網路）
+  let allBookings = [];
+  try{
+    const { data } = await sb.from('bookings').select('date,master_id,start_time')
+      .gte('date', startStr).lte('date', endStr)
+      .neq('status','cancelled').neq('status','no_show');
+    allBookings = data || [];
+  }catch(e){ return null; }
+  const takenSet = new Set(allBookings.map(b=> `${b.date}_${b.master_id}_${(b.start_time||'').slice(0,5)}`));
+  // 順便把每天的資料寫進 takenCache，之後採用建議時段時就不用重新查一次
+  const byDate = {};
+  allBookings.forEach(b=>{ (byDate[b.date] = byDate[b.date] || []).push(b); });
+  for(let dayOffset=0; dayOffset<14; dayOffset++){
+    const d0 = new Date(now); d0.setDate(d0.getDate()+dayOffset);
+    const ds = fmtD(d0);
+    if(!takenCache[ds]) takenCache[ds] = byDate[ds] || [];
+  }
+
+  for(let dayOffset=0; dayOffset<14; dayOffset++){
+    const d = new Date(now); d.setDate(d.getDate()+dayOffset);
+    const dateStr = fmtD(d);
+    for(const t of TIMES){
+      if(dayOffset===0){
+        const [hh,mm] = t.split(':').map(Number);
+        if(hh*60+mm <= nowMinutes) continue;
+      }
+      for(const m of MASTERS){
+        if(takenSet.has(`${dateStr}_${m.id}_${t}`)) continue;
+        if(isRestSlot(m.id, dateStr, t)) continue;
+        return {date:dateStr, time:t, masterId:m.id};
+      }
+    }
+  }
+  return null;
+}
+
+// ── Date row (next 30 days) ──────────
+const WK=['日','一','二','三','四','五','六'];
+let calYear, calMonth;
+(function initCalState(){
+  const d=new Date();
+  calYear=d.getFullYear(); calMonth=d.getMonth();
+})();
+
+function buildDateRow(){
+  renderCalendar();
+}
+
+function renderCalendar(){
+  const title=document.getElementById('calTitle');
+  const wkRow=document.getElementById('calWkRow');
+  const grid=document.getElementById('calGrid');
+  if(!title||!grid) return;
+  title.textContent=`${calYear} 年 ${calMonth+1} 月`;
+  if(!wkRow.dataset.built){
+    wkRow.innerHTML=WK.map(w=>`<div class="cal-wk-lbl">週${w}</div>`).join('');
+    wkRow.dataset.built='1';
+  }
+  const today=new Date();
+  const todayStr=fmtD(today);
+  const isCurrentMonth=(calYear===today.getFullYear() && calMonth===today.getMonth());
+  document.getElementById('calPrev').disabled=isCurrentMonth;
+
+  const firstDay=new Date(calYear,calMonth,1).getDay();
+  const daysInMonth=new Date(calYear,calMonth+1,0).getDate();
+  const cells=[];
+  for(let i=0;i<firstDay;i++) cells.push(null);
+  for(let d=1;d<=daysInMonth;d++) cells.push(d);
+
+  grid.innerHTML='';
+  cells.forEach(day=>{
+    const cell=document.createElement('div');
+    if(day===null){ cell.className='cal-cell empty'; grid.appendChild(cell); return; }
+    const dateStr=`${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    cell.className='cal-cell';
+    cell.dataset.date=dateStr;
+    if(dateStr<todayStr){
+      cell.classList.add('disabled');
+      cell.textContent=day;
+    }else{
+      cell.textContent=day;
+      cell.onclick=()=>pickDate(dateStr);
+      if(selDate===dateStr) cell.classList.add('on');
+    }
+    grid.appendChild(cell);
+  });
+}
+
+function calNav(delta){
+  calMonth+=delta;
+  if(calMonth<0){ calMonth=11; calYear--; }
+  if(calMonth>11){ calMonth=0; calYear++; }
+  renderCalendar();
+}
+
+function fmtD(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+async function pickDate(dateStr){
+  selDate = dateStr; selTime = null;
+  document.querySelectorAll('.cal-cell').forEach(el=>el.classList.toggle('on', el.dataset.date===dateStr));
+  document.getElementById('timeCard').style.display = 'block';
+  await loadTaken(dateStr);
+  renderTimeSlots();
+  updateFooter();
+}
+
+// ── Rest times / taken slots ─────────
+async function loadRestTimes(mid){
+  if(restCache[mid]) return;
+  try{
+    const { data } = await sb.from('master_rest_times').select('rest_times').eq('master_id', mid).maybeSingle();
+    restCache[mid] = new Set(Array.isArray(data?.rest_times) ? data.rest_times : []);
+  }catch(e){ restCache[mid] = new Set(); }
+}
+function isRestSlot(mid, dateStr, t){
+  const dt = new Date(dateStr+'T00:00:00');
+  if(dt.getDay()===0) return false; // 週日不套用
+  const set = restCache[mid];
+  return set ? set.has(t) : false;
+}
+async function loadTaken(dateStr){
+  if(takenCache[dateStr]) return;
+  try{
+    const { data } = await sb.from('bookings').select('master_id,start_time').eq('date', dateStr).neq('status','cancelled').neq('status','no_show');
+    takenCache[dateStr] = data || [];
+  }catch(e){ takenCache[dateStr] = []; }
+}
+function renderTimeSlots(){
+  const grid = document.getElementById('timeGrid');
+  grid.innerHTML = '';
+  if(!selDate) return;
+  if(!anyMode && !selMasterId) return;
+  const taken = takenCache[selDate] || [];
+
+  if(anyMode){
+    TIMES.forEach(t=>{
+      // 不指定模式：只要當下時段有任何一位師傅有空，這格就可以點；
+      // 點下去自動分配給「第一位有空」的師傅（跟客人 app 的「不指定」邏輯一致）
+      const freeMaster = MASTERS.find(m=>{
+        const isTaken = taken.some(b=> b.master_id===m.id && b.start_time?.slice(0,5)===t);
+        const isRest = isRestSlot(m.id, selDate, t);
+        return !isTaken && !isRest;
+      });
+      const btn = document.createElement('button');
+      btn.className = 'ts';
+      if(!freeMaster){
+        btn.classList.add('full'); btn.textContent='已滿';
+      }else{
+        btn.innerHTML = `${t}<div style="font-size:9px;opacity:.75;margin-top:2px">${freeMaster.name}</div>`;
+        btn.onclick = ()=>pickTime(t, freeMaster.id);
+        if(selTime===t) btn.classList.add('on');
+      }
+      grid.appendChild(btn);
+    });
+    return;
+  }
+
+  TIMES.forEach(t=>{
+    const isTaken = taken.some(b=> b.master_id===selMasterId && b.start_time?.slice(0,5)===t);
+    const isRest = isRestSlot(selMasterId, selDate, t);
+    const btn = document.createElement('button');
+    btn.className = 'ts';
+    if(isTaken){ btn.classList.add('full'); btn.textContent='已滿'; }
+    else if(isRest){ btn.classList.add('full'); btn.textContent='休息'; }
+    else{
+      btn.textContent = t;
+      btn.onclick = ()=>pickTime(t);
+      if(selTime===t) btn.classList.add('on');
+    }
+    grid.appendChild(btn);
+  });
+}
+function pickTime(t, assignedMasterId){
+  selTime = t;
+  if(anyMode) selActualMasterId = assignedMasterId || null;
+  renderTimeSlots();
+  updateFooter();
+}
+
+// ── 電話查詢：抓上次預約 + 姓名 + 放鳥次數 ──
+let lookupTimer = null;
+document.getElementById('f-phone').addEventListener('input', e=>{
+  const v = e.target.value.replace(/\D/g,'').slice(0,10);
+  e.target.value = v;
+  clearTimeout(lookupTimer);
+  document.getElementById('suggestBox').classList.add('hidden');
+  document.getElementById('noShowWarn').classList.add('hidden');
+  lastKnown = null;
+  if(v.length===10 && /^09\d{8}$/.test(v)){
+    lookupTimer = setTimeout(()=>lookupPhone(v), 400);
+  } else {
+    document.getElementById('lookupStatus').textContent = v.length>0 ? '請輸入正確的手機號碼（09 開頭共 10 碼）' : '';
+  }
+});
+async function lookupPhone(phone){
+  document.getElementById('lookupStatus').textContent = '查詢中…';
+  try{
+    const [custRes, lastRes, noShowRes] = await Promise.all([
+      sb.from('customers').select('name').eq('phone', phone).maybeSingle(),
+      sb.from('bookings').select('date,start_time,master_id').eq('customer_phone', phone).neq('status','cancelled').not('date','is',null)
+        .order('date',{ascending:false}).order('start_time',{ascending:false}).limit(1),
+      sb.from('bookings').select('*',{count:'exact',head:true}).eq('customer_phone', phone).eq('status','no_show')
+    ]);
+    isNewCustomer = !custRes.data;
+    if(custRes.data?.name){ document.getElementById('f-name').value = custRes.data.name; }
+    document.getElementById('lookupStatus').textContent = isNewCustomer ? '🆕 新客人' : '✓ 舊客人';
+
+    const noShowCount = noShowRes.count || 0;
+    if(noShowCount >= 3){
+      const warnEl = document.getElementById('noShowWarn');
+      warnEl.textContent = `⚠️ 此電話已累計放鳥 ${noShowCount} 次，登記前請留意`;
+      warnEl.classList.remove('hidden');
+    }
+
+    const last = lastRes.data && lastRes.data[0];
+    if(last){
+      lastKnown = last;
+      showSuggest(last);
+    }
+  }catch(e){
+    document.getElementById('lookupStatus').textContent = '';
+  }
+}
+
+// ── 姓名查詢：電話還沒填的時候，打姓名也能找到人（方便只記得名字的情況）──
+let nameLookupTimer = null;
+document.getElementById('f-name').addEventListener('input', e=>{
+  const v = e.target.value.trim();
+  clearTimeout(nameLookupTimer);
+  const box = document.getElementById('nameMatches');
+  const phoneField = document.getElementById('f-phone');
+  // 電話已經填好了（代表已經是查過或選過的人），不用再跳姓名建議，避免干擾
+  if(phoneField.value.length===10){ box.classList.add('hidden'); return; }
+  if(v.length<1){ box.classList.add('hidden'); return; }
+  nameLookupTimer = setTimeout(()=>lookupByName(v), 400);
+});
+async function lookupByName(nameQuery){
+  const box = document.getElementById('nameMatches');
+  try{
+    const { data } = await sb.from('customers').select('name,phone').ilike('name', `%${nameQuery}%`).limit(5);
+    if(!data || !data.length){ box.classList.add('hidden'); box.innerHTML=''; return; }
+    box.innerHTML = data.map(c=>`
+      <div class="name-match-item" data-phone="${c.phone||''}" data-name="${(c.name||'').replace(/"/g,'&quot;')}">
+        <span class="nm-name">${c.name||'（無姓名）'}</span>
+        <span class="nm-phone">${c.phone||''}</span>
+      </div>
+    `).join('');
+    box.querySelectorAll('.name-match-item').forEach(el=>{
+      el.onclick = ()=>pickNameMatch(el.dataset.phone, el.dataset.name);
+    });
+    box.classList.remove('hidden');
+  }catch(e){ box.classList.add('hidden'); }
+}
+function pickNameMatch(phone, name){
+  document.getElementById('nameMatches').classList.add('hidden');
+  document.getElementById('f-name').value = name;
+  if(phone){
+    document.getElementById('f-phone').value = phone;
+    lookupPhone(phone);
+  }
+  updateFooter();
+}
+function showSuggest(last){
+  const box = document.getElementById('suggestBox');
+  const mname = MNAME[last.master_id] || '未知師傅';
+  const t = (last.start_time||'').slice(0,5);
+  document.getElementById('sg-last').textContent = `${last.date} ${t}　${mname}`;
+  document.getElementById('sg-name').textContent = `建議下一次時段（同師傅、同時段）：`;
+  const chipRow = document.getElementById('sg-chips');
+  chipRow.innerHTML = '';
+  [[7,'7 天後'],[14,'14 天後'],[28,'28 天後']].forEach(([days,label])=>{
+    const chip = document.createElement('button');
+    chip.className = 'chip';
+    chip.textContent = label;
+    chip.onclick = ()=>applySuggestedSlot(last, days, chip);
+    chipRow.appendChild(chip);
+  });
+  box.classList.remove('hidden');
+}
+async function applySuggestedSlot(last, days, chipEl){
+  document.querySelectorAll('#sg-chips .chip').forEach(c=>c.classList.remove('on'));
+  chipEl.classList.add('on');
+  const base = new Date(last.date+'T00:00:00');
+  base.setDate(base.getDate()+days);
+  const dateStr = fmtD(base);
+  const t = (last.start_time||'').slice(0,5);
+  pickMaster(last.master_id);
+  calYear = base.getFullYear(); calMonth = base.getMonth();
+  renderCalendar();
+  document.querySelectorAll('.cal-cell').forEach(el=>el.classList.toggle('on', el.dataset.date===dateStr));
+  const chip = document.querySelector(`.cal-cell[data-date="${dateStr}"]`);
+  if(chip) chip.scrollIntoView({behavior:'smooth', block:'center'});
+  selDate = dateStr;
+  document.getElementById('timeCard').style.display = 'block';
+  await loadTaken(dateStr);
+  await loadRestTimes(last.master_id);
+  // 檢查建議的時段是否還空著，空著才自動代入；已被約走或休息就不自動選，改讓師傅自己挑
+  const taken = takenCache[dateStr] || [];
+  const isTaken = taken.some(b=> b.master_id===last.master_id && b.start_time?.slice(0,5)===t);
+  const isRest = isRestSlot(last.master_id, dateStr, t);
+  if(isTaken || isRest){
+    selTime = null;
+    toast(isTaken ? '該建議時段已被約走，請手動選擇時段' : '該建議時段是師傅休息時間，請手動選擇時段', 'err');
+  } else {
+    selTime = t;
+  }
+  renderTimeSlots();
+  updateFooter();
+  setTimeout(()=>document.getElementById('timeCard').scrollIntoView({behavior:'smooth',block:'center'}), 100);
+}
+
+// ── Footer / submit ───────────────────
+function updateFooter(){
+  const masterOk = anyMode ? !!selActualMasterId : !!selMasterId;
+  const ok = masterOk && selDate && selTime && document.getElementById('f-phone').value.length===10 && document.getElementById('f-name').value.trim();
+  document.getElementById('footer').style.display = (masterOk && selDate && selTime) ? 'block' : 'none';
+  document.getElementById('submitBtn').disabled = !ok;
+}
+document.getElementById('f-name').addEventListener('input', updateFooter);
+
+async function submitBooking(){
+  const phone = document.getElementById('f-phone').value.trim();
+  const name = document.getElementById('f-name').value.trim();
+  const note = document.getElementById('f-note').value.trim();
+  const targetMasterId = anyMode ? selActualMasterId : selMasterId;
+  if(!phone || !name || !targetMasterId || !selDate || !selTime){ toast('請把資料填完整','err'); return; }
+
+  // 店休警告：不硬擋（師傅可能有特殊需要），但一定要提醒
+  try{
+    const { data: closures } = await sb.from('store_closures').select('reason').lte('start_date', selDate).gte('end_date', selDate).limit(1);
+    if(closures && closures.length){
+      if(!confirm(`⚠️ ${selDate} 是店休期間${closures[0].reason?'（'+closures[0].reason+'）':''}，確定要登記這筆預約嗎？`)) return;
+    }
+  }catch(e){}
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true; btn.textContent = '處理中...';
+
+  try{
+    // 送出前再次即時檢查衝突（防止查詢快取後這段時間被別人約走）
+    const { data: conflictRows } = await sb.from('bookings').select('id,customer_name')
+      .eq('master_id', targetMasterId).eq('date', selDate).eq('start_time', selTime+':00')
+      .neq('status','cancelled').neq('status','no_show').limit(1);
+    if(conflictRows && conflictRows.length){
+      toast(`該時段已被「${conflictRows[0].customer_name}」約走，請重新選擇`, 'err');
+      btn.disabled = false; btn.textContent = '確認登記';
+      await loadTaken2(selDate);
+      renderTimeSlots();
+      return;
+    }
+
+    const raw = `${name}${phone}`;
+    const row = {
+      master_id: targetMasterId,
+      raw_input: raw,
+      customer_name: name,
+      customer_phone: phone,
+      date: selDate,
+      start_time: selTime+':00',
+      guest_count: 1,
+      color_tag: isNewCustomer ? 'new_customer' : 'none',
+      note: note || null,
+      booking_source: 'internal',
+      status: 'confirmed',
+      reservation_type: 'single',
+      party_size: 1
+    };
+    const { data: inserted, error } = await sb.from('bookings').insert(row).select('id').single();
+    if(error){ toast('登記失敗：'+error.message, 'err'); btn.disabled=false; btn.textContent='確認登記'; return; }
+
+    const todayStr = fmtD(new Date());
+    await sb.rpc('upsert_customer_visit', { p_phone: phone, p_name: name, p_visit_date: todayStr });
+
+    // 記錄操作紀錄，跟主 app 的編輯記錄一致
+    try{
+      await sb.from('booking_edit_logs').insert({
+        booking_id: inserted.id,
+        editor_name: currentMaster?.name || '快速登記',
+        edited_at: new Date().toISOString(),
+        changes_summary: `【快速登記】${name} ${selDate} ${selTime}`
+      });
+    }catch(e){}
+
+    showSuccess(name, selDate, selTime, targetMasterId);
+  }catch(e){
+    toast('登記失敗，請再試一次','err');
+    btn.disabled = false; btn.textContent = '確認登記';
+  }
+}
+async function loadTaken2(dateStr){
+  delete takenCache[dateStr];
+  await loadTaken(dateStr);
+}
+
+let lastCreated = null; // {name, phone, masterId} 給「排下一次」用
+function showSuccess(name, date, time, masterId){
+  lastCreated = { name, phone: document.getElementById('f-phone').value.trim(), masterId, date, time };
+  document.getElementById('mainPage').classList.add('hidden');
+  document.getElementById('footer').style.display = 'none';
+  document.getElementById('successPage').classList.remove('hidden');
+  document.getElementById('successDetail').innerHTML = `${name}<br>${date}　${time}　${MNAME[masterId]||''}`;
+}
+
+function startFresh(){
+  selMasterId=null; anyMode=false; selActualMasterId=null; fastestResult=null;
+  selDate=null; selTime=null; lastKnown=null; isNewCustomer=true;
+  document.getElementById('f-phone').value='';
+  document.getElementById('f-name').value='';
+  document.getElementById('f-note').value='';
+  document.getElementById('lookupStatus').textContent='';
+  document.getElementById('suggestBox').classList.add('hidden');
+  document.getElementById('noShowWarn').classList.add('hidden');
+  document.getElementById('nameMatches').classList.add('hidden');
+  document.getElementById('fastestBox').classList.add('hidden');
+  document.querySelectorAll('.mc').forEach(el=>el.classList.remove('on'));
+  document.querySelectorAll('.cal-cell').forEach(el=>el.classList.remove('on'));
+  document.getElementById('timeCard').style.display='none';
+  document.getElementById('successPage').classList.add('hidden');
+  document.getElementById('mainPage').classList.remove('hidden');
+  document.getElementById('f-phone').focus();
+}
+
+async function startRepeat(){
+  if(!lastCreated) return startFresh();
+  document.getElementById('successPage').classList.add('hidden');
+  document.getElementById('mainPage').classList.remove('hidden');
+  document.getElementById('f-phone').value = lastCreated.phone;
+  document.getElementById('f-name').value = lastCreated.name;
+  document.getElementById('f-note').value = '';
+  isNewCustomer = false;
+  document.getElementById('lookupStatus').textContent = '✓ 舊客人';
+  pickMaster(lastCreated.masterId);
+  showSuggest({ date: lastCreated.date, start_time: lastCreated.time+':00', master_id: lastCreated.masterId });
+  window.scrollTo(0,0);
+}
+
+init();
+</script>
+</body>
+</html>
