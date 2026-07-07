@@ -95,6 +95,28 @@ const sb=supabase.createClient(
 );
 
 // ═══════════════════════════════════════════
+// 全域 Realtime：監聽 bookings 表任何變動 → 觸發各視圖 reload
+// 兩個排班視圖（個人 / 總覽）都已監聽 yp:bookings_changed 事件，
+// 這裡收到 DB 變動就 dispatch 該事件，讓它們自動重新載入。
+// debounce 300ms：多筆同時變動（如多人預約、批次操作）只 reload 一次。
+// ═══════════════════════════════════════════
+let __bkReloadTimer=null;
+function __triggerBookingsReload(payload){
+  if(__bkReloadTimer)clearTimeout(__bkReloadTimer);
+  __bkReloadTimer=setTimeout(()=>{
+    __bkReloadTimer=null;
+    try{window.dispatchEvent(new CustomEvent("yp:bookings_changed",{detail:{realtime:true,payload}}));}catch(_){}
+  },300);
+}
+try{
+  sb.channel("staff-bookings-realtime")
+    .on("postgres_changes",{event:"*",schema:"public",table:"bookings"},(payload)=>{
+      __triggerBookingsReload(payload);
+    })
+    .subscribe((status)=>{console.log("[Realtime] bookings 訂閱狀態:",status);});
+}catch(e){console.warn("[Realtime] 訂閱失敗:",e);}
+
+// ═══════════════════════════════════════════
 // 全域彈窗 stack — 給「左滑返回」優先關彈窗用
 // 每個彈窗用 useModalBackClose hook 註冊自己的 close 函數
 // 左滑（popstate）時先呼叫 stack 最上層的 close，沒彈窗才回上一個 tab
@@ -209,9 +231,68 @@ const TIMES=[];
 for(let h=8;h<=22;h++){TIMES.push(`${String(h).padStart(2,"0")}:00`);if(h<22)TIMES.push(`${String(h).padStart(2,"0")}:30`);}
 TIMES.push("22:30");
 const DEFAULT_REST=["08:00","12:00","12:30","13:00","13:30","18:00","18:30"];
-function loadRest(){try{const s=localStorage.getItem("rest_times");return s?new Set(JSON.parse(s)):new Set(DEFAULT_REST);}catch(e){return new Set(DEFAULT_REST);}}
-function saveRest(set){try{localStorage.setItem("rest_times",JSON.stringify([...set]));}catch(e){}}
-let REST=loadRest();
+
+// ── 休息時段（每位師傅各自一組，存於 master_rest_times 表）──
+// REST_BY_MASTER: { master_id: Set(times) }  給總覽視圖用
+// REST:           當前登入師傅的休息集合（相容個人視圖既有代碼）
+// localStorage 僅作載入前 / 離線的快取 fallback
+const REST_BY_MASTER={};
+let __currentMasterId=null;
+
+function _restCacheKey(mid){return "rest_times_"+(mid||"default");}
+function loadRestCache(mid){
+  try{
+    const s=localStorage.getItem(_restCacheKey(mid));
+    if(s)return new Set(JSON.parse(s));
+    // 舊版單一鍵相容：首次遷移時沿用舊 rest_times
+    const legacy=localStorage.getItem("rest_times");
+    if(legacy)return new Set(JSON.parse(legacy));
+  }catch(e){}
+  return new Set(DEFAULT_REST);
+}
+function saveRestCache(mid,set){try{localStorage.setItem(_restCacheKey(mid),JSON.stringify([...set]));}catch(e){}}
+
+// 取得某師傅的休息集合（總覽視圖用）；沒載到就用快取/預設
+function restOf(mid){
+  if(REST_BY_MASTER[mid])return REST_BY_MASTER[mid];
+  const c=loadRestCache(mid);REST_BY_MASTER[mid]=c;return c;
+}
+
+// 從資料庫載入所有師傅的休息時段，填入 REST_BY_MASTER，並設定當前師傅的 REST
+async function loadAllRestTimes(currentMasterId){
+  __currentMasterId=currentMasterId||__currentMasterId;
+  try{
+    const{data,error}=await sb.from("master_rest_times").select("master_id,rest_times");
+    if(!error&&data){
+      data.forEach(r=>{
+        const set=new Set(Array.isArray(r.rest_times)?r.rest_times:[]);
+        REST_BY_MASTER[r.master_id]=set;
+        saveRestCache(r.master_id,set);
+      });
+    }
+  }catch(e){console.warn("[rest] 載入失敗，用快取:",e);}
+  if(__currentMasterId){
+    REST=REST_BY_MASTER[__currentMasterId]||loadRestCache(__currentMasterId);
+  }
+  return REST;
+}
+
+// 儲存某師傅的休息時段到資料庫（+更新記憶體與快取）
+async function saveRestTimes(mid,set){
+  const arr=[...set];
+  REST_BY_MASTER[mid]=new Set(arr);
+  saveRestCache(mid,new Set(arr));
+  if(mid===__currentMasterId)REST=REST_BY_MASTER[mid];
+  try{
+    const{error}=await sb.from("master_rest_times")
+      .upsert({master_id:mid,rest_times:arr,updated_at:new Date().toISOString()},{onConflict:"master_id"});
+    if(error){console.warn("[rest] 儲存失敗:",error);return false;}
+    return true;
+  }catch(e){console.warn("[rest] 儲存例外:",e);return false;}
+}
+
+// 當前登入師傅的休息集合（初始用預設，登入後由 loadAllRestTimes 覆蓋）
+let REST=new Set(DEFAULT_REST);
 const DAYS=["一","二","三","四","五","六","日"];
 const ALL_DAYS_OV=["日","一","二","三","四","五","六"];
 const MONTHS=["一月","二月","三月","四月","五月","六月","七月","八月","九月","十月","十一月","十二月"];
@@ -1022,6 +1103,23 @@ function App(){
 
   const handleLogin=(masterData)=>{setAuthMaster(masterData);setIsFirstLogin(!!masterData.is_first_login);};
   const handleLogout=async()=>{await sb.auth.signOut();setAuthMaster(null);};
+
+  // 登入師傅確定後：載入所有師傅休息時段 + 訂閱 master_rest_times 即時同步
+  useEffect(()=>{
+    if(!authMaster?.id)return;
+    loadAllRestTimes(authMaster.id).then(()=>{
+      try{window.dispatchEvent(new CustomEvent("yp:rest_changed"));}catch(_){}
+    });
+    const ch=sb.channel("staff-rest-realtime")
+      .on("postgres_changes",{event:"*",schema:"public",table:"master_rest_times"},()=>{
+        loadAllRestTimes(authMaster.id).then(()=>{
+          try{window.dispatchEvent(new CustomEvent("yp:rest_changed"));}catch(_){}
+        });
+      })
+      .subscribe();
+    return()=>{try{sb.removeChannel(ch);}catch(_){}};
+  },[authMaster]);
+
   const handlePasswordUpdated=()=>{setIsFirstLogin(false);};
 
   // 未登入 → 顯示登入畫面
@@ -1348,7 +1446,8 @@ function MainApp({authMaster,onLogout}){
   useEffect(()=>{
     const h=()=>loadBk();
     window.addEventListener("yp:bookings_changed",h);
-    return ()=>window.removeEventListener("yp:bookings_changed",h);
+    window.addEventListener("yp:rest_changed",h);
+    return ()=>{window.removeEventListener("yp:bookings_changed",h);window.removeEventListener("yp:rest_changed",h);};
   },[loadBk]);
 
   // 自動跳轉到今日：切換到排班 tab、切換視圖、或載入當月時觸發
@@ -1906,14 +2005,15 @@ function MainApp({authMaster,onLogout}){
   const{t:mT,n:mN}=mStats();
 
   const todayStr=fmtDate(today.getFullYear(),today.getMonth(),today.getDate());
-  const todaySlots=TIMES.filter(t=>!REST.has(t)&&!bookings[`${todayStr}__${t}`]);
+  const _restSet=restOf(master?.id);
+  const todaySlots=TIMES.filter(t=>!_restSet.has(t)&&!bookings[`${todayStr}__${t}`]);
   const weeksLocal=showSun==="1"?getWeeksSun(year,month):getWeeksMon(year,month,false);
   const ACTIVE_DAYS=showSun==="1"?ALL_DAYS_OV:DAYS.slice(0,6);
   // 週日索引：開啟週日時為 0（第一欄），關閉週日時無此欄
   const SUN_IDX=showSun==="1"?0:-1;
 
   const renderCell=(d,t,b,dayIdx)=>{
-    const isR=REST.has(t)&&dayIdx!==SUN_IDX;
+    const isR=restOf(master?.id).has(t)&&dayIdx!==SUN_IDX;
     const isVac=b?.color_tag==="vacation";
     const cellKey=d?`${fmtDate(year,month,d)}__${t}`:"";
     const isDragSel=dragCells.has(cellKey);
@@ -2104,7 +2204,8 @@ function MainApp({authMaster,onLogout}){
         </div>}
         {slotDate&&slotDate!=="pick"&&(()=>{
           const{y,m,d}=slotDate;
-          const slots=TIMES.filter(t=>{if(REST.has(t))return false;return!bookings[`${fmtDate(y,m,d)}__${t}`];});
+          const _rs=restOf(master?.id);
+          const slots=TIMES.filter(t=>{if(_rs.has(t))return false;return!bookings[`${fmtDate(y,m,d)}__${t}`];});
           return<><div style={{fontSize:FS.s,color:"#00b894",marginBottom:4}}>{master.name} {m+1}/{d} 空檔 {slots.length} 格</div>
           <div style={{display:"flex",flexWrap:"wrap",gap:4}}>{slots.map(t=><button key={t} onClick={()=>{openDlg(d,t);setShowSlots(false);setSlotDate(null);}} style={{padding:"2px 7px",background:"#00b89415",border:"1px solid #00b89440",color:"#00b894",borderRadius:4,fontSize:10,cursor:"pointer"}}>{t}</button>)}</div></>;
         })()}
@@ -2255,7 +2356,7 @@ function MainApp({authMaster,onLogout}){
     {tab==="overview"&&<div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column"}}><OverviewMonth masters={masters} ovMasters={ovMasters} setOvMasters={setOvMasters} FS={FS} ovColW={parseInt(ovColW)} setOvColW={setOvColW} ovRowH={parseInt(ovRowH)} setOvRowH={setOvRowH} onBookingAdded={loadBk} loginMaster={loginMaster||master} undoStack={undoStack} pushUndo={pushUndo} executeUndo={executeUndo} /></div>}
     {tab==="crm"&&canViewCRM&&<CRMModule key={crmKey} masters={masters} FS={FS} />}
     {tab==="analytics"&&<AnalyticsModule masters={masters} FS={FS} currentMaster={master} />}
-    {tab==="settings"&&isAdmin&&<SettingsModule masters={masters} setMasters={setMasters} FS={FS} msg={msg} />}
+    {tab==="settings"&&isAdmin&&<SettingsModule masters={masters} setMasters={setMasters} FS={FS} msg={msg} loginMaster={loginMaster||master} />}
     {tab==="pending"&&<PendingBookings masters={masters} currentMaster={loginMaster||master} isAdmin={isAdmin} onConfirmed={()=>{loadBk();loadPendingCount();}} />}
 
     {/* Dialog */}
@@ -2838,7 +2939,8 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
   useEffect(()=>{
     const h=()=>loadBk();
     window.addEventListener("yp:bookings_changed",h);
-    return ()=>window.removeEventListener("yp:bookings_changed",h);
+    window.addEventListener("yp:rest_changed",h);
+    return ()=>{window.removeEventListener("yp:bookings_changed",h);window.removeEventListener("yp:rest_changed",h);};
   },[loadBk]);
 
   // 自動跳轉到今日：掛載時及切換回當月時觸發
@@ -3281,7 +3383,7 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
         }} className="nb" style={{color:"#00b894",borderColor:"#00b894",fontWeight:700}}>📍 當日</button>
         <button onClick={()=>{setOvDragMode(p=>!p);setOvIsDraggingVac(false);setOvDragCells(new Set());}} className="nb" style={{color:ovDragMode?"#e94560":"var(--nav-color)",borderColor:ovDragMode?"#e94560":"var(--border2)",fontWeight:ovDragMode?700:400}}>🔴 {ovDragMode?"退出":"休假"}</button>
         <button onClick={()=>{setOvMoveMode(p=>!p);setOvIsDragActive(false);}} className="nb" style={{color:ovMoveMode?"#a29bfe":"var(--nav-color)",borderColor:ovMoveMode?"#a29bfe":"var(--border2)",fontWeight:ovMoveMode?700:400}}>🔀 {ovMoveMode?"退出":"移動"}</button>
-        <button onClick={()=>{if(!sel.length)return;const m=sel[0];const d=yr===today.getFullYear()&&mo===today.getMonth()?today.getDate():1;const dateStr=fmtDate(yr,mo,d);const t=TIMES.find(x=>!REST.has(x)&&!bks[`${m.id}__${dateStr}__${x}`])||"09:00";setDialog({master:m,masterId:m.id,dateStr,time:t});setForm({input:"",guests:"1",note:"",color:"none",isSplit:false,splitMasterId:"",recurType:"none",recurEndType:"date",recurEndDate:"",recurEndCount:12});}} className="nb" style={{color:"#e94560",borderColor:"#e94560"}}>＋ 新增</button>
+        <button onClick={()=>{if(!sel.length)return;const m=sel[0];const d=yr===today.getFullYear()&&mo===today.getMonth()?today.getDate():1;const dateStr=fmtDate(yr,mo,d);const t=TIMES.find(x=>!restOf(m.id).has(x)&&!bks[`${m.id}__${dateStr}__${x}`])||"09:00";setDialog({master:m,masterId:m.id,dateStr,time:t});setForm({input:"",guests:"1",note:"",color:"none",isSplit:false,splitMasterId:"",recurType:"none",recurEndType:"date",recurEndDate:"",recurEndCount:12});}} className="nb" style={{color:"#e94560",borderColor:"#e94560"}}>＋ 新增</button>
         <span style={{fontSize:10,color:"var(--text-dim)"}}>欄</span>
         <input type="range" min="45" max="140" value={ocw} onChange={e=>setOvColW(e.target.value)} style={{width:50,cursor:"pointer",accentColor:"#74b9ff"}} />
         <span style={{fontSize:10,color:"#74b9ff",minWidth:22,fontWeight:700}}>{ocw}</span>
@@ -3325,7 +3427,7 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
       </div>
       {ovSlotDate&&sel.map(m=>{
         const dateStr=fmtDate(ovSlotDate.y,ovSlotDate.m,ovSlotDate.d);
-        const slots=TIMES.filter(t=>{if(REST.has(t))return false;return!bks[`${m.id}__${dateStr}__${t}`];});
+        const slots=TIMES.filter(t=>{if(restOf(m.id).has(t))return false;return!bks[`${m.id}__${dateStr}__${t}`];});
         return<div key={m.id} style={{marginBottom:4}}>
           <span style={{fontSize:11,color:"#00b894",marginRight:6,fontWeight:700}}>{m.name} 空檔 {slots.length} 格</span>
           <span style={{display:"inline-flex",flexWrap:"wrap",gap:3}}>
@@ -3406,7 +3508,7 @@ function OverviewMonth({masters,ovMasters,setOvMasters,FS,ovColW,setOvColW,ovRow
                   <td style={{...TT,borderBottom:"1px solid var(--border)"}}>{t}</td>
                   {wk.map((d,i)=>sel.map((m,j)=>{
                     const b=bk(m.id,d,t);
-                    const isR=REST.has(t)&&i!==0;
+                    const isR=restOf(m.id).has(t)&&i!==0;
                     const isVac=b?.color_tag==="vacation";
                     const isSun=i===0;
                     const cellKey=d?`${m.id}__${fmtDate(yr,mo,d)}__${t}`:"";
@@ -5259,7 +5361,7 @@ function AnalyticsModule({masters,FS,currentMaster}){
 // ═══════════════════════════════════════════
 // SETTINGS MODULE
 // ═══════════════════════════════════════════
-function SettingsModule({masters,setMasters,FS,msg}){
+function SettingsModule({masters,setMasters,FS,msg,loginMaster}){
   const[settTab,setSettTab]=useState("masters");
   const[editMaster,setEditMaster]=useState(null);
   const[form,setForm]=useState({name:"",username:"",role:"master",display_color:"#74b9ff",reserve_color:"#a29bfe"});
@@ -5268,8 +5370,14 @@ function SettingsModule({masters,setMasters,FS,msg}){
   const[histLoading,setHistLoading]=useState(false);
   const[histMaster,setHistMaster]=useState("");
   const[histDate,setHistDate]=useState(getTaipeiDateStr());
-  const[restSet,setRestSet]=useState(()=>new Set([...REST]));
+  // 休息時段：正在編輯哪位師傅（預設登入者自己）
+  const[restMasterId,setRestMasterId]=useState(loginMaster?.id||"");
+  const[restSet,setRestSet]=useState(()=>new Set(restOf(loginMaster?.id)));
   const[restSaved,setRestSaved]=useState(false);
+  // 切換編輯對象時，載入該師傅目前的休息集合
+  useEffect(()=>{
+    if(restMasterId)setRestSet(new Set(restOf(restMasterId)));
+  },[restMasterId]);
   const[onlineSettings,setOnlineSettings]=useState([]);
   const[onlineLoading,setOnlineLoading]=useState(false);
 
@@ -5411,6 +5519,15 @@ function SettingsModule({masters,setMasters,FS,msg}){
           <div style={{fontWeight:700,fontSize:14}}>休息時段設定</div>
           <button onClick={()=>setRestSet(new Set(DEFAULT_REST))} style={{fontSize:11,padding:"3px 10px",borderRadius:6,border:"1px solid var(--border2)",background:"transparent",color:"var(--text-muted)",cursor:"pointer"}}>還原預設</button>
         </div>
+        <div style={{marginBottom:12}}>
+          <div style={{fontSize:12,color:"var(--text-muted)",marginBottom:5,fontWeight:700}}>設定對象</div>
+          <select value={restMasterId} onChange={e=>setRestMasterId(e.target.value)}
+            style={{width:"100%",background:"var(--input-bg)",border:"1px solid var(--border2)",borderRadius:8,padding:"9px 12px",fontSize:13,color:"var(--text-main)"}}>
+            {masters.filter(m=>m.name!=="Hanna"&&m.username!=="hanna").map(m=>(
+              <option key={m.id} value={m.id}>{m.name}{m.id===loginMaster?.id?"（我）":""}</option>
+            ))}
+          </select>
+        </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:14}}>
           {(()=>{const blocks=[];for(let h=8;h<=22;h++){const t0=`${String(h).padStart(2,"0")}:00`;const t1=`${String(h).padStart(2,"0")}:30`;blocks.push([t0,h<22?t1:null]);}return blocks;})().map(([t0,t1])=>(
             <div key={t0} style={{display:"flex",gap:4}}>
@@ -5427,7 +5544,18 @@ function SettingsModule({masters,setMasters,FS,msg}){
           ))}
         </div>
         <div style={{fontSize:11,color:"var(--text-dim)",marginBottom:10}}>※ 紅色＝休息時段（灰底顯示）　週日不套用</div>
-        <button onClick={()=>{REST=restSet;saveRest(restSet);setRestSaved(true);setTimeout(()=>setRestSaved(false),2000);msg("休息時段已儲存");}}
+        <button onClick={async()=>{
+          if(!restMasterId){msg("請先選擇設定對象",true);return;}
+          const ok=await saveRestTimes(restMasterId,restSet);
+          if(ok){
+            try{window.dispatchEvent(new CustomEvent("yp:rest_changed"));}catch(_){}
+            setRestSaved(true);setTimeout(()=>setRestSaved(false),2000);
+            const mn=masters.find(m=>m.id===restMasterId)?.name||"";
+            msg(`已儲存${mn}的休息時段`);
+          }else{
+            msg("儲存失敗，請重試",true);
+          }
+        }}
           style={{width:"100%",padding:"10px",borderRadius:8,background:"#e94560",border:"none",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>
           {restSaved?"✓ 已儲存":"儲存休息時段"}
         </button>
