@@ -658,10 +658,52 @@ function PendingBookings({masters, currentMaster, isAdmin, onConfirmed}){
     const isReq=!group[0].date;
     if(isReq&&(!confDate||!confTime)){alert('請填入日期和時段');return;}
     setSaving(true);
-    for(const b of group){
+
+    // 計算每一筆要填入的時段
+    // - 非申請制（已有時間）：維持原時段，只改 status
+    // - 申請制單人：全部填 confDate/confTime
+    // - 申請制拆單(split)：兩位師傅同一時段
+    // - 申請制同師傅多人(same_master)：從 confTime 起連續排格
+    const rtype=group[0].reservation_type;
+    const isSameMasterMulti = isReq && group.length>1 && rtype!=='split';
+    const plan=[]; // {b, date, time}  time 為 'HH:MM' 或 null（非申請制沿用原值）
+    for(let i=0;i<group.length;i++){
+      const b=group[i];
+      if(!isReq){ plan.push({b,date:null,time:null}); continue; }
+      let t=confTime;
+      if(isSameMasterMulti){
+        const nt=getNextTime(confTime,i);
+        if(!nt){ setSaving(false); alert(`第 ${i+1} 位的連續時段超出營業時間，請改選較早的起始時段`); return; }
+        t=nt;
+      }
+      plan.push({b,date:confDate,time:t});
+    }
+
+    // 🔴 防呆：申請制填入前，逐筆檢查目標時段是否已被占用
+    if(isReq){
+      for(const p of plan){
+        const conflict=await checkConflict(p.b.master_id, p.date, p.time);
+        if(conflict){
+          setSaving(false);
+          const mname=MASTER_IDS[p.b.master_id]||'該師傅';
+          alert(`⚠️ ${mname} ${p.date} ${p.time} 已有「${conflict.customer_name}」的預約，無法填入。\n\n請改選其他時段。`);
+          return;
+        }
+      }
+    }
+
+    // 執行 update，逐筆檢查 error，任一失敗即中止（不清空列表，避免假成功）
+    for(const p of plan){
       const update={status:'confirmed'};
-      if(isReq){update.date=confDate;update.start_time=confTime+':00';}
-      await sb.from('bookings').update(update).eq('id',b.id);
+      if(isReq){update.date=p.date;update.start_time=p.time+':00';}
+      const{error}=await sb.from('bookings').update(update).eq('id',p.b.id);
+      if(error){
+        setSaving(false);
+        alert(`填入排班失敗：${error.message||'該時段可能已被占用'}\n\n請重新整理後再試。`);
+        if(onConfirmed) onConfirmed();
+        load();
+        return;
+      }
     }
 
     const lineInfo=lineNames[group[0].customer_phone]||{};
