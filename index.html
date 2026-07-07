@@ -7,6 +7,9 @@
 <meta name="theme-color" content="#0d1117">
 <meta name="apple-mobile-web-app-title" content="永平預約">
 <link rel="manifest" href="/booking/manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
 <title>永平整復保健 預約系統</title>
 <script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/booking/sw.js');</script>
 <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
@@ -95,6 +98,53 @@ const {
   useMemo
 } = React;
 const sb = supabase.createClient("https://ikzyzkhuireqztbhrtna.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlrenl6a2h1aXJlcXp0YmhydG5hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMjI1NjIsImV4cCI6MjA5Mjc5ODU2Mn0.rIXfMsiuYg6HoJaACxvxr1SFS9M3m7XNP57qcoyvRxw");
+
+// ═══════════════════════════════════════════
+// 客人二次確認流程 helper
+// ═══════════════════════════════════════════
+// 客人端 LIFF 確認深連結（點確認訊息 → 開 app → 自動確認）
+const LIFF_CONFIRM_BASE = "https://liff.line.me/2009934614-9PWvOAfL?confirm=";
+// 確認時限：2 小時
+const CONFIRM_WINDOW_MS = 2 * 60 * 60 * 1000;
+
+// 推播 LINE 給客人（透過 Edge Function，token 由後端保管）
+async function pushLineToCustomer(userId, text) {
+  if (!userId || String(userId).startsWith("__")) return false;
+  try {
+    const r = await fetch("https://ikzyzkhuireqztbhrtna.supabase.co/functions/v1/notify-line-push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ customerLineId: userId, messageText: text })
+    });
+    const j = await r.json().catch(() => ({}));
+    return !!j.success;
+  } catch (e) {
+    console.error("推播失敗", e);
+    return false;
+  }
+}
+
+// 逾時未確認自動釋放（前端保險，主力仍是 Supabase pg_cron）
+async function sweepExpiredAwaiting() {
+  try {
+    const nowIso = new Date().toISOString();
+    const { data } = await sb.from("bookings")
+      .select("id,note")
+      .eq("status", "awaiting_customer")
+      .lt("confirm_deadline", nowIso);
+    if (!data || !data.length) return;
+    for (const b of data) {
+      await sb.from("bookings").update({
+        status: "cancelled",
+        note: (b.note ? b.note + "　" : "") + "（逾時未確認，自動釋放）",
+        last_edited_at: nowIso
+      }).eq("id", b.id).eq("status", "awaiting_customer");
+    }
+  } catch (e) { /* 靜默：pg_cron 會兜底 */ }
+}
+// 開啟後延遲掃一次（等 auth session 還原），之後每 5 分鐘掃一次
+setTimeout(sweepExpiredAwaiting, 4000);
+setInterval(sweepExpiredAwaiting, 5 * 60 * 1000);
 
 // ═══════════════════════════════════════════
 // 全域 Realtime：監聽 bookings 表任何變動 → 觸發各視圖 reload
@@ -1338,10 +1388,13 @@ function PendingBookings({
       }
     }
 
-    // 執行 update，逐筆檢查 error，任一失敗即中止（不清空列表，避免假成功）
+    // 執行 update：改為「待客人確認」+ 2 小時到期，逐筆檢查 error，任一失敗即中止
+    const deadlineIso = new Date(Date.now() + CONFIRM_WINDOW_MS).toISOString();
     for (const p of plan) {
       const update = {
-        status: 'confirmed'
+        status: 'awaiting_customer',
+        confirm_deadline: deadlineIso,
+        last_edited_at: new Date().toISOString()
       };
       if (isReq) {
         update.date = p.date;
@@ -1361,6 +1414,12 @@ function PendingBookings({
     const lineInfo = lineNames[group[0].customer_phone] || {};
     const copyText = `${group[0].customer_name}${group[0].customer_phone || ''}`;
     const lineUid = lineInfo.uid || null;
+    // 推播「請確認」給客人（含 2 小時確認深連結）；整組共用主筆 id 的連結
+    const _pd = plan[0] && plan[0].date || group[0].date;
+    const _pt = plan[0] && plan[0].time || (group[0].start_time ? group[0].start_time.slice(0, 5) : '');
+    const _mname = MASTER_IDS[group[0].master_id] || '師傅';
+    const _confirmMsg = `📅 預約時段確認\n師傅：${_mname}\n時間：${_pd} ${_pt}\n\n請於 2 小時內點下方連結完成確認，逾時時段將自動釋出：\n${LIFF_CONFIRM_BASE}${group[0].id}`;
+    if (lineUid) pushLineToCustomer(lineUid, _confirmMsg);
     const idsInGroup = new Set(group.map(x => x.id));
     setItems(p => p.filter(x => !idsInGroup.has(x.id)));
     setConfirmDialog(null);
@@ -1871,13 +1930,13 @@ function PendingBookings({
       fontWeight: 900,
       marginBottom: 8
     }
-  }, "✅ 預約已確認！"), /*#__PURE__*/React.createElement("div", {
+  }, "✅ 已通知客人確認"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 13,
       color: '#8b949e',
       marginBottom: 16
     }
-  }, "請複製客人資訊後，到 LINE 改備註名稱"), /*#__PURE__*/React.createElement("div", {
+  }, "已自動傳送 2 小時確認連結給客人。可複製客人資訊到 LINE 改備註名稱。"), /*#__PURE__*/React.createElement("div", {
     style: {
       background: '#0d1117',
       border: '1.5px solid #30363d',
@@ -2196,6 +2255,374 @@ function SplitMasterSelect({
     }, "✓"));
   }));
 }
+// ═══════════════════════════════════════════
+// 🟢 開放設定：師傅自主選擇「開放哪一天／哪些時段」給客人線上預約
+// 白名單模式：沒被設定過的日子＝不可約。
+// ═══════════════════════════════════════════
+// 營業時間：週一～週六 09:30-12:00 / 14:00-18:00 / 19:00-21:30
+// 週日＝師傅自願加班日：只接受師傅內部電話/現場登記，永遠不開放線上預約
+// （12:00/18:00 是休息時間起點所以不含；21:30 沿用系統既有慣例，當作最後一個可預約時段）
+const BUSINESS_HOUR_SLOTS = [
+  "09:30","10:00","10:30","11:00","11:30",
+  "14:00","14:30","15:00","15:30","16:00","16:30","17:00","17:30",
+  "19:00","19:30","20:00","20:30","21:00","21:30"
+];
+function isSundayStr(dateStr){
+  return new Date(dateStr+"T00:00:00").getDay() === 0;
+}
+// ═══════════════════════════════════════════
+// 🏖️ 店休設定（員工旅遊等全店休假）— 所有師傅都看得到，只有 admin 能新增/刪除
+// ═══════════════════════════════════════════
+function StoreClosuresPanel({ isAdmin, msg, currentMaster }) {
+  const [list, setList] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [showForm, setShowForm] = React.useState(false);
+  const [startD, setStartD] = React.useState("");
+  const [endD, setEndD] = React.useState("");
+  const [reason, setReason] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  const todayStr = (() => { const d = getTaipeiNow(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })();
+
+  const load = React.useCallback(async () => {
+    setLoading(true);
+    const { data } = await sb.from("store_closures").select("*").gte("end_date", todayStr).order("start_date", { ascending: true });
+    setList(data || []);
+    setLoading(false);
+  }, []);
+  React.useEffect(() => { load(); }, [load]);
+
+  const addClosure = async () => {
+    if (!startD || !endD) { msg("請選開始和結束日期", true); return; }
+    if (endD < startD) { msg("結束日期不能早於開始日期", true); return; }
+    setSaving(true);
+    const { error } = await sb.from("store_closures").insert({
+      start_date: startD, end_date: endD, reason: reason || null, created_by: (currentMaster?.name || "系統")
+    });
+    setSaving(false);
+    if (error) { msg("新增失敗：" + error.message, true); return; }
+    setStartD(""); setEndD(""); setReason(""); setShowForm(false);
+    msg("✓ 已設定店休");
+    load();
+  };
+
+  const removeClosure = async (id) => {
+    if (!window.confirm("確定要取消這段店休設定嗎？")) return;
+    await sb.from("store_closures").delete().eq("id", id);
+    msg("✓ 已取消");
+    load();
+  };
+
+  return /*#__PURE__*/React.createElement("div", { style: { padding: "12px 12px 0", borderBottom: "1px solid var(--border)", marginBottom: 8 } },
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 } },
+      /*#__PURE__*/React.createElement("div", { style: { fontWeight: 900, fontSize: 14 } }, "🏖️ 店休設定"),
+      isAdmin && /*#__PURE__*/React.createElement("button", {
+        onClick: () => setShowForm(s => !s),
+        style: { fontSize: 12, fontWeight: 700, padding: "5px 10px", borderRadius: 8, border: "1px solid #e94560", background: showForm ? "#e9456020" : "none", color: "#e94560", cursor: "pointer" }
+      }, showForm ? "取消" : "＋ 新增店休")
+    ),
+    showForm && isAdmin && /*#__PURE__*/React.createElement("div", { style: { background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, padding: 12, marginBottom: 10 } },
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 8 } },
+        /*#__PURE__*/React.createElement("input", { type: "date", value: startD, min: todayStr, onChange: e => setStartD(e.target.value), style: { flex: 1, padding: 8, borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg-header)", color: "var(--text-main)" } }),
+        /*#__PURE__*/React.createElement("input", { type: "date", value: endD, min: startD || todayStr, onChange: e => setEndD(e.target.value), style: { flex: 1, padding: 8, borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg-header)", color: "var(--text-main)" } })
+      ),
+      /*#__PURE__*/React.createElement("input", { type: "text", placeholder: "原因（選填，例：員工旅遊）", value: reason, onChange: e => setReason(e.target.value), style: { width: "100%", padding: 8, borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg-header)", color: "var(--text-main)", marginBottom: 8, boxSizing: "border-box" } }),
+      /*#__PURE__*/React.createElement("button", {
+        onClick: addClosure, disabled: saving,
+        style: { width: "100%", padding: 11, borderRadius: 8, border: "none", background: "#e94560", color: "#fff", fontWeight: 900, fontSize: 13, cursor: saving ? "wait" : "pointer" }
+      }, saving ? "儲存中..." : "確認設定店休"),
+      /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: "var(--text-dim)", marginTop: 6 } }, "店休期間客人完全無法線上預約；師傅內部手動排班仍可操作，但會跳警告提醒。")
+    ),
+    loading ? null : list.length === 0
+      ? /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: "var(--text-dim)", paddingBottom: 10 } }, "目前沒有設定店休")
+      : /*#__PURE__*/React.createElement("div", { style: { paddingBottom: 10 } },
+          list.map(c => /*#__PURE__*/React.createElement("div", {
+            key: c.id,
+            style: { display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(233,69,96,0.1)", border: "1px solid #e94560", borderRadius: 8, padding: "8px 10px", marginBottom: 6, fontSize: 12 }
+          },
+            /*#__PURE__*/React.createElement("div", null,
+              /*#__PURE__*/React.createElement("span", { style: { fontWeight: 700 } }, c.start_date === c.end_date ? c.start_date : `${c.start_date} ~ ${c.end_date}`),
+              c.reason && /*#__PURE__*/React.createElement("span", { style: { color: "var(--text-dim)", marginLeft: 8 } }, c.reason)
+            ),
+            isAdmin && /*#__PURE__*/React.createElement("button", {
+              onClick: () => removeClosure(c.id),
+              style: { background: "none", border: "none", color: "#e94560", cursor: "pointer", fontSize: 16, padding: "0 4px" }
+            }, "✕")
+          ))
+        )
+  );
+}
+function AvailabilityModule({
+  masters,
+  currentMaster,
+  isAdmin,
+  canSeeAll,
+  msg
+}) {
+  // 四位師傅都能各自設定開放日期/時段。哲瑋、泓文是目前客人 app 已經在用的
+  // 「開放制」；治、麒目前客人 app 還是走「申請制」——在這裡先幫他們把設定
+  // 準備好，但要等客人 app 那邊也接上（下一步跟 Hanna 一起連），設定才會
+  // 真的影響客人能不能線上直接約，現在只是先把資料準備好、UI 可以用。
+  const ZHIWEI_ID = '7ae4e5c5-bfa5-46f6-8a90-a96e8721cea5';
+  const HONGWEN_ID = 'b98e3afb-42d1-4149-b278-12d5493885b1';
+  const CURRENTLY_LIVE_IDS = new Set([ZHIWEI_ID, HONGWEN_ID]); // 客人 app 目前真的會生效的兩位
+  const configurableMasters = (masters || []).filter(m => m.role !== 'editor' && m.is_active !== false);
+  const selfIsConfigurable = configurableMasters.some(m => m.id === currentMaster?.id);
+  const [targetId, setTargetId] = React.useState(selfIsConfigurable ? currentMaster.id : configurableMasters[0]?.id || '');
+  const [ym, setYm] = React.useState(() => {
+    const d = getTaipeiNow();
+    return { y: d.getFullYear(), m: d.getMonth() };
+  });
+  const [rows, setRows] = React.useState({}); // date -> {is_open, open_slots}
+  const [loading, setLoading] = React.useState(false);
+  const [editDate, setEditDate] = React.useState(null);
+  const [editSlots, setEditSlots] = React.useState(null); // null=整天 / Set=部分時段
+  const [savingDay, setSavingDay] = React.useState(false);
+  const [bulkBusy, setBulkBusy] = React.useState(false);
+
+  const monthStart = new Date(ym.y, ym.m, 1);
+  const monthEnd = new Date(ym.y, ym.m + 1, 0);
+  const daysInMonth = monthEnd.getDate();
+  const fmtD = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const todayStr = fmtD(getTaipeiNow());
+
+  const load = React.useCallback(async () => {
+    if (!targetId) return;
+    setLoading(true);
+    const minD = fmtD(monthStart);
+    const maxD = fmtD(monthEnd);
+    const { data } = await sb.from("master_day_availability").select("date,is_open,open_slots").eq("master_id", targetId).gte("date", minD).lte("date", maxD);
+    const m = {};
+    (data || []).forEach(r => { m[r.date] = r; });
+    setRows(m);
+    setLoading(false);
+  }, [targetId, ym.y, ym.m]);
+  React.useEffect(() => { load(); }, [load]);
+
+  const changeMonth = delta => {
+    setYm(prev => {
+      const d = new Date(prev.y, prev.m + delta, 1);
+      return { y: d.getFullYear(), m: d.getMonth() };
+    });
+  };
+
+  const openEditor = dateStr => {
+    if (dateStr < todayStr) return; // 過去日期不可編輯
+    if (isSundayStr(dateStr)) { msg("週日是師傅加班日，僅接受內部登記，無法開放線上預約", true); return; }
+    const r = rows[dateStr];
+    setEditDate(dateStr);
+    if (r && r.is_open && Array.isArray(r.open_slots) && r.open_slots.length) {
+      setEditSlots(new Set(r.open_slots));
+    } else {
+      setEditSlots(null); // 沒設定過 或 整天開放 → 預設用「整天」模式
+    }
+  };
+
+  const saveDay = async (isOpen, slotsSet) => {
+    if (!editDate || !targetId) return;
+    setSavingDay(true);
+    const payload = {
+      master_id: targetId,
+      date: editDate,
+      is_open: isOpen,
+      open_slots: isOpen && slotsSet && slotsSet.size ? [...slotsSet].sort() : null
+    };
+    const { error } = await sb.from("master_day_availability").upsert(payload, { onConflict: "master_id,date" });
+    setSavingDay(false);
+    if (error) { msg("儲存失敗：" + error.message, true); return; }
+    setRows(prev => ({ ...prev, [editDate]: payload }));
+    setEditDate(null);
+    msg("✓ 已儲存");
+  };
+
+  const clearDay = async () => {
+    if (!editDate || !targetId) return;
+    setSavingDay(true);
+    await sb.from("master_day_availability").delete().eq("master_id", targetId).eq("date", editDate);
+    setSavingDay(false);
+    setRows(prev => { const n = { ...prev }; delete n[editDate]; return n; });
+    setEditDate(null);
+    msg("✓ 已清除（恢復未開放）");
+  };
+
+  const bulkOpenMonth = async (which) => {
+    // which: 'this' 這個月剩餘天數 / 'next' 下個月整月
+    const base = which === "next" ? new Date(ym.y, ym.m + 1, 1) : new Date();
+    const y = base.getFullYear(), m = base.getMonth();
+    const first = which === "next" ? new Date(y, m, 1) : new Date();
+    const last = new Date(y, m + 1, 0);
+    const dates = [];
+    for (let d = new Date(first); d <= last; d.setDate(d.getDate() + 1)) {
+      const ds = fmtD(new Date(d));
+      if (!isSundayStr(ds)) dates.push(ds); // 週日不開放線上預約，一鍵開放時自動跳過
+    }
+    if (!dates.length) return;
+    const label = which === "next" ? `下個月（${y}/${m + 1}）` : "本月剩餘天數";
+    if (!window.confirm(`確定要一鍵開放 ${targetName(targetId)} ${label} 共 ${dates.length} 天（營業時間整天開放，週日已自動跳過）嗎？`)) return;
+    setBulkBusy(true);
+    const payload = dates.map(dt => ({ master_id: targetId, date: dt, is_open: true, open_slots: BUSINESS_HOUR_SLOTS }));
+    const { error } = await sb.from("master_day_availability").upsert(payload, { onConflict: "master_id,date" });
+    setBulkBusy(false);
+    if (error) { msg("開放失敗：" + error.message, true); return; }
+    msg(`✓ 已開放 ${dates.length} 天`);
+    load();
+  };
+
+  const bulkCloseMonth = async (which) => {
+    const base = which === "next" ? new Date(ym.y, ym.m + 1, 1) : new Date(ym.y, ym.m, 1);
+    const y = base.getFullYear(), m = base.getMonth();
+    const first = new Date(y, m, 1);
+    const last = new Date(y, m + 1, 0);
+    const minD = fmtD(first), maxD = fmtD(last);
+    const label = which === "next" ? `下個月（${y}/${m + 1}）` : "這個月";
+    if (!window.confirm(`確定要把 ${targetName(targetId)} ${label} 全部改回「不開放」嗎？（不影響已經約走的預約）`)) return;
+    setBulkBusy(true);
+    await sb.from("master_day_availability").delete().eq("master_id", targetId).gte("date", minD).lte("date", maxD);
+    setBulkBusy(false);
+    msg("✓ 已全部關閉");
+    load();
+  };
+
+  const targetName = id => (masters || []).find(m => m.id === id)?.name || "";
+
+  if (!selfIsConfigurable && !canSeeAll) {
+    return /*#__PURE__*/React.createElement(React.Fragment, null,
+      /*#__PURE__*/React.createElement(StoreClosuresPanel, { isAdmin, msg, currentMaster }),
+      /*#__PURE__*/React.createElement("div", { style: { padding: 20, color: "var(--text-dim)", fontSize: 13, lineHeight: 1.8 } },
+        "帳號未啟用，無法設定開放時段。"
+      )
+    );
+  }
+
+  const weeks = [];
+  {
+    const startPad = monthStart.getDay(); // 0=日
+    const cells = [];
+    for (let i = 0; i < startPad; i++) cells.push(null);
+    for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+    while (cells.length % 7) cells.push(null);
+    for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+  }
+  const wk = ["日", "一", "二", "三", "四", "五", "六"];
+
+  return /*#__PURE__*/React.createElement("div", { style: { padding: "12px 12px 60px" } },
+    /*#__PURE__*/React.createElement(StoreClosuresPanel, { isAdmin, msg, currentMaster }),
+    /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: "var(--text-dim)", marginBottom: 10, lineHeight: 1.6, background: "var(--bg-card)", padding: 10, borderRadius: 10, border: "1px solid var(--border)" } },
+      "⚠️ 白名單模式：沒被設定過的日子，客人線上一律約不到。設定「整天開放」＝當天所有時段（扣掉你的休息時段與已被約走的）都開放；也可以只開放特定時段。"
+    ),
+    canSeeAll && configurableMasters.length > 1 && /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 6, flexWrap: "wrap" } },
+      configurableMasters.map(m => /*#__PURE__*/React.createElement("button", {
+        key: m.id,
+        onClick: () => setTargetId(m.id),
+        style: {
+          padding: "7px 14px", borderRadius: 20, cursor: "pointer", fontSize: 13, fontWeight: 700,
+          border: targetId === m.id ? "2px solid #2ed9c3" : "1px solid var(--border)",
+          background: targetId === m.id ? "#2ed9c320" : "var(--bg-card)",
+          color: targetId === m.id ? "#2ed9c3" : "var(--text-main)"
+        }
+      }, m.name, !CURRENTLY_LIVE_IDS.has(m.id) && "（申請制）"))
+    ),
+    !CURRENTLY_LIVE_IDS.has(targetId) && /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: "#f5a623", background: "#f5a62315", border: "1px solid #f5a623", borderRadius: 8, padding: "8px 10px", marginBottom: 10, lineHeight: 1.6 } },
+      "⚠️ 目前設定好也不會馬上生效——客人 app 這邊還沒接這位師傅的線上日曆，客人還是只能送申請。這裡先讓你把資料準備好，正式串接後才會真的能線上約。"
+    ),
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 } },
+      /*#__PURE__*/React.createElement("button", { onClick: () => changeMonth(-1), style: { background: "none", border: "1px solid var(--border)", borderRadius: 8, padding: "6px 12px", cursor: "pointer", color: "var(--text-main)" } }, "‹"),
+      /*#__PURE__*/React.createElement("div", { style: { fontWeight: 900, fontSize: 16 } }, `${ym.y} 年 ${ym.m + 1} 月`),
+      /*#__PURE__*/React.createElement("button", { onClick: () => changeMonth(1), style: { background: "none", border: "1px solid var(--border)", borderRadius: 8, padding: "6px 12px", cursor: "pointer", color: "var(--text-main)" } }, "›")
+    ),
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" } },
+      /*#__PURE__*/React.createElement("button", {
+        onClick: () => bulkOpenMonth("next"), disabled: bulkBusy,
+        style: { flex: "1 1 auto", padding: "10px 12px", borderRadius: 10, border: "none", background: "#2ed9c3", color: "#00171f", fontWeight: 900, fontSize: 13, cursor: bulkBusy ? "wait" : "pointer" }
+      }, "🚀 一鍵開放下個月"),
+      /*#__PURE__*/React.createElement("button", {
+        onClick: () => bulkCloseMonth("next"), disabled: bulkBusy,
+        style: { padding: "10px 12px", borderRadius: 10, border: "1px solid #e94560", background: "none", color: "#e94560", fontWeight: 700, fontSize: 13, cursor: bulkBusy ? "wait" : "pointer" }
+      }, "關閉下個月")
+    ),
+    loading ? /*#__PURE__*/React.createElement("div", { style: { textAlign: "center", padding: 30, color: "var(--text-dim)" } }, "載入中…") :
+    /*#__PURE__*/React.createElement("div", null,
+      /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, marginBottom: 4 } },
+        wk.map(w => /*#__PURE__*/React.createElement("div", { key: w, style: { textAlign: "center", fontSize: 11, color: "var(--text-dim)", padding: "4px 0" } }, w))
+      ),
+      weeks.map((week, wi) => /*#__PURE__*/React.createElement("div", { key: wi, style: { display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, marginBottom: 4 } },
+        week.map((d, di) => {
+          if (!d) return /*#__PURE__*/React.createElement("div", { key: di });
+          const dateStr = fmtD(new Date(ym.y, ym.m, d));
+          const r = rows[dateStr];
+          const isPast = dateStr < todayStr;
+          const isSun = isSundayStr(dateStr);
+          const isOpen = !!(r && r.is_open);
+          const isPartial = isOpen && Array.isArray(r.open_slots) && r.open_slots.length > 0;
+          const bg = isSun ? "var(--bg2)" : isPast ? "var(--bg2)" : isOpen ? (isPartial ? "rgba(245,166,35,0.28)" : "rgba(46,217,195,0.25)") : "var(--bg-card)";
+          const border = isSun ? "1px dashed var(--border)" : isPast ? "1px solid var(--border)" : isOpen ? (isPartial ? "1.5px solid #f5a623" : "1.5px solid #2ed9c3") : "1px solid var(--border)";
+          return /*#__PURE__*/React.createElement("div", {
+            key: di,
+            onClick: () => openEditor(dateStr),
+            style: {
+              aspectRatio: "1", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+              borderRadius: 8, background: bg, border, cursor: (isPast || isSun) ? "default" : "pointer",
+              opacity: (isPast || isSun) ? 0.4 : 1, fontSize: 13, fontWeight: 700, color: "var(--text-main)"
+            }
+          }, d, isSun && !isPast && /*#__PURE__*/React.createElement("span", { style: { fontSize: 7, color: "var(--text-dim)" } }, "僅內部"));
+        })
+      ))
+    ),
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 12, marginTop: 14, fontSize: 11, color: "var(--text-dim)", flexWrap: "wrap" } },
+      /*#__PURE__*/React.createElement("span", null, "🟢 整天開放"),
+      /*#__PURE__*/React.createElement("span", null, "🟠 部分時段開放"),
+      /*#__PURE__*/React.createElement("span", null, "⚪ 未開放")
+    ),
+    editDate && /*#__PURE__*/React.createElement("div", {
+      style: { position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 999, display: "flex", alignItems: "flex-end", justifyContent: "center" },
+      onClick: () => setEditDate(null)
+    }, /*#__PURE__*/React.createElement("div", {
+      style: { background: "var(--bg-header)", borderRadius: "20px 20px 0 0", padding: "20px 18px 32px", width: "100%", maxWidth: 480, maxHeight: "80vh", overflowY: "auto" },
+      onClick: e => e.stopPropagation()
+    },
+      /*#__PURE__*/React.createElement("div", { style: { fontWeight: 900, fontSize: 16, marginBottom: 14 } }, `${editDate}　${targetName(targetId)}`),
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 14 } },
+        /*#__PURE__*/React.createElement("button", {
+          onClick: () => saveDay(true, new Set(BUSINESS_HOUR_SLOTS)), disabled: savingDay,
+          style: { flex: 1, padding: 12, borderRadius: 10, border: "none", background: "#2ed9c3", color: "#00171f", fontWeight: 900, fontSize: 14, cursor: "pointer" }
+        }, "🟢 整天開放"),
+        /*#__PURE__*/React.createElement("button", {
+          onClick: () => setEditSlots(editSlots === null ? new Set() : editSlots), disabled: savingDay,
+          style: { flex: 1, padding: 12, borderRadius: 10, border: "1.5px solid #f5a623", background: editSlots !== null ? "#f5a62320" : "none", color: "#f5a623", fontWeight: 900, fontSize: 14, cursor: "pointer" }
+        }, "🟠 只開放部分時段")
+      ),
+      editSlots !== null && /*#__PURE__*/React.createElement("div", null,
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: "var(--text-dim)", marginBottom: 8 } }, "點選要開放的時段（可多選）："),
+        /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6, marginBottom: 16 } },
+          BUSINESS_HOUR_SLOTS.map(t => {
+            const on = editSlots.has(t);
+            return /*#__PURE__*/React.createElement("button", {
+              key: t,
+              onClick: () => setEditSlots(prev => { const n = new Set(prev); n.has(t) ? n.delete(t) : n.add(t); return n; }),
+              style: {
+                padding: "8px 4px", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 700,
+                border: on ? "1.5px solid #f5a623" : "1px solid var(--border)",
+                background: on ? "#f5a62325" : "var(--bg-card)",
+                color: on ? "#f5a623" : "var(--text-main)"
+              }
+            }, t);
+          })
+        ),
+        /*#__PURE__*/React.createElement("button", {
+          onClick: () => saveDay(true, editSlots), disabled: savingDay || editSlots.size === 0,
+          style: { width: "100%", padding: 13, borderRadius: 10, border: "none", background: editSlots.size === 0 ? "var(--border)" : "#f5a623", color: "#1a1200", fontWeight: 900, fontSize: 14, cursor: editSlots.size === 0 ? "default" : "pointer", marginBottom: 10 }
+        }, `儲存（已選 ${editSlots.size} 個時段）`)
+      ),
+      /*#__PURE__*/React.createElement("button", {
+        onClick: clearDay, disabled: savingDay,
+        style: { width: "100%", padding: 12, borderRadius: 10, border: "1px solid #e94560", background: "none", color: "#e94560", fontWeight: 700, fontSize: 13, cursor: "pointer", marginBottom: 8 }
+      }, "⚪ 設為不開放"),
+      /*#__PURE__*/React.createElement("button", {
+        onClick: () => setEditDate(null),
+        style: { width: "100%", padding: 12, borderRadius: 10, border: "1.5px solid var(--border)", background: "none", color: "var(--text-dim)", fontSize: 14, cursor: "pointer" }
+      }, "取消")
+    ))
+  );
+}
 function App() {
   const today = getTaipeiNow();
   const isMobile = window.innerWidth <= 768;
@@ -2508,6 +2935,7 @@ function MainApp({
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchMatchIdx, setSearchMatchIdx] = useState(0);
+  const [findingSlot, setFindingSlot] = useState(false);
   const searchInputRef = useRef(null);
 
   // 註冊彈窗到全域 stack — 左滑時優先關彈窗
@@ -2992,16 +3420,10 @@ function MainApp({
         });
       }
       if (_phone) {
-        const _todayStr = getTaipeiDateStr();
-        await sb.from("customers").upsert({
-          phone: _phone,
-          name: _name,
-          first_visit_date: _todayStr,
-          last_visit_date: _todayStr,
-          total_visits: 1
-        }, {
-          onConflict: "phone",
-          ignoreDuplicates: false
+        await sb.rpc("upsert_customer_visit", {
+          p_phone: _phone,
+          p_name: _name,
+          p_visit_date: getTaipeiDateStr()
         });
       }
       msg(`✅ 成功建立 ${_inserted.length} 筆${_skipDates.size > 0 ? `（跳過 ${_skipDates.size} 筆衝突）` : ""}`);
@@ -3028,6 +3450,15 @@ function MainApp({
       if (!window.confirm(`⚠️ 此客戶 (${name}) 已累計放鳥 ${noShowCount} 次！確定要接受預約嗎？`)) {
         setSaving(false);
         return;
+      }
+    }
+    {
+      const { data: _clo } = await sb.from("store_closures").select("reason").lte("start_date", dialog.dateStr).gte("end_date", dialog.dateStr).limit(1);
+      if (_clo && _clo.length) {
+        if (!window.confirm(`⚠️ ${dialog.dateStr} 是店休期間${_clo[0].reason ? "（" + _clo[0].reason + "）" : ""}，確定要建立這筆預約嗎？`)) {
+          setSaving(false);
+          return;
+        }
       }
     }
     const conflict = await checkConflict(dialog.masterId, dialog.dateStr, dialog.time);
@@ -3145,21 +3576,11 @@ function MainApp({
         });
       }
       if (phone) {
-        const todayStr = getTaipeiDateStr();
-        await sb.from("customers").upsert({
-          phone,
-          name,
-          first_visit_date: todayStr,
-          last_visit_date: todayStr,
-          total_visits: 1
-        }, {
-          onConflict: "phone",
-          ignoreDuplicates: false
+        await sb.rpc("upsert_customer_visit", {
+          p_phone: phone,
+          p_name: name,
+          p_visit_date: getTaipeiDateStr()
         });
-        await sb.from("customers").update({
-          last_visit_date: todayStr,
-          name
-        }).eq("phone", phone).lt("last_visit_date", todayStr);
       }
       msg(rows.length > 1 ? "已成功建立多筆拆單預約！" : "預約成功！");
       loadBk();
@@ -3642,6 +4063,73 @@ function MainApp({
     }, 600);
   };
 
+  // ⚡ 最近空檔：往後最多找 60 天，找出目前選定師傅最早的空格，跳過去（切到週檢視，方便直接看時段）
+  const jumpToDate = (dateStr, highlightTime) => {
+    const [y, m, d] = dateStr.split("-").map(Number);
+    setYear(y);
+    setMonth(m - 1);
+    setView("week");
+    setTimeout(() => {
+      const wks = showSun === "1" ? getWeeksSun(y, m - 1) : getWeeksMon(y, m - 1, false);
+      const idx = wks.findIndex(wk => wk.includes(d));
+      if (idx >= 0) setWeekIdx(idx);
+      setTimeout(() => {
+        if (!highlightTime) return;
+        const rows = scrollContainerRef.current?.querySelectorAll("tr");
+        if (rows) for (const row of rows) {
+          if (row.textContent.trim().startsWith(highlightTime)) {
+            row.scrollIntoView({ behavior: "smooth", block: "center" });
+            row.style.outline = "2px solid #2ed9c3";
+            setTimeout(() => { row.style.outline = ""; }, 2500);
+            break;
+          }
+        }
+      }, 300);
+    }, 500);
+  };
+
+  const findNearestOpenSlot = async () => {
+    if (!master) { msg("請先選擇師傅", true); return; }
+    setFindingSlot(true);
+    try {
+      const now = getTaipeiNow();
+      const todayStr = getTaipeiDateStr(now);
+      const endD = new Date(now); endD.setDate(endD.getDate() + 60);
+      const endStr = getTaipeiDateStr(endD);
+      const { data, error } = await sb.from("bookings").select("date,start_time")
+        .eq("master_id", master.id).gte("date", todayStr).lte("date", endStr)
+        .neq("status", "cancelled").neq("status", "no_show").neq("color_tag", "vacation");
+      if (error) { msg("查詢失敗，請再試", true); setFindingSlot(false); return; }
+      const taken = new Set((data || []).map(b => `${b.date}_${(b.start_time || "").slice(0, 5)}`));
+      const restSet = restOf(master.id);
+      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+      let found = null;
+      for (let off = 0; off <= 60 && !found; off++) {
+        const d = new Date(now); d.setDate(d.getDate() + off);
+        const dateStr = getTaipeiDateStr(d);
+        for (const t of TIMES) {
+          if (off === 0) {
+            const [hh, mm] = t.split(":").map(Number);
+            if (hh * 60 + mm <= nowMinutes) continue;
+          }
+          if (restSet.has(t)) continue;
+          if (taken.has(`${dateStr}_${t}`)) continue;
+          found = { date: dateStr, time: t };
+          break;
+        }
+      }
+      setFindingSlot(false);
+      if (!found) { msg("接下來 60 天內都排滿了，請手動確認", true); return; }
+      const wk = ["日", "一", "二", "三", "四", "五", "六"];
+      const dObj = new Date(found.date + "T00:00:00");
+      msg(`✓ 最近空檔：${found.date}（週${wk[dObj.getDay()]}）${found.time}`);
+      jumpToDate(found.date, found.time);
+    } catch (e) {
+      setFindingSlot(false);
+      msg("查詢失敗，請再試", true);
+    }
+  };
+
   // ── 執行上一步還原 ──
   const executeUndo = async () => {
     console.log("[executeUndo] called, stack:", undoStack);
@@ -3884,8 +4372,8 @@ function MainApp({
         verticalAlign: "middle",
         userSelect: "none",
         touchAction: dragMode ? "none" : isDragActive ? "none" : "auto",
-        outline: dragMode && isVac && removeVacCells.has(cellKey) ? "2px dashed #f5a623" : "none",
-        outlineOffset: dragMode && isVac && removeVacCells.has(cellKey) ? -2 : 0
+        outline: dragMode && isVac && removeVacCells.has(cellKey) ? "2px dashed #f5a623" : b && b.status === "awaiting_customer" ? "2px solid #f5a623" : "none",
+        outlineOffset: dragMode && isVac && removeVacCells.has(cellKey) || b && b.status === "awaiting_customer" ? -2 : 0
       }
     }, b && b.guest_count > 0 && !isVac && /*#__PURE__*/React.createElement("div", {
       className: "draggable-card",
@@ -3951,7 +4439,14 @@ function MainApp({
         marginRight: 2,
         color: "#e94560"
       }
-    }, "❌"), b.color_tag === "new_customer" && /*#__PURE__*/React.createElement("span", {
+    }, "❌"), b.status === "awaiting_customer" && /*#__PURE__*/React.createElement("span", {
+      title: "待客人確認",
+      style: {
+        fontSize: FS.s - 1,
+        marginRight: 2,
+        color: "#f5a623"
+      }
+    }, "⏳"), b.color_tag === "new_customer" && /*#__PURE__*/React.createElement("span", {
       style: {
         fontSize: FS.s - 1,
         marginRight: 2
@@ -4085,7 +4580,43 @@ function MainApp({
       padding: "3px 10px",
       border: "1px solid var(--border2)"
     }
-  }, /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => window.open("./quick-booking.html", "_blank"),
+    title: "快速登記預約",
+    "aria-label": "快速登記預約",
+    style: {
+      background: "#2ed9c320",
+      border: "1px solid #2ed9c3",
+      color: "#2ed9c3",
+      cursor: "pointer",
+      fontSize: 15,
+      lineHeight: 1,
+      padding: "5px 9px",
+      borderRadius: 6,
+      fontWeight: 700,
+      flexShrink: 0,
+      whiteSpace: "nowrap",
+      marginRight: 4
+    }
+  }, "⚡"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => window.open(`./bind-line.html?masterId=${authMaster.id}&masterName=${encodeURIComponent(authMaster.name || "")}`, "_blank"),
+    title: "綁定 LINE 通知",
+    "aria-label": "綁定 LINE 通知",
+    style: {
+      background: "#06c75520",
+      border: "1px solid #06c755",
+      color: "#06c755",
+      cursor: "pointer",
+      fontSize: 15,
+      lineHeight: 1,
+      padding: "5px 9px",
+      borderRadius: 6,
+      fontWeight: 700,
+      flexShrink: 0,
+      whiteSpace: "nowrap",
+      marginRight: 4
+    }
+  }, "🔗"), /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 12,
       color: "var(--text-muted)",
@@ -4167,7 +4698,7 @@ function MainApp({
       overflowX: "auto",
       flexShrink: 0
     }
-  }, [["schedule", "📅 排班"], ["overview", "🗓 全覽"], ...(canViewCRM ? [["crm", "👥 客戶"]] : []), ["analytics", "📊 數據"], ["pending", `📋 待確認${pendingCount > 0 ? ` (${pendingCount})` : ""}`], ...(isAdmin ? [["settings", "⚙️ 設定"]] : [])].map(([k, l]) => /*#__PURE__*/React.createElement("button", {
+  }, [["schedule", "📅 排班"], ["overview", "🗓 全覽"], ...(canViewCRM ? [["crm", "👥 客戶"]] : []), ["analytics", "📊 數據"], ["pending", `📋 待確認${pendingCount > 0 ? ` (${pendingCount})` : ""}`], ["availability", "🟢 開放"], ...(isAdmin ? [["settings", "⚙️ 設定"]] : [])].map(([k, l]) => /*#__PURE__*/React.createElement("button", {
     key: k,
     className: `tab-btn${tab === k ? " active" : ""}`,
     onClick: () => {
@@ -4266,7 +4797,16 @@ function MainApp({
       color: showSearch ? "#74b9ff" : "var(--nav-color)",
       borderColor: showSearch ? "#74b9ff" : "var(--border2)"
     }
-  }, "🔍 搜尋"), undoStack.length > 0 ? /*#__PURE__*/React.createElement("button", {
+  }, "🔍 搜尋"), /*#__PURE__*/React.createElement("button", {
+    onClick: findNearestOpenSlot,
+    disabled: findingSlot,
+    className: "nb",
+    style: {
+      color: "#2ed9c3",
+      borderColor: "#2ed9c3",
+      fontWeight: 700
+    }
+  }, findingSlot ? "查詢中..." : "⚡ 最近空檔"), undoStack.length > 0 ? /*#__PURE__*/React.createElement("button", {
     onClick: executeUndo,
     className: "nb",
     title: `還原：${undoStack[0]?.desc || ""}`,
@@ -5105,7 +5645,8 @@ function MainApp({
   }), tab === "analytics" && /*#__PURE__*/React.createElement(AnalyticsModule, {
     masters: masters,
     FS: FS,
-    currentMaster: master
+    currentMaster: master,
+    isAdmin: isAdmin
   }), tab === "settings" && isAdmin && /*#__PURE__*/React.createElement(SettingsModule, {
     masters: masters,
     setMasters: setMasters,
@@ -5120,6 +5661,12 @@ function MainApp({
       loadBk();
       loadPendingCount();
     }
+  }), tab === "availability" && /*#__PURE__*/React.createElement(AvailabilityModule, {
+    masters: masters,
+    currentMaster: loginMaster || master,
+    isAdmin: isAdmin,
+    canSeeAll: isAdmin || (loginMaster || master)?.username === 'qi' || (loginMaster || master)?.name === '許老師',
+    msg: msg
   }), cellHistory && /*#__PURE__*/React.createElement("div", {
     "data-modal-backdrop": "true",
     style: {
@@ -6514,19 +7061,13 @@ function MainApp({
       if (!error) {
         await saveEditLog(editForm.id, (loginMaster || master)?.name || "系統", `${editForm.customer_name} ${finalColorTag}${finalColorTag !== editForm.color_tag ? "（卡位→自動分類）" : ""}`);
         if (editForm.customer_phone) {
-          const todayStr = getTaipeiDateStr();
-          await sb.from("customers").upsert({
-            phone: editForm.customer_phone,
-            name: editForm.customer_name,
-            last_visit_date: todayStr,
-            total_visits: 1
-          }, {
-            onConflict: "phone",
-            ignoreDuplicates: false
+          // 卡位補資料/改名：只是把既有預約的客人資訊補齊或訂正，
+          // 不算多一次到訪，所以不累加 total_visits（全新客人仍會建立成 1 次）
+          await sb.rpc("touch_customer_no_increment", {
+            p_phone: editForm.customer_phone,
+            p_name: editForm.customer_name,
+            p_visit_date: getTaipeiDateStr()
           });
-          await sb.from("customers").update({
-            name: editForm.customer_name
-          }).eq("phone", editForm.customer_phone);
         }
         msg(finalColorTag !== editForm.color_tag ? finalColorTag === "new_customer" ? "已更新（卡位→新客）" : "已更新（卡位→舊客）" : "已更新");
         setEditForm(null);
@@ -7455,16 +7996,10 @@ function OverviewMonth({
         });
       }
       if (_phone) {
-        const _todayStr = getTaipeiDateStr();
-        await sb.from("customers").upsert({
-          phone: _phone,
-          name: _name,
-          first_visit_date: _todayStr,
-          last_visit_date: _todayStr,
-          total_visits: 1
-        }, {
-          onConflict: "phone",
-          ignoreDuplicates: false
+        await sb.rpc("upsert_customer_visit", {
+          p_phone: _phone,
+          p_name: _name,
+          p_visit_date: getTaipeiDateStr()
         });
       }
       msg(`✅ 成功建立 ${_inserted.length} 筆${_skipDates.size > 0 ? `（跳過 ${_skipDates.size} 筆衝突）` : ""}`);
@@ -7491,6 +8026,15 @@ function OverviewMonth({
       if (!window.confirm(`⚠️ 此客戶 (${name}) 已累計放鳥 ${noShowCount} 次！確定要接受預約嗎？`)) {
         setSaving(false);
         return;
+      }
+    }
+    {
+      const { data: _clo } = await sb.from("store_closures").select("reason").lte("start_date", dialog.dateStr).gte("end_date", dialog.dateStr).limit(1);
+      if (_clo && _clo.length) {
+        if (!window.confirm(`⚠️ ${dialog.dateStr} 是店休期間${_clo[0].reason ? "（" + _clo[0].reason + "）" : ""}，確定要建立這筆預約嗎？`)) {
+          setSaving(false);
+          return;
+        }
       }
     }
     const conflict = await checkConflict(dialog.masterId, dialog.dateStr, dialog.time);
@@ -7607,21 +8151,11 @@ function OverviewMonth({
         });
       }
       if (phone) {
-        const todayStr = getTaipeiDateStr();
-        await sb.from("customers").upsert({
-          phone,
-          name,
-          first_visit_date: todayStr,
-          last_visit_date: todayStr,
-          total_visits: 1
-        }, {
-          onConflict: "phone",
-          ignoreDuplicates: false
+        await sb.rpc("upsert_customer_visit", {
+          p_phone: phone,
+          p_name: name,
+          p_visit_date: getTaipeiDateStr()
         });
-        await sb.from("customers").update({
-          last_visit_date: todayStr,
-          name
-        }).eq("phone", phone).lt("last_visit_date", todayStr);
       }
       msg(rows.length > 1 ? "已成功建立多筆拆單預約！" : "預約成功！");
       loadBk();
@@ -8902,7 +9436,9 @@ function OverviewMonth({
           height: orh,
           verticalAlign: "middle",
           overflow: "hidden",
-          background: b ? undefined : emptyBg,
+          background: b && b.status === "awaiting_customer" ? "rgba(245,166,35,0.22)" : b ? undefined : emptyBg,
+          outline: b && b.status === "awaiting_customer" ? "2px solid #f5a623" : undefined,
+          outlineOffset: b && b.status === "awaiting_customer" ? -2 : 0,
           cursor: canAdd || b ? "pointer" : "default",
           touchAction: ovIsDragActive ? "none" : "auto"
         }
@@ -8961,7 +9497,14 @@ function OverviewMonth({
           marginRight: 1,
           color: "#e94560"
         }
-      }, "❌"), b.color_tag === "new_customer" && /*#__PURE__*/React.createElement("span", {
+      }, "❌"), b.status === "awaiting_customer" && /*#__PURE__*/React.createElement("span", {
+        title: "待客人確認",
+        style: {
+          fontSize: FS.s - 2,
+          marginRight: 1,
+          color: "#f5a623"
+        }
+      }, "⏳"), b.color_tag === "new_customer" && /*#__PURE__*/React.createElement("span", {
         style: {
           fontSize: FS.s - 2,
           marginRight: 1,
@@ -10468,19 +11011,13 @@ function OverviewMonth({
       if (!error) {
         await saveEditLog(editForm.id, editForm._editorName || loginMaster?.name || "系統", `${editForm.customer_name} ${finalColorTag}${finalColorTag !== editForm.color_tag ? "（卡位→自動分類）" : ""}`);
         if (editForm.customer_phone) {
-          const todayStr = getTaipeiDateStr();
-          await sb.from("customers").upsert({
-            phone: editForm.customer_phone,
-            name: editForm.customer_name,
-            last_visit_date: todayStr,
-            total_visits: 1
-          }, {
-            onConflict: "phone",
-            ignoreDuplicates: false
+          // 卡位補資料/改名：只是把既有預約的客人資訊補齊或訂正，
+          // 不算多一次到訪，所以不累加 total_visits（全新客人仍會建立成 1 次）
+          await sb.rpc("touch_customer_no_increment", {
+            p_phone: editForm.customer_phone,
+            p_name: editForm.customer_name,
+            p_visit_date: getTaipeiDateStr()
           });
-          await sb.from("customers").update({
-            name: editForm.customer_name
-          }).eq("phone", editForm.customer_phone);
         }
         msg(finalColorTag !== editForm.color_tag ? finalColorTag === "new_customer" ? "已更新（卡位→新客）" : "已更新（卡位→舊客）" : "已更新");
         setEditForm(null);
@@ -11712,14 +12249,12 @@ function CRMModule({
           }).in("id", chunk);
         }
       }
-      // customers 主檔也用 finalName
+      // customers 主檔也用 finalName（合併/改名，不算新到訪）
       try {
-        await sb.from("customers").upsert({
-          phone: targetCard.phone,
-          name: finalName
-        }, {
-          onConflict: "phone",
-          ignoreDuplicates: false
+        await sb.rpc("touch_customer_no_increment", {
+          p_phone: targetCard.phone,
+          p_name: finalName,
+          p_visit_date: getTaipeiDateStr()
         });
       } catch {}
       // 本地更新 bks
@@ -11861,15 +12396,13 @@ function CRMModule({
       }).in("id", chunk);
       if (error) failed += chunk.length;else updated += chunk.length;
     }
-    // 同步更新 customers 表
+    // 同步更新 customers 表（訂正電話，不算新到訪）
     if (newPhone) {
       try {
-        await sb.from("customers").upsert({
-          phone: newPhone,
-          name: sel.name
-        }, {
-          onConflict: "phone",
-          ignoreDuplicates: false
+        await sb.rpc("touch_customer_no_increment", {
+          p_phone: newPhone,
+          p_name: sel.name,
+          p_visit_date: getTaipeiDateStr()
         });
       } catch {}
     }
@@ -13430,10 +13963,84 @@ function CRMModule({
 // ═══════════════════════════════════════════
 // ANALYTICS MODULE
 // ═══════════════════════════════════════════
+// ═══════════════════════════════════════════
+// 📊 提前統計（週報／月報，可選 AI 分析）— 只有 admin 看得到
+// ═══════════════════════════════════════════
+function QuickReportPanel({ isAdmin, currentMaster }) {
+  const [busy, setBusy] = React.useState(null); // 'week' | 'month' | null
+  const [lastMsg, setLastMsg] = React.useState(null);
+  const [showResult, setShowResult] = React.useState(false);
+
+  if (!isAdmin) return null;
+
+  const run = async (kind) => {
+    const wantAI = window.confirm("是否要加入本期 AI 分析？（哲瑋、泓文）\n\n確定＝連同數字報表一起產生 AI 分析\n取消＝只送出數字報表，不跑 AI 分析");
+    setBusy(kind);
+    try {
+      const rpcName = kind === "week" ? "send_weekly_settlement_report" : "send_monthly_settlement_report";
+      const { data: reportText, error } = await sb.rpc(rpcName);
+      if (error) { alert("報表產生失敗：" + error.message); setBusy(null); return; }
+
+      let aiText = null;
+      if (wantAI) {
+        try {
+          const today = getTaipeiNow();
+          const startDate = kind === "week"
+            ? (() => { const d = new Date(today); d.setDate(d.getDate() - d.getDay()); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })()
+            : `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
+          const endDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+          const resp = await fetch("https://ikzyzkhuireqztbhrtna.supabase.co/functions/v1/generate-monthly-analysis", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ startDate, endDate })
+          });
+          const result = await resp.json();
+          if (result.success) aiText = result.message;
+        } catch (e) { /* AI 分析失敗不影響數字報表已經送出 */ }
+      }
+
+      setLastMsg({ report: reportText, ai: aiText });
+      setShowResult(true);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return /*#__PURE__*/React.createElement("div", { style: { padding: "12px 12px 0", borderBottom: "1px solid var(--border)", marginBottom: 12 } },
+    /*#__PURE__*/React.createElement("div", { style: { fontWeight: 900, fontSize: 14, marginBottom: 8 } }, "📊 提前統計"),
+    /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: "var(--text-dim)", marginBottom: 10 } }, "不用等自動排程，現在就送出數字報表（會推播給管理員）；可選擇是否同時跑 AI 分析。"),
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 12 } },
+      /*#__PURE__*/React.createElement("button", {
+        onClick: () => run("week"), disabled: !!busy,
+        style: { flex: 1, padding: 11, borderRadius: 10, border: "1px solid #74b9ff", background: "none", color: "#74b9ff", fontWeight: 700, fontSize: 13, cursor: busy ? "wait" : "pointer" }
+      }, busy === "week" ? "統計中..." : "本週報表"),
+      /*#__PURE__*/React.createElement("button", {
+        onClick: () => run("month"), disabled: !!busy,
+        style: { flex: 1, padding: 11, borderRadius: 10, border: "1px solid #a29bfe", background: "none", color: "#a29bfe", fontWeight: 700, fontSize: 13, cursor: busy ? "wait" : "pointer" }
+      }, busy === "month" ? "統計中..." : "本月報表（至今）")
+    ),
+    showResult && lastMsg && /*#__PURE__*/React.createElement("div", {
+      style: { position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 999, display: "flex", alignItems: "flex-end", justifyContent: "center" },
+      onClick: () => setShowResult(false)
+    }, /*#__PURE__*/React.createElement("div", {
+      style: { background: "var(--bg-header)", borderRadius: "20px 20px 0 0", padding: "20px 18px 32px", width: "100%", maxWidth: 480, maxHeight: "80vh", overflowY: "auto" },
+      onClick: e => e.stopPropagation()
+    },
+      /*#__PURE__*/React.createElement("div", { style: { fontWeight: 900, fontSize: 15, marginBottom: 10 } }, "✓ 已推播給管理員"),
+      /*#__PURE__*/React.createElement("pre", { style: { whiteSpace: "pre-wrap", fontFamily: "inherit", fontSize: 13, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, padding: 12, marginBottom: lastMsg.ai ? 10 : 16 } }, lastMsg.report),
+      lastMsg.ai && /*#__PURE__*/React.createElement("pre", { style: { whiteSpace: "pre-wrap", fontFamily: "inherit", fontSize: 13, background: "rgba(162,155,254,0.1)", border: "1px solid #a29bfe", borderRadius: 10, padding: 12, marginBottom: 16 } }, lastMsg.ai),
+      /*#__PURE__*/React.createElement("button", {
+        onClick: () => setShowResult(false),
+        style: { width: "100%", padding: 12, borderRadius: 10, border: "1.5px solid var(--border)", background: "none", color: "var(--text-dim)", fontSize: 14, cursor: "pointer" }
+      }, "關閉")
+    ))
+  );
+}
 function AnalyticsModule({
   masters,
   FS,
-  currentMaster
+  currentMaster,
+  isAdmin
 }) {
   const today = getTaipeiNow();
   // 數據模組用獨立的師傅清單（不受 is_active 過濾）
@@ -13577,7 +14184,7 @@ function AnalyticsModule({
       flex: 1,
       overflow: "auto"
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(QuickReportPanel, { isAdmin, currentMaster }), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       background: "var(--bg-header)",
