@@ -1216,15 +1216,17 @@ function PendingBookings({
   const [confLoadingSlots, setConfLoadingSlots] = React.useState(false);
 
   // 選定日期後，查該師傅該天已被占用的時段（含客人姓名，方便判斷是不是要併單/合診）
-  async function loadTakenSlots(dateStr) {
-    if (!confirmDialog || !dateStr) {
+  // midOverride：剛開啟彈窗的當下呼叫時，confirmDialog 這個 state 因為 React
+  // 非同步更新的關係還沒生效（closure 讀到的是舊值），直接把 master_id 當參數傳進來，
+  // 不要依賴 confirmDialog，才不會讀到 null 而白跑一次。
+  async function loadTakenSlots(dateStr, midOverride) {
+    const mid = midOverride || (confirmDialog && confirmDialog[0] && confirmDialog[0].master_id);
+    if (!mid || !dateStr) {
       setConfTakenSlots(new Map());
       return;
     }
     setConfLoadingSlots(true);
     try {
-      // 用該組第一筆的 master_id（同組同師傅；split 例外但仍以錨點師傅為主參考）
-      const mid = confirmDialog[0].master_id;
       const {
         data
       } = await sb.from("bookings").select("start_time,customer_name").eq("master_id", mid).eq("date", dateStr).neq("status", "cancelled").neq("status", "no_show");
@@ -1441,7 +1443,7 @@ function PendingBookings({
     setConfirmDialog(null);
     setConfDate('');
     setConfTime('');
-    setConfTakenSlots(new Set());
+    setConfTakenSlots(new Map());
     setSaving(false);
     if (onConfirmed) onConfirmed();
     loadCounts();
@@ -1817,7 +1819,8 @@ function PendingBookings({
           setConfirmDialog(group);
           setConfDate(b.date || '');
           setConfTime(b.start_time ? b.start_time.slice(0, 5) : '');
-          setConfTakenSlots(new Set());
+          setConfTakenSlots(new Map());
+          if (b.date) loadTakenSlots(b.date, b.master_id);
         },
         style: {
           flex: 2,
