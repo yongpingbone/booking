@@ -450,7 +450,7 @@ function isRestSlot(mid, dateStr, t){
 async function loadTaken(dateStr){
   if(takenCache[dateStr]) return;
   try{
-    const { data } = await sb.from('bookings').select('master_id,start_time').eq('date', dateStr).neq('status','cancelled').neq('status','no_show');
+    const { data } = await sb.from('bookings').select('master_id,start_time,customer_name').eq('date', dateStr).neq('status','cancelled').neq('status','no_show');
     takenCache[dateStr] = data || [];
   }catch(e){ takenCache[dateStr] = []; }
 }
@@ -485,11 +485,11 @@ function renderTimeSlots(){
   }
 
   TIMES.forEach(t=>{
-    const isTaken = taken.some(b=> b.master_id===selMasterId && b.start_time?.slice(0,5)===t);
+    const takenBk = taken.find(b=> b.master_id===selMasterId && b.start_time?.slice(0,5)===t);
     const isRest = isRestSlot(selMasterId, selDate, t);
     const btn = document.createElement('button');
     btn.className = 'ts';
-    if(isTaken){ btn.classList.add('full'); btn.textContent='已滿'; }
+    if(takenBk){ btn.classList.add('full'); btn.textContent='已滿（'+(takenBk.customer_name||'')+'）'; }
     else if(isRest){ btn.classList.add('full'); btn.textContent='休息'; }
     else{
       btn.textContent = t;
