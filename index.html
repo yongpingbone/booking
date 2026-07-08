@@ -1212,13 +1212,13 @@ function PendingBookings({
   const [confirmDialog, setConfirmDialog] = React.useState(null);
   const [confDate, setConfDate] = React.useState('');
   const [confTime, setConfTime] = React.useState('');
-  const [confTakenSlots, setConfTakenSlots] = React.useState(new Set()); // 該師傅該天已被占用的時段（置灰用）
+  const [confTakenSlots, setConfTakenSlots] = React.useState(new Map()); // 該師傅該天已被占用的時段 -> 客人姓名
   const [confLoadingSlots, setConfLoadingSlots] = React.useState(false);
 
-  // 選定日期後，查該師傅該天已被占用的時段
+  // 選定日期後，查該師傅該天已被占用的時段（含客人姓名，方便判斷是不是要併單/合診）
   async function loadTakenSlots(dateStr) {
     if (!confirmDialog || !dateStr) {
-      setConfTakenSlots(new Set());
+      setConfTakenSlots(new Map());
       return;
     }
     setConfLoadingSlots(true);
@@ -1227,11 +1227,15 @@ function PendingBookings({
       const mid = confirmDialog[0].master_id;
       const {
         data
-      } = await sb.from("bookings").select("start_time").eq("master_id", mid).eq("date", dateStr).neq("status", "cancelled").neq("status", "no_show");
-      const taken = new Set((data || []).map(r => r.start_time?.slice(0, 5)).filter(Boolean));
+      } = await sb.from("bookings").select("start_time,customer_name").eq("master_id", mid).eq("date", dateStr).neq("status", "cancelled").neq("status", "no_show");
+      const taken = new Map();
+      (data || []).forEach(r => {
+        const t = r.start_time?.slice(0, 5);
+        if (t) taken.set(t, r.customer_name || "未填姓名");
+      });
       setConfTakenSlots(taken);
     } catch (e) {
-      setConfTakenSlots(new Set());
+      setConfTakenSlots(new Map());
     }
     setConfLoadingSlots(false);
   }
@@ -2129,6 +2133,7 @@ function PendingBookings({
     value: ""
   }, "選擇時段"), [...new Set(TIMES)].sort().map(t => {
     const taken = confTakenSlots.has(t);
+    const takenName = confTakenSlots.get(t);
     return /*#__PURE__*/React.createElement("option", {
       key: t,
       value: t,
@@ -2136,14 +2141,14 @@ function PendingBookings({
         color: taken ? '#e94560' : '#f0f6fc',
         background: taken ? '#2a1620' : '#0d1117'
       }
-    }, t, taken ? '　⚠️ 已滿' : '');
+    }, t, taken ? `　⚠️ 已滿（${takenName}）` : '');
   })), confTime && confTakenSlots.has(confTime) && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 6,
       fontSize: 12,
       color: '#e94560'
     }
-  }, "⚠️ 此時段已有預約，確認時會再次提醒")), /*#__PURE__*/React.createElement("div", {
+  }, "⚠️ 此時段已有預約（" + (confTakenSlots.get(confTime) || '') + "），確認時會再次提醒")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: 10
