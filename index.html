@@ -2934,6 +2934,14 @@ function MainApp({
     } = await q;
     setPendingCount(count || 0);
   }
+  React.useEffect(() => {
+    // 一登入就先查一次，不用等師傅自己點進「待確認」分頁才知道有沒有新的；
+    // 之後只要 bookings 有任何異動（跟排班表共用同一個即時訂閱事件），
+    // 就重新算一次，紅點才會主動出現，不用手動觸發。
+    loadPendingCount();
+    window.addEventListener("yp:bookings_changed", loadPendingCount);
+    return () => window.removeEventListener("yp:bookings_changed", loadPendingCount);
+  }, [master]);
   const [crmKey, setCrmKey] = useState(0);
   const [ovMasters, setOvMasters] = useState([]);
   const [view, setView] = useState("month");
@@ -4645,25 +4653,7 @@ function MainApp({
       whiteSpace: "nowrap",
       marginRight: 4
     }
-  }, "⚡"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => window.open(`./bind-line.html?masterId=${authMaster.id}&masterName=${encodeURIComponent(authMaster.name || "")}`, "_blank"),
-    title: "綁定 LINE 通知",
-    "aria-label": "綁定 LINE 通知",
-    style: {
-      background: "#06c75520",
-      border: "1px solid #06c755",
-      color: "#06c755",
-      cursor: "pointer",
-      fontSize: 15,
-      lineHeight: 1,
-      padding: "5px 9px",
-      borderRadius: 6,
-      fontWeight: 700,
-      flexShrink: 0,
-      whiteSpace: "nowrap",
-      marginRight: 4
-    }
-  }, "🔗"), /*#__PURE__*/React.createElement("span", {
+  }, "⚡"), /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 12,
       color: "var(--text-muted)",
@@ -4745,15 +4735,33 @@ function MainApp({
       overflowX: "auto",
       flexShrink: 0
     }
-  }, [["schedule", "📅 排班"], ["overview", "🗓 全覽"], ...(canViewCRM ? [["crm", "👥 客戶"]] : []), ["analytics", "📊 數據"], ["pending", `📋 待確認${pendingCount > 0 ? ` (${pendingCount})` : ""}`], ["availability", "🟢 開放"], ...(isAdmin ? [["settings", "⚙️ 設定"]] : [])].map(([k, l]) => /*#__PURE__*/React.createElement("button", {
+  }, [["schedule", "📅 排班"], ["overview", "🗓 全覽"], ...(canViewCRM ? [["crm", "👥 客戶"]] : []), ["analytics", "📊 數據"], ["pending", "📋 待確認"], ["availability", "🟢 開放"], ...(isAdmin ? [["settings", "⚙️ 設定"]] : [])].map(([k, l]) => /*#__PURE__*/React.createElement("button", {
     key: k,
     className: `tab-btn${tab === k ? " active" : ""}`,
+    style: { position: "relative" },
     onClick: () => {
       goTab(k);
       if (k === "crm") setCrmKey(p => p + 1);
       if (k === "pending") loadPendingCount();
     }
-  }, l))), tab === "schedule" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, l, k === "pending" && pendingCount > 0 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: "absolute",
+      top: 2,
+      right: 2,
+      minWidth: 16,
+      height: 16,
+      padding: "0 3px",
+      borderRadius: 8,
+      background: "#e94560",
+      color: "#fff",
+      fontSize: 10,
+      fontWeight: 800,
+      lineHeight: "16px",
+      textAlign: "center",
+      boxShadow: "0 0 0 2px var(--bg-header)"
+    }
+  }, pendingCount > 99 ? "99+" : pendingCount)))), tab === "schedule" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       background: "var(--bg-header)",
