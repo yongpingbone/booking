@@ -1400,9 +1400,25 @@ function PendingBookings({
       }
     }
 
-    // 執行 update：改為「待客人確認」+ 2 小時到期，逐筆檢查 error，任一失敗即中止
-    const deadlineIso = new Date(Date.now() + CONFIRM_WINDOW_MS).toISOString();
+    // 執行 update：改為「待客人確認」，到期時間取「+2 小時」跟「預約時間前 30 分鐘」
+    // 兩者中較早的那個——避免師傅在預約快到的時候才按確認，卻讓客人的確認視窗
+    // 一路拖到預約時間之後才到期（同一組如果是連續多人，每個人時段不同，
+    // 所以到期時間要逐筆算，不能整組共用同一個）。
+    const CONFIRM_BUFFER_BEFORE_APPT_MS = 30 * 60 * 1000;
+    function computeDeadlineIso(apptDate, apptTime) {
+      const base = Date.now() + CONFIRM_WINDOW_MS;
+      if (!apptDate || !apptTime) return new Date(base).toISOString();
+      const apptMs = new Date(`${apptDate}T${apptTime}:00`).getTime();
+      if (isNaN(apptMs)) return new Date(base).toISOString();
+      const cap = apptMs - CONFIRM_BUFFER_BEFORE_APPT_MS;
+      return new Date(Math.min(base, cap)).toISOString();
+    }
+    let firstDeadlineIso = null;
     for (const p of plan) {
+      const apptDate = p.date || p.b.date;
+      const apptTime = p.time || (p.b.start_time ? p.b.start_time.slice(0, 5) : null);
+      const deadlineIso = computeDeadlineIso(apptDate, apptTime);
+      if (firstDeadlineIso === null) firstDeadlineIso = deadlineIso;
       const update = {
         status: 'awaiting_customer',
         confirm_deadline: deadlineIso,
@@ -1438,11 +1454,16 @@ function PendingBookings({
       } catch (e) {}
     }
     const copyText = `${group[0].customer_name}${group[0].customer_phone || ''}`;
-    // 推播「請確認」給客人（含 2 小時確認深連結）；整組共用主筆 id 的連結
+    // 推播「請確認」給客人（含確認深連結）；整組共用主筆 id 的連結，
+    // 文字裡的時間限制改成根據實際到期時間動態算，不要寫死 2 小時
+    // （師傅太接近預約時間才確認時，實際能給客人的時間會被縮短到 30 分鐘內）
     const _pd = plan[0] && plan[0].date || group[0].date;
     const _pt = plan[0] && plan[0].time || (group[0].start_time ? group[0].start_time.slice(0, 5) : '');
     const _mname = MASTER_IDS[group[0].master_id] || '師傅';
-    const _confirmMsg = `📅 預約時段確認\n師傅：${_mname}\n時間：${_pd} ${_pt}\n\n請於 2 小時內點下方連結完成確認，逾時時段將自動釋出：\n${LIFF_CONFIRM_BASE}${group[0].id}`;
+    const _deadlineMs = firstDeadlineIso ? new Date(firstDeadlineIso).getTime() - Date.now() : CONFIRM_WINDOW_MS;
+    const _deadlineMins = Math.max(1, Math.round(_deadlineMs / 60000));
+    const _deadlineLabel = _deadlineMins >= 60 ? `${Math.floor(_deadlineMins / 60)} 小時${_deadlineMins % 60 ? ' ' + (_deadlineMins % 60) + ' 分' : ''}` : `${_deadlineMins} 分鐘`;
+    const _confirmMsg = `📅 預約時段確認\n師傅：${_mname}\n時間：${_pd} ${_pt}\n\n請於 ${_deadlineLabel}內點下方連結完成確認，逾時時段將自動釋出：\n${LIFF_CONFIRM_BASE}${group[0].id}`;
     if (lineUid) pushLineToCustomer(lineUid, _confirmMsg);
     const idsInGroup = new Set(group.map(x => x.id));
     setItems(p => p.filter(x => !idsInGroup.has(x.id)));
