@@ -1328,8 +1328,14 @@ function PendingBookings({
     load();
     loadCounts();
   }, [subTab, historyDays]);
-  function openLineChat(phone) {
-    const info = lineNames[phone];
+  async function openLineChat(phone) {
+    let info = lineNames[phone];
+    if (!info?.uid) {
+      try {
+        const { data: fresh } = await sb.from('line_bindings').select('line_user_id').eq('phone', phone).maybeSingle();
+        if (fresh?.line_user_id) info = { uid: fresh.line_user_id };
+      } catch (e) {}
+    }
     if (!info?.uid) {
       alert('找不到此客人的 LINE 帳號');
       return;
