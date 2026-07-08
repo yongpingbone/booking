@@ -73,7 +73,7 @@ body.dark input[type="date"]::-webkit-calendar-picker-indicator {
 body.light input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(0) sepia(1) saturate(4) hue-rotate(295deg) brightness(0.85);
 }
-.scroll-container { flex:1; min-height:0; overflow:auto; width:100%; position:relative; -webkit-overflow-scrolling:touch; will-change:transform; touch-action:pan-x pan-y pinch-zoom; transform:translateZ(0); }
+.scroll-container { flex:1; min-height:0; overflow:auto; width:100%; position:relative; -webkit-overflow-scrolling:touch; will-change:transform; touch-action:pan-x pan-y pinch-zoom; transform:translateZ(0); scroll-snap-type:x proximity; }
 .cv-row { content-visibility: auto; contain-intrinsic-size: 0 28px; }
 .cv-cell { contain: layout style; }
 .draggable-card { cursor:grab; touch-action:pan-x pan-y pinch-zoom; width:100%; height:100%; display:flex; align-items:center; transition:opacity 0.2s,transform 0.2s; }
@@ -680,7 +680,8 @@ const thDay = (fs, cw) => ({
   width: cw,
   minWidth: cw,
   maxWidth: cw,
-  overflow: "hidden"
+  overflow: "hidden",
+  scrollSnapAlign: "start"
 });
 
 // ═══════════════════════════════════════════
@@ -4124,11 +4125,16 @@ function MainApp({
     setYear(y);
     setMonth(m - 1);
     setView("week");
+    // 水平捲動位置要一起重置，不然「時間」欄位固定住之後，底下的欄位
+    // 如果還停在跳轉前的舊捲動位置，兩者對不齊，會出現欄位被切成一小條、
+    // 內容擠在一起看起來像重疊的畫面。
+    if (scrollContainerRef.current) scrollContainerRef.current.scrollLeft = 0;
     setTimeout(() => {
       const wks = showSun === "1" ? getWeeksSun(y, m - 1) : getWeeksMon(y, m - 1, false);
       const idx = wks.findIndex(wk => wk.includes(d));
       if (idx >= 0) setWeekIdx(idx);
       setTimeout(() => {
+        if (scrollContainerRef.current) scrollContainerRef.current.scrollLeft = 0;
         if (!highlightTime) return;
         const rows = scrollContainerRef.current?.querySelectorAll("tr");
         if (rows) for (const row of rows) {
@@ -9318,7 +9324,8 @@ function OverviewMonth({
       fontSize: FS.t,
       fontWeight: 800,
       textAlign: "center",
-      zIndex: 7
+      zIndex: 7,
+      scrollSnapAlign: "start"
     }
   }, "週", l))), /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", {
     className: "th-corner",
