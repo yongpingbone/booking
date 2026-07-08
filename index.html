@@ -5847,7 +5847,7 @@ function MainApp({
         color: taken ? "#e94560" : "inherit",
         background: taken ? "#e9456020" : "inherit"
       }
-    }, t, taken ? " ✕已佔" : "");
+    }, t, taken ? ` ✕已佔（${taken.customer_name || ''}）` : "");
   })), /*#__PURE__*/React.createElement("select", {
     value: dialog.masterId,
     onChange: e => setDialog(d => ({
@@ -6684,7 +6684,7 @@ function MainApp({
       style: {
         color: taken ? "#e94560" : "inherit"
       }
-    }, t, taken ? " ✕已佔" : "");
+    }, t, taken ? ` ✕已佔（${taken.customer_name || ''}）` : "");
   }))), /*#__PURE__*/React.createElement("button", {
     onClick: copyBk,
     disabled: !cpTarget.date || !cpTarget.time || saving,
@@ -9796,7 +9796,7 @@ function OverviewMonth({
         color: taken ? "#e94560" : "inherit",
         background: taken ? "#e9456020" : "inherit"
       }
-    }, t, taken ? " ✕已佔" : "");
+    }, t, taken ? ` ✕已佔（${taken.customer_name || ''}）` : "");
   })), /*#__PURE__*/React.createElement("select", {
     value: dialog.masterId,
     onChange: e => setDialog(d => ({
@@ -10633,7 +10633,7 @@ function OverviewMonth({
       style: {
         color: taken ? "#e94560" : "inherit"
       }
-    }, t, taken ? " ✕已佔" : "");
+    }, t, taken ? ` ✕已佔（${taken.customer_name || ''}）` : "");
   }))), /*#__PURE__*/React.createElement("button", {
     onClick: copyBk,
     disabled: !cpTarget.date || !cpTarget.time || saving,
