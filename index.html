@@ -1411,9 +1411,21 @@ function PendingBookings({
         return;
       }
     }
-    const lineInfo = lineNames[group[0].customer_phone] || {};
+    // ⚠️ 不用 lineNames 快取（進分頁時查一次、之後不會自動更新，客人剛登入 LINE
+    // 送出預約時可能還沒被抓到，導致誤判成「沒有 LINE、不用推播」而安靜跳過）
+    // 改成按確認的當下即時重新查一次，保證資料是新的
+    let lineUid = null;
+    if (group[0].customer_phone) {
+      try {
+        const { data: freshBinding } = await sb
+          .from('line_bindings')
+          .select('line_user_id')
+          .eq('phone', group[0].customer_phone)
+          .maybeSingle();
+        lineUid = freshBinding?.line_user_id || null;
+      } catch (e) {}
+    }
     const copyText = `${group[0].customer_name}${group[0].customer_phone || ''}`;
-    const lineUid = lineInfo.uid || null;
     // 推播「請確認」給客人（含 2 小時確認深連結）；整組共用主筆 id 的連結
     const _pd = plan[0] && plan[0].date || group[0].date;
     const _pt = plan[0] && plan[0].time || (group[0].start_time ? group[0].start_time.slice(0, 5) : '');
