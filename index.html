@@ -1630,6 +1630,18 @@ function PendingBookings({
       status: 'confirmed',
       last_edited_at: new Date().toISOString()
     }).eq('id', item.id);
+    // 通知客人：取消申請未核准，預約維持原狀
+    if (item.customer_phone) {
+      try {
+        const { data: freshBinding } = await sb.from('line_bindings').select('line_user_id').eq('phone', item.customer_phone).maybeSingle();
+        const lineUid = freshBinding?.line_user_id || null;
+        if (lineUid) {
+          const timeLabel = item.date ? `${item.date} ${item.start_time ? item.start_time.slice(0, 5) : ''}` : '';
+          const msg = `❗ 取消申請未核准\n${timeLabel ? `日期：${timeLabel}\n` : ''}姓名：${item.customer_name || ''}\n\n這筆預約目前維持「已確認」狀態，如有疑問請透過 LINE 聯繫我們。`;
+          pushLineToCustomer(lineUid, msg);
+        }
+      } catch (e) {}
+    }
     setItems(p => p.filter(x => x.id !== item.id));
     loadCounts();
   }
@@ -1641,6 +1653,18 @@ function PendingBookings({
       status: 'confirmed',
       last_edited_at: new Date().toISOString()
     }).eq('id', item.id);
+    // 通知客人：改期申請未核准，維持原本時段
+    if (item.customer_phone) {
+      try {
+        const { data: freshBinding } = await sb.from('line_bindings').select('line_user_id').eq('phone', item.customer_phone).maybeSingle();
+        const lineUid = freshBinding?.line_user_id || null;
+        if (lineUid) {
+          const timeLabel = item.date ? `${item.date} ${item.start_time ? item.start_time.slice(0, 5) : ''}` : '';
+          const msg = `❗ 改期申請未核准\n${timeLabel ? `原本時段：${timeLabel}\n` : ''}姓名：${item.customer_name || ''}\n\n這筆預約維持原本的時段，如有疑問請透過 LINE 聯繫我們。`;
+          pushLineToCustomer(lineUid, msg);
+        }
+      } catch (e) {}
+    }
     setItems(p => p.filter(x => x.id !== item.id));
     loadCounts();
   }
