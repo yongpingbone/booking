@@ -15436,6 +15436,32 @@ function SettingsModule({
   const [importRows, setImportRows] = useState([]);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  const [histMonths] = useState([{
+    key: "2026-01",
+    label: "一月",
+    count: 1919
+  }, {
+    key: "2026-02",
+    label: "二月",
+    count: null
+  }, {
+    key: "2026-03",
+    label: "三月",
+    count: null
+  }, {
+    key: "2026-04",
+    label: "四月",
+    count: null
+  }, {
+    key: "2026-05",
+    label: "五月",
+    count: null
+  }, {
+    key: "2026-06",
+    label: "六月",
+    count: null
+  }]);
+  const [histStatus, setHistStatus] = useState({}); // key -> {checking, existingCount, importing, result}
   // 切換編輯對象時，載入該師傅目前的休息集合
   useEffect(() => {
     if (restMasterId) setRestSet(new Set(restOf(restMasterId)));
@@ -15705,6 +15731,83 @@ function SettingsModule({
     msg(fail ? `匯入完成，成功 ${ok} 筆、失敗 ${fail} 筆` : `匯入完成，成功 ${ok} 筆`);
   };
 
+  // ── 歷史資料一鍵匯入：先查是否已匯入過（防重複），再抓對應 JSON 分批寫入 ──
+  const monthRange = key => {
+    const [y, m] = key.split("-").map(Number);
+    const start = `${key}-01`;
+    const lastDay = new Date(y, m, 0).getDate();
+    const end = `${key}-${String(lastDay).padStart(2, "0")}`;
+    return { start, end };
+  };
+
+  const checkHistMonth = async key => {
+    setHistStatus(prev => ({
+      ...prev,
+      [key]: { ...prev[key], checking: true }
+    }));
+    const { start, end } = monthRange(key);
+    const { count } = await sb.from("bookings").select("id", { count: "exact", head: true }).eq("booking_source", "historical_import").gte("date", start).lte("date", end);
+    setHistStatus(prev => ({
+      ...prev,
+      [key]: { ...prev[key], checking: false, existingCount: count || 0 }
+    }));
+  };
+
+  const importHistMonth = async (key, label) => {
+    const { start, end } = monthRange(key);
+    // 送出前再查一次最新狀態，不要相信畫面上可能已經過期的數字
+    const { count: freshCount } = await sb.from("bookings").select("id", { count: "exact", head: true }).eq("booking_source", "historical_import").gte("date", start).lte("date", end);
+    if (freshCount > 0) {
+      alert(`${label}已經有 ${freshCount} 筆歷史匯入資料了，為了避免重複，這次操作已擋下。如果真的要重新匯入，請先手動確認/清除既有的 historical_import 資料。`);
+      setHistStatus(prev => ({
+        ...prev,
+        [key]: { ...prev[key], existingCount: freshCount }
+      }));
+      return;
+    }
+    if (!window.confirm(`確定要匯入${label}的歷史資料嗎？這個動作無法復原。`)) return;
+
+    setHistStatus(prev => ({
+      ...prev,
+      [key]: { ...prev[key], importing: true, result: null }
+    }));
+    try {
+      const resp = await fetch(`./import-data/${key}.json`);
+      if (!resp.ok) throw new Error(`抓不到資料檔（HTTP ${resp.status}）`);
+      const rows = await resp.json();
+      const CHUNK = 500;
+      let ok = 0,
+        fail = 0;
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        const chunk = rows.slice(i, i + CHUNK);
+        const { error } = await sb.from("bookings").insert(chunk);
+        if (error) {
+          console.error("歷史匯入失敗", key, error);
+          fail += chunk.length;
+        } else {
+          ok += chunk.length;
+        }
+      }
+      setHistStatus(prev => ({
+        ...prev,
+        [key]: { ...prev[key], importing: false, result: { ok, fail }, existingCount: ok }
+      }));
+      msg(fail ? `${label}匯入完成，成功 ${ok} 筆、失敗 ${fail} 筆` : `${label}匯入完成，成功 ${ok} 筆`);
+    } catch (e) {
+      setHistStatus(prev => ({
+        ...prev,
+        [key]: { ...prev[key], importing: false, result: { error: String(e?.message ?? e) } }
+      }));
+      msg(`${label}匯入失敗：${e?.message ?? e}`, true);
+    }
+  };
+
+  useEffect(() => {
+    if (settTab === "histimport") {
+      histMonths.forEach(m => checkHistMonth(m.key));
+    }
+  }, [settTab]);
+
   return /*#__PURE__*/React.createElement("div", {
     style: {
       flex: 1,
@@ -15716,7 +15819,7 @@ function SettingsModule({
       background: "var(--bg-header)",
       borderBottom: "1px solid var(--border)"
     }
-  }, [["masters", "帳號管理"], ["online", "線上預約"], ["rest", "休息時段"], ["export", "資料匯出"], ["history", "歷史紀錄"]].map(([k, l]) => /*#__PURE__*/React.createElement("button", {
+  }, [["masters", "帳號管理"], ["online", "線上預約"], ["rest", "休息時段"], ["export", "資料匯出"], ["histimport", "歷史匯入"], ["history", "歷史紀錄"]].map(([k, l]) => /*#__PURE__*/React.createElement("button", {
     key: k,
     className: `tab-btn${settTab === k ? " active" : ""}`,
     onClick: () => {
@@ -16303,7 +16406,74 @@ function SettingsModule({
       fontSize: 12,
       color: "var(--text-dim)"
     }
-  }, `上次匯入結果：成功 ${importResult.ok} 筆`, importResult.fail > 0 && `、失敗 ${importResult.fail} 筆`, importResult.skipped > 0 && `、略過 ${importResult.skipped} 筆`))), settTab === "history" && /*#__PURE__*/React.createElement("div", {
+  }, `上次匯入結果：成功 ${importResult.ok} 筆`, importResult.fail > 0 && `、失敗 ${importResult.fail} 筆`, importResult.skipped > 0 && `、略過 ${importResult.skipped} 筆`))), settTab === "histimport" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "var(--text-dim)",
+      marginBottom: 12,
+      lineHeight: 1.6
+    }
+  }, "一次性歷史資料匯入，一個月一顆按鈕。每次按之前都會先重新查一次資料庫，已經匯入過的月份會直接擋下、不會重複匯入。"), histMonths.map(m => {
+    const st = histStatus[m.key] || {};
+    const already = (st.existingCount || 0) > 0;
+    return /*#__PURE__*/React.createElement("div", {
+      key: m.key,
+      style: {
+        background: "var(--bg-header)",
+        borderRadius: 10,
+        padding: "12px 16px",
+        border: "1px solid var(--border2)",
+        marginBottom: 10,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between"
+      }
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 700,
+        fontSize: 14
+      }
+    }, m.label, m.count ? `（預計 ${m.count} 筆）` : "（尚未產生資料檔）"), st.checking && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: "var(--text-dim)"
+      }
+    }, "查詢中…"), already && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: "#00d09c"
+      }
+    }, `✓ 已有 ${st.existingCount} 筆歷史匯入資料`), st.result?.error && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: "#e94560"
+      }
+    }, `上次失敗：${st.result.error}`), st.result && !st.result.error && st.result.fail > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: "#e94560"
+      }
+    }, `成功 ${st.result.ok}、失敗 ${st.result.fail}`)), /*#__PURE__*/React.createElement("button", {
+      onClick: () => importHistMonth(m.key, m.label),
+      disabled: !m.count || st.checking || st.importing || already,
+      style: {
+        padding: "8px 16px",
+        borderRadius: 8,
+        border: "none",
+        background: already ? "var(--border2)" : "#00b894",
+        color: already ? "var(--text-dim)" : "#fff",
+        fontWeight: 700,
+        fontSize: 13,
+        cursor: !m.count || st.checking || st.importing || already ? "default" : "pointer",
+        opacity: !m.count ? 0.4 : 1,
+        flexShrink: 0
+      }
+    }, st.importing ? "匯入中…" : already ? "✓ 已匯入" : !m.count ? "尚無資料" : "匯入"));
+  })), settTab === "history" && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: 12
     }
