@@ -3154,11 +3154,11 @@ function MainApp({
   const [tab, setTab] = useState("schedule");
   const [pendingCount, setPendingCount] = React.useState(0);
   async function loadPendingCount() {
-    // 同時計入「待確認的新預約」+「待處理的取消請求」
+    // 同時計入「待確認的新預約」+「待處理的取消請求」+「待處理的改期請求」
     let q = sb.from('bookings').select('*', {
       count: 'exact',
       head: true
-    }).in('status', ['tentative', 'cancellation_requested']).eq('booking_source', 'customer_app');
+    }).in('status', ['tentative', 'cancellation_requested', 'reschedule_requested']).eq('booking_source', 'customer_app');
     const isAdminUser = (loginMaster || master)?.role === 'admin' || (loginMaster || master)?.role === 'editor';
     if (!isAdminUser && master) q = q.eq('master_id', master.id);
     const {
