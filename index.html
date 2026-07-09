@@ -2845,6 +2845,16 @@ function AvailabilityModule({
       /*#__PURE__*/React.createElement("div", { style: { fontWeight: 900, fontSize: 16 } }, `${ym.y} 年 ${ym.m + 1} 月`),
       /*#__PURE__*/React.createElement("button", { onClick: () => changeMonth(1), style: { background: "none", border: "1px solid var(--border)", borderRadius: 8, padding: "6px 12px", cursor: "pointer", color: "var(--text-main)" } }, "›")
     ),
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" } },
+      /*#__PURE__*/React.createElement("button", {
+        onClick: () => bulkOpenMonth("this"), disabled: bulkBusy,
+        style: { flex: "1 1 auto", padding: "10px 12px", borderRadius: 10, border: "none", background: "#2ed9c3", color: "#00171f", fontWeight: 900, fontSize: 13, cursor: bulkBusy ? "wait" : "pointer" }
+      }, "🚀 一鍵開放本月"),
+      /*#__PURE__*/React.createElement("button", {
+        onClick: () => bulkCloseMonth("this"), disabled: bulkBusy,
+        style: { padding: "10px 12px", borderRadius: 10, border: "1px solid #e94560", background: "none", color: "#e94560", fontWeight: 700, fontSize: 13, cursor: bulkBusy ? "wait" : "pointer" }
+      }, "關閉本月")
+    ),
     /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" } },
       /*#__PURE__*/React.createElement("button", {
         onClick: () => bulkOpenMonth("next"), disabled: bulkBusy,
@@ -14540,6 +14550,37 @@ function SettingsModule({
   // 休息時段：正在編輯哪位師傅（預設登入者自己）
   const [restMasterId, setRestMasterId] = useState(loginMaster?.id || "");
   const [restSet, setRestSet] = useState(() => new Set(restOf(loginMaster?.id)));
+  // ── 時段格子拖曳批次選取（休息時段設定共用）──
+  // 觸控裝置上 pointermove 只會綁在手指一開始按下的元素，不會像滑鼠一樣自然觸發別的元素的
+  // pointerenter，所以改成在容器上聽 pointermove，用座標算出目前實際壓在哪個按鈕上。
+  const restDragModeRef = React.useRef(null); // null | 'add' | 'remove'
+  const restDragActiveRef = React.useRef(false);
+  const applyRestDrag = t => {
+    if (restDragModeRef.current === null) return;
+    setRestSet(prev => {
+      if (restDragModeRef.current === "add" && prev.has(t)) return prev;
+      if (restDragModeRef.current === "remove" && !prev.has(t)) return prev;
+      const n = new Set(prev);
+      if (restDragModeRef.current === "add") n.add(t);else n.delete(t);
+      return n;
+    });
+  };
+  const onRestPointerDown = t => e => {
+    e.preventDefault();
+    restDragActiveRef.current = true;
+    restDragModeRef.current = restSet.has(t) ? "remove" : "add";
+    applyRestDrag(t);
+  };
+  const onRestContainerPointerMove = e => {
+    if (!restDragActiveRef.current) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const t = el?.dataset?.restTime;
+    if (t) applyRestDrag(t);
+  };
+  const onRestPointerUp = () => {
+    restDragActiveRef.current = false;
+    restDragModeRef.current = null;
+  };
   const [restSaved, setRestSaved] = useState(false);
   const [importRows, setImportRows] = useState([]);
   const [importing, setImporting] = useState(false);
@@ -15235,8 +15276,13 @@ function SettingsModule({
       display: "grid",
       gridTemplateColumns: "1fr 1fr",
       gap: 6,
-      marginBottom: 14
-    }
+      marginBottom: 14,
+      touchAction: "none"
+    },
+    onPointerMove: onRestContainerPointerMove,
+    onPointerUp: onRestPointerUp,
+    onPointerLeave: onRestPointerUp,
+    onPointerCancel: onRestPointerUp
   }, (() => {
     const blocks = [];
     for (let h = 8; h <= 22; h++) {
@@ -15253,11 +15299,8 @@ function SettingsModule({
     }
   }, [t0, t1].filter(Boolean).map(t => /*#__PURE__*/React.createElement("button", {
     key: t,
-    onClick: () => setRestSet(prev => {
-      const n = new Set(prev);
-      n.has(t) ? n.delete(t) : n.add(t);
-      return n;
-    }),
+    "data-rest-time": t,
+    onPointerDown: onRestPointerDown(t),
     style: {
       flex: 1,
       padding: "6px 4px",
