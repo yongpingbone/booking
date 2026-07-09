@@ -2783,7 +2783,7 @@ function AvailabilityModule({
   }
   const wk = ["日", "一", "二", "三", "四", "五", "六"];
 
-  return /*#__PURE__*/React.createElement("div", { style: { padding: "12px 12px 60px" } },
+  return /*#__PURE__*/React.createElement("div", { style: { padding: "12px 12px 60px", maxWidth: 560, margin: "0 auto" } },
     /*#__PURE__*/React.createElement(StoreClosuresPanel, { isAdmin, msg, currentMaster }),
     /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, color: "var(--text-dim)", marginBottom: 10, lineHeight: 1.6, background: "var(--bg-card)", padding: 10, borderRadius: 10, border: "1px solid var(--border)" } },
       "⚠️ 白名單模式：沒被設定過的日子，客人線上一律約不到。設定「整天開放」＝當天所有時段（扣掉你的休息時段與已被約走的）都開放；也可以只開放特定時段。"
