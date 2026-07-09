@@ -4976,11 +4976,12 @@ function MainApp({
       setWeekIdx(Math.max(0, idx));
     },
     className: "nb",
+    title: showSun === "1" ? "點一下隱藏週日欄位" : "點一下顯示週日欄位",
     style: {
       color: showSun === "1" ? "#a29bfe" : "var(--nav-color)",
       borderColor: showSun === "1" ? "#a29bfe" : "var(--border2)"
     }
-  }, showSun === "1" ? "🙈 隱藏週日" : "👁 顯示週日"), /*#__PURE__*/React.createElement("button", {
+  }, showSun === "1" ? "🙈 週日" : "👁 週日"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setDragMode(p => !p);
       setIsDragging(false);
