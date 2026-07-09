@@ -2455,16 +2455,22 @@ function SplitMasterSelect({
   const [avail, setAvail] = React.useState({});
   React.useEffect(() => {
     if (!dateStr || !time) return;
+    let cancelled = false;
     const filtered = masters.filter(m => m.id !== dialogMasterId && m.name !== "Hanna" && m.username !== "hanna");
-    filtered.forEach(async m => {
-      const {
-        data
-      } = await sb.from("bookings").select("id,customer_name").eq("master_id", m.id).eq("date", dateStr).eq("start_time", time + ":00").neq("status", "cancelled").neq("status", "no_show").neq("color_tag", "vacation").limit(1);
-      setAvail(prev => ({
-        ...prev,
-        [m.id]: data && data.length > 0 ? data[0].customer_name : null
-      }));
-    });
+    const ids = filtered.map(m => m.id);
+    if (!ids.length) return;
+    (async () => {
+      const { data } = await sb.from("bookings").select("master_id,customer_name").in("master_id", ids).eq("date", dateStr).eq("start_time", time + ":00").neq("status", "cancelled").neq("status", "no_show").neq("color_tag", "vacation");
+      if (cancelled) return;
+      const byMaster = {};
+      (data || []).forEach(row => {
+        byMaster[row.master_id] = row.customer_name;
+      });
+      setAvail(byMaster);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [dialogMasterId, dateStr, time]);
   const filtered = masters.filter(m => m.id !== dialogMasterId && m.name !== "Hanna" && m.username !== "hanna");
   return /*#__PURE__*/React.createElement("div", {
