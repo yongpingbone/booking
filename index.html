@@ -15462,8 +15462,9 @@ function SettingsModule({
     count: 1636
   }, {
     key: "2026-07",
-    label: "七月（重新匯入，取代舊資料）",
-    count: 1098
+    label: "七月",
+    count: 1098,
+    replaceMode: true
   }]);
   const [histStatus, setHistStatus] = useState({}); // key -> {checking, existingCount, importing, result}
   // 切換編輯對象時，載入該師傅目前的休息集合
@@ -15757,24 +15758,51 @@ function SettingsModule({
     }));
   };
 
-  const importHistMonth = async (key, label) => {
+  const importHistMonth = async (key, label, replaceMode) => {
     const { start, end } = monthRange(key);
-    // 送出前再查一次最新狀態，不要相信畫面上可能已經過期的數字
-    const { count: freshCount } = await sb.from("bookings").select("id", { count: "exact", head: true }).eq("booking_source", "historical_import").gte("date", start).lte("date", end);
-    if (freshCount > 0) {
-      alert(`${label}已經有 ${freshCount} 筆歷史匯入資料了，為了避免重複，這次操作已擋下。如果真的要重新匯入，請先手動確認/清除既有的 historical_import 資料。`);
+
+    if (replaceMode) {
+      // 取代模式（七月）：現有資料不是用 historical_import 標記存的，
+      // 不能用「查 historical_import 筆數」防呆，改成：查全部現有筆數給妳看清楚，
+      // 再要求手動打字確認，確認了才真的先刪除、再匯入，整個流程留在手機 APP 裡完成
+      const { count: totalCount } = await sb.from("bookings").select("id", { count: "exact", head: true }).gte("date", start).lte("date", end);
+      const typed = window.prompt(`${label}現在資料庫裡有 ${totalCount || 0} 筆預約（不管來源），確定要「全部刪除」後重新匯入嗎？這個動作無法復原。\n\n要繼續的話，請輸入「刪除${label}」四個字：`);
+      if (typed !== `刪除${label}`) {
+        if (typed !== null) alert("輸入的文字不符，已取消，沒有任何資料被刪除。");
+        return;
+      }
       setHistStatus(prev => ({
         ...prev,
-        [key]: { ...prev[key], existingCount: freshCount }
+        [key]: { ...prev[key], importing: true, result: null }
       }));
-      return;
+      const { error: delError, count: delCount } = await sb.from("bookings").delete({ count: "exact" }).gte("date", start).lte("date", end);
+      if (delError) {
+        setHistStatus(prev => ({
+          ...prev,
+          [key]: { ...prev[key], importing: false, result: { error: "刪除失敗：" + delError.message } }
+        }));
+        msg(`${label}刪除失敗：${delError.message}`, true);
+        return;
+      }
+      msg(`已刪除 ${label}原有的 ${delCount ?? "?"} 筆，開始重新匯入…`);
+    } else {
+      // 送出前再查一次最新狀態，不要相信畫面上可能已經過期的數字
+      const { count: freshCount } = await sb.from("bookings").select("id", { count: "exact", head: true }).eq("booking_source", "historical_import").gte("date", start).lte("date", end);
+      if (freshCount > 0) {
+        alert(`${label}已經有 ${freshCount} 筆歷史匯入資料了，為了避免重複，這次操作已擋下。如果真的要重新匯入，請先手動確認/清除既有的 historical_import 資料。`);
+        setHistStatus(prev => ({
+          ...prev,
+          [key]: { ...prev[key], existingCount: freshCount }
+        }));
+        return;
+      }
+      if (!window.confirm(`確定要匯入${label}的歷史資料嗎？這個動作無法復原。`)) return;
+      setHistStatus(prev => ({
+        ...prev,
+        [key]: { ...prev[key], importing: true, result: null }
+      }));
     }
-    if (!window.confirm(`確定要匯入${label}的歷史資料嗎？這個動作無法復原。`)) return;
 
-    setHistStatus(prev => ({
-      ...prev,
-      [key]: { ...prev[key], importing: true, result: null }
-    }));
     try {
       const resp = await fetch(`./import-data/${key}.json`);
       if (!resp.ok) throw new Error(`抓不到資料檔（HTTP ${resp.status}）`);
@@ -16441,7 +16469,13 @@ function SettingsModule({
         fontWeight: 700,
         fontSize: 14
       }
-    }, m.label, m.count ? `（預計 ${m.count} 筆）` : "（尚未產生資料檔）"), st.checking && /*#__PURE__*/React.createElement("div", {
+    }, m.label, m.count ? `（預計 ${m.count} 筆）` : "（尚未產生資料檔）"), m.replaceMode && !already && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: "#ffb300",
+        marginTop: 2
+      }
+    }, "⚠️ 這個月現有的預約會先整批刪除，才重新匯入"), st.checking && /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 11,
         color: "var(--text-dim)"
@@ -16462,13 +16496,13 @@ function SettingsModule({
         color: "#e94560"
       }
     }, `成功 ${st.result.ok}、失敗 ${st.result.fail}`)), /*#__PURE__*/React.createElement("button", {
-      onClick: () => importHistMonth(m.key, m.label),
+      onClick: () => importHistMonth(m.key, m.label, m.replaceMode),
       disabled: !m.count || st.checking || st.importing || already,
       style: {
         padding: "8px 16px",
         borderRadius: 8,
         border: "none",
-        background: already ? "var(--border2)" : "#00b894",
+        background: already ? "var(--border2)" : m.replaceMode ? "#e94560" : "#00b894",
         color: already ? "var(--text-dim)" : "#fff",
         fontWeight: 700,
         fontSize: 13,
@@ -16476,7 +16510,7 @@ function SettingsModule({
         opacity: !m.count ? 0.4 : 1,
         flexShrink: 0
       }
-    }, st.importing ? "匯入中…" : already ? "✓ 已匯入" : !m.count ? "尚無資料" : "匯入"));
+    }, st.importing ? "處理中…" : already ? "✓ 已匯入" : !m.count ? "尚無資料" : m.replaceMode ? "刪除並重新匯入" : "匯入"));
   })), settTab === "history" && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: 12
