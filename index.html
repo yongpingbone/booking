@@ -1511,6 +1511,20 @@ function PendingBookings({
         last_edited_at: new Date().toISOString()
       }).eq('id', b.id);
     }
+    // 通知客人：預約申請無法受理
+    const first = items_[0];
+    if (first.customer_phone) {
+      try {
+        const { data: freshBinding } = await sb.from('line_bindings').select('line_user_id').eq('phone', first.customer_phone).maybeSingle();
+        const lineUid = freshBinding?.line_user_id || null;
+        if (lineUid) {
+          const mname = MASTER_IDS[first.master_id] || '師傅';
+          const timeLabel = first.date ? `${first.date} ${first.start_time ? first.start_time.slice(0, 5) : ''}` : '';
+          const msg = `很抱歉，您申請的預約${timeLabel ? `（${timeLabel}）` : ''}目前無法受理\n師傅：${mname}\n\n如有需要請重新預約，或致電 02-8285-4865 了解詳情。`;
+          pushLineToCustomer(lineUid, msg);
+        }
+      } catch (e) {}
+    }
     const idsInGroup = new Set(items_.map(x => x.id));
     setItems(p => p.filter(x => !idsInGroup.has(x.id)));
     loadCounts();
@@ -1523,6 +1537,18 @@ function PendingBookings({
       status: 'cancelled',
       last_edited_at: new Date().toISOString()
     }).eq('id', item.id);
+    // 通知客人：取消申請已核准
+    if (item.customer_phone) {
+      try {
+        const { data: freshBinding } = await sb.from('line_bindings').select('line_user_id').eq('phone', item.customer_phone).maybeSingle();
+        const lineUid = freshBinding?.line_user_id || null;
+        if (lineUid) {
+          const timeLabel = item.date ? `${item.date} ${item.start_time ? item.start_time.slice(0, 5) : ''}` : '';
+          const msg = `✅ 取消申請已核准\n${timeLabel ? `日期：${timeLabel}\n` : ''}姓名：${item.customer_name || ''}\n\n這個時段已經釋出，如需重新預約歡迎再透過 LINE 預約。`;
+          pushLineToCustomer(lineUid, msg);
+        }
+      } catch (e) {}
+    }
     setItems(p => p.filter(x => x.id !== item.id));
     if (onConfirmed) onConfirmed();
     loadCounts();
