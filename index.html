@@ -15437,7 +15437,12 @@ function SettingsModule({
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
   const [isHistoricalImport, setIsHistoricalImport] = useState(false);
-  const [historicalWarning, setHistoricalWarning] = useState(null); // 該日期範圍已有幾筆 historical_import 資料
+  const [historicalWarning, setHistoricalWarning] = useState(null);
+  const [delStart, setDelStart] = useState("");
+  const [delEnd, setDelEnd] = useState("");
+  const [delCount, setDelCount] = useState(null); // null=還沒查過
+  const [delChecking, setDelChecking] = useState(false);
+  const [deleting, setDeleting] = useState(false); // 該日期範圍已有幾筆 historical_import 資料
   // 切換編輯對象時，載入該師傅目前的休息集合
   useEffect(() => {
     if (restMasterId) setRestSet(new Set(restOf(restMasterId)));
@@ -15548,6 +15553,41 @@ function SettingsModule({
   };
 
   // ── CSV 匯入：解析＋逐列驗證（不寫入資料庫，先產生預覽） ──
+  // ── 批次刪除（獨立小工具，不綁月份）：先查範圍內有幾筆，打字確認才真的刪 ──
+  const checkDelCount = async (s, e) => {
+    if (!s || !e) {
+      setDelCount(null);
+      return;
+    }
+    setDelChecking(true);
+    const { count } = await sb.from("bookings").select("id", { count: "exact", head: true }).gte("date", s).lte("date", e);
+    setDelChecking(false);
+    setDelCount(count || 0);
+  };
+
+  const runBatchDelete = async () => {
+    if (!delStart || !delEnd) return;
+    if (delStart > delEnd) {
+      msg("開始日期不能比結束日期晚", true);
+      return;
+    }
+    const { count: freshCount } = await sb.from("bookings").select("id", { count: "exact", head: true }).gte("date", delStart).lte("date", delEnd);
+    const typed = window.prompt(`${delStart} ～ ${delEnd}（含頭尾）這段範圍內，資料庫現在有 ${freshCount || 0} 筆預約（不分來源），確定要全部刪除嗎？這個動作無法復原。\n\n要繼續的話，請輸入「確定刪除」四個字：`);
+    if (typed !== "確定刪除") {
+      if (typed !== null) alert("輸入的文字不符，已取消，沒有任何資料被刪除。");
+      return;
+    }
+    setDeleting(true);
+    const { error, count: deletedCount } = await sb.from("bookings").delete({ count: "exact" }).gte("date", delStart).lte("date", delEnd);
+    setDeleting(false);
+    if (error) {
+      msg(`刪除失敗：${error.message}`, true);
+      return;
+    }
+    setDelCount(0);
+    msg(`已刪除 ${deletedCount ?? freshCount ?? "?"} 筆`);
+  };
+
   const handleImportFile = async e => {
     const file = e.target.files?.[0];
     e.target.value = ""; // 允許重選同一個檔案也能觸發 onChange
@@ -16347,7 +16387,101 @@ function SettingsModule({
       fontSize: 12,
       color: "var(--text-dim)"
     }
-  }, `上次匯入結果：成功 ${importResult.ok} 筆`, importResult.fail > 0 && `、失敗 ${importResult.fail} 筆`, importResult.skipped > 0 && `、略過 ${importResult.skipped} 筆`))), settTab === "history" && /*#__PURE__*/React.createElement("div", {
+  }, `上次匯入結果：成功 ${importResult.ok} 筆`, importResult.fail > 0 && `、失敗 ${importResult.fail} 筆`, importResult.skipped > 0 && `、略過 ${importResult.skipped} 筆`))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "var(--bg-header)",
+      borderRadius: 10,
+      padding: "14px 16px",
+      border: "1px solid var(--border2)",
+      marginTop: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 700,
+      fontSize: 14,
+      marginBottom: 8
+    }
+  }, "批次刪除"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "var(--text-dim)",
+      marginBottom: 10,
+      lineHeight: 1.6
+    }
+  }, "選一段日期範圍，刪掉裡面全部的預約（不分來源），通常用在重新匯入前先清空舊資料。跟上面的匯入無關，是獨立的工具。"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      alignItems: "center",
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "date",
+    value: delStart,
+    onChange: e => {
+      const v = e.target.value;
+      setDelStart(v);
+      checkDelCount(v, delEnd);
+    },
+    style: {
+      background: "var(--input-bg)",
+      border: "1px solid var(--border2)",
+      borderRadius: 6,
+      padding: "7px 8px",
+      fontSize: 13,
+      color: "var(--text-main)",
+      flex: "1 1 130px"
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "var(--text-dim)"
+    }
+  }, "～"), /*#__PURE__*/React.createElement("input", {
+    type: "date",
+    value: delEnd,
+    onChange: e => {
+      const v = e.target.value;
+      setDelEnd(v);
+      checkDelCount(delStart, v);
+    },
+    style: {
+      background: "var(--input-bg)",
+      border: "1px solid var(--border2)",
+      borderRadius: 6,
+      padding: "7px 8px",
+      fontSize: 13,
+      color: "var(--text-main)",
+      flex: "1 1 130px"
+    }
+  })), delChecking && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "var(--text-dim)",
+      marginTop: 8
+    }
+  }, "查詢中…"), delCount !== null && !delChecking && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: delCount > 0 ? "#ffb300" : "var(--text-dim)",
+      marginTop: 8
+    }
+  }, `這段範圍內現在有 ${delCount} 筆預約`), /*#__PURE__*/React.createElement("button", {
+    onClick: runBatchDelete,
+    disabled: !delStart || !delEnd || deleting || !delCount,
+    style: {
+      width: "100%",
+      marginTop: 10,
+      padding: "10px",
+      borderRadius: 8,
+      border: "none",
+      background: "#e94560",
+      color: "#fff",
+      fontWeight: 700,
+      fontSize: 13,
+      cursor: !delStart || !delEnd || deleting || !delCount ? "default" : "pointer",
+      opacity: !delStart || !delEnd || deleting || !delCount ? 0.4 : 1
+    }
+  }, deleting ? "刪除中…" : "批次刪除")), settTab === "history" && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: 12
     }
