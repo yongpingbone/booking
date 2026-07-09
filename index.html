@@ -1290,6 +1290,7 @@ function PendingBookings({
   const [confTime, setConfTime] = React.useState('');
   const [confTakenSlots, setConfTakenSlots] = React.useState(new Map()); // 該師傅該天已被占用的時段 -> 客人姓名
   const [confLoadingSlots, setConfLoadingSlots] = React.useState(false);
+  const confirmingRef = React.useRef(false); // 同步鎖，不依賴 state 重繪時機，真正擋住快速連點
 
   // 選定日期後，查該師傅該天已被占用的時段（含客人姓名，方便判斷是不是要併單/合診）
   // midOverride：剛開啟彈窗的當下呼叫時，confirmDialog 這個 state 因為 React
@@ -1430,6 +1431,9 @@ function PendingBookings({
   }
   async function confirmBooking() {
     if (!confirmDialog) return;
+    if (confirmingRef.current) return; // 同步鎖：已經在處理中，直接擋掉，不會因為連點兩下而送出兩次
+    confirmingRef.current = true;
+    try {
     const group = confirmDialog; // array of one or more bookings sharing a party
     const isReq = !group[0].date || group[0].status === 'reschedule_requested';
     if (isReq && (!confDate || !confTime)) {
@@ -1568,6 +1572,9 @@ function PendingBookings({
       text: copyText,
       uid: lineUid
     });
+    } finally {
+      confirmingRef.current = false;
+    }
   }
   async function reject(group) {
     // group 可能是單筆 booking 或整組 bookings 陣列
