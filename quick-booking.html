@@ -37,33 +37,12 @@ input:focus{outline:none;border-color:var(--cyan)}
 .name-match-item:active{border-color:var(--cyan)}
 .name-match-item .nm-name{font-size:14px;font-weight:700}
 .name-match-item .nm-phone{font-size:12px;color:var(--t2)}
-.mgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:8px}
-.mc{padding:12px 8px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg3);color:var(--text);text-align:center;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
-.mc.on{border-color:var(--cyan);background:var(--cdim);color:var(--cyan)}
-.drow{display:flex;gap:8px;overflow-x:auto;padding:4px 0}
-.dc{display:flex;flex-direction:column;align-items:center;min-width:52px;padding:9px 6px;background:var(--bg3);border:1.5px solid var(--border);border-radius:12px;cursor:pointer;flex-shrink:0}
-.dc.on{border-color:var(--cyan);background:var(--cdim)}
-.dc .d-mo{font-size:10px;color:var(--t2)}
-.dc .d-num{font-size:17px;font-weight:900}
-.dc .d-wk{font-size:10px;color:var(--t2)}
-.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
-.cal-nav{background:none;border:1.5px solid var(--border);color:var(--text);border-radius:8px;width:34px;height:34px;font-size:16px;cursor:pointer;font-family:inherit}
-.cal-nav:disabled{opacity:.3;cursor:default}
-.cal-title{font-size:15px;font-weight:900}
-.cal-wk-row{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px}
-.cal-wk-lbl{text-align:center;font-size:11px;color:var(--t2);padding:4px 0}
-.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
-.cal-cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:10px;background:var(--bg3);border:1.5px solid var(--border);cursor:pointer;user-select:none;font-size:14px;font-weight:700}
-.cal-cell.empty{background:none;border:none;cursor:default}
-.cal-cell.on{border-color:var(--cyan);background:var(--cdim);color:var(--cyan)}
-.cal-cell.disabled{opacity:.3;pointer-events:none}
+.compact-row{display:flex;gap:8px}
+.csel,.cdate{background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;padding:10px;color:var(--text);font-size:14px;font-family:inherit;flex:1;min-width:0;color-scheme:dark}
+.csel:focus,.cdate:focus{outline:none;border-color:var(--cyan)}
 .fastest-box{background:var(--cdim);border:1.5px solid var(--cyan);border-radius:12px;padding:14px;margin-top:10px}
 .fastest-box .ft{font-size:12px;color:var(--t2);margin-bottom:6px}
 .fastest-box .fv{font-size:16px;font-weight:900;margin-bottom:10px}
-.tgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:10px}
-.ts{padding:11px 4px;border-radius:9px;border:1.5px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
-.ts.on{border-color:var(--cyan);background:var(--cdim);color:var(--cyan)}
-.ts.full{opacity:.3;cursor:not-allowed;text-decoration:line-through}
 .footer{position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--border);display:none}
 .footer-inner{max-width:480px;margin:0 auto;padding:12px 16px calc(12px + env(safe-area-inset-bottom))}
 .btn{width:100%;padding:15px;border-radius:12px;border:none;background:var(--cyan);color:#00171f;font-size:16px;font-weight:900;cursor:pointer;font-family:inherit}
@@ -87,11 +66,8 @@ input:focus{outline:none;border-color:var(--cyan)}
 @media (hover:hover){
   .hdr-back:hover{border-color:var(--cyan);color:var(--cyan)}
   .chip:hover{border-color:var(--cyan)}
-  .mc:not(.on):hover{border-color:var(--cyan)}
   .name-match-item:hover{border-color:var(--cyan)}
-  .cal-nav:not(:disabled):hover{border-color:var(--cyan);color:var(--cyan)}
-  .cal-cell:not(.empty):not(.disabled):not(.on):hover{border-color:var(--cyan)}
-  .ts:not(.full):not(.on):hover{border-color:var(--cyan)}
+  .csel:hover,.cdate:hover{border-color:var(--t2)}
   .btn:not(:disabled):hover{filter:brightness(1.08)}
   .btn2:hover{border-color:var(--cyan);color:var(--cyan)}
   input[type=text]:hover,input[type=tel]:hover{border-color:var(--t2)}
@@ -141,29 +117,19 @@ input:focus{outline:none;border-color:var(--cyan)}
   </div>
 
   <div class="card">
-    <div class="lbl">師傅</div>
-    <div class="mgrid" id="masterGrid"></div>
-  </div>
-
-  <div class="card">
-    <div class="lbl">日期</div>
+    <div class="lbl">師傅・日期・時段</div>
+    <div class="compact-row">
+      <select class="csel" id="selMaster" style="flex:1.15" onchange="onMasterChange()"></select>
+      <input type="date" class="cdate" id="selDateInput" style="flex:1" onchange="onDateInputChange()">
+      <select class="csel" id="selTimeInput" style="flex:1" onchange="onTimeSelectChange()">
+        <option value="" disabled selected>選擇時段</option>
+      </select>
+    </div>
     <div id="fastestBox" class="fastest-box hidden">
       <div class="ft" id="ft-status">尋找最快時段中...</div>
       <div class="fv" id="fv-result"></div>
       <button class="btn" id="fastestConfirmBtn" style="display:none" onclick="acceptFastest()">採用這個時段</button>
     </div>
-    <div class="cal-head">
-      <button class="cal-nav" id="calPrev" onclick="calNav(-1)">‹</button>
-      <div class="cal-title" id="calTitle"></div>
-      <button class="cal-nav" id="calNext" onclick="calNav(1)">›</button>
-    </div>
-    <div class="cal-wk-row" id="calWkRow"></div>
-    <div class="cal-grid" id="calGrid"></div>
-  </div>
-
-  <div class="card" id="timeCard" style="display:none">
-    <div class="lbl">時段</div>
-    <div class="tgrid" id="timeGrid"></div>
   </div>
 
   <div class="card">
@@ -261,47 +227,56 @@ async function doLogin(){
 function showMain(){
   document.getElementById('mainPage').classList.remove('hidden');
   buildMasterGrid();
-  buildDateRow();
 }
 
-// ── Master grid ──────────────────────
+// ── 師傅 / 日期 / 時段（緊湊列，比照排班表編輯視窗的原生 input/select） ──
 function buildMasterGrid(){
-  const grid = document.getElementById('masterGrid');
-  grid.innerHTML = '';
+  const sel = document.getElementById('selMaster');
+  sel.innerHTML = '';
+  const ph = document.createElement('option');
+  ph.value=''; ph.textContent='請選擇師傅'; ph.disabled=true; ph.selected=true;
+  sel.appendChild(ph);
+  const anyOpt = document.createElement('option');
+  anyOpt.value='any'; anyOpt.textContent='⚡ 不指定（最快時段）';
+  sel.appendChild(anyOpt);
   MASTERS.forEach(m=>{
-    const b = document.createElement('button');
-    b.className = 'mc';
-    b.textContent = m.name;
-    b.onclick = ()=>pickMaster(m.id);
-    b.id = 'mc-'+m.id;
-    grid.appendChild(b);
+    const opt = document.createElement('option');
+    opt.value = m.id; opt.textContent = m.name;
+    sel.appendChild(opt);
   });
-  const anyBtn = document.createElement('button');
-  anyBtn.className = 'mc';
-  anyBtn.id = 'mc-any';
-  anyBtn.style.gridColumn = '1 / -1';
-  anyBtn.style.borderColor = '#2ed9c3';
-  anyBtn.style.color = '#2ed9c3';
-  anyBtn.textContent = '⚡ 不指定（最快時段）';
-  anyBtn.onclick = ()=>pickAnyMaster();
-  grid.appendChild(anyBtn);
 }
-function pickMaster(mid){
-  anyMode = false;
-  selMasterId = mid; selActualMasterId = mid; selTime = null;
-  document.querySelectorAll('.mc').forEach(el=>el.classList.remove('on'));
-  document.getElementById('mc-'+mid)?.classList.add('on');
+
+function showDateTimeRow(show){
+  document.getElementById('selDateInput').style.display = show ? '' : 'none';
+  document.getElementById('selTimeInput').style.display = show ? '' : 'none';
+}
+
+async function onMasterChange(){
+  const val = document.getElementById('selMaster').value;
+  selTime = null;
   document.getElementById('fastestBox').classList.add('hidden');
-  loadRestTimes(mid);
-  if(selDate) renderTimeSlots();
+  if(val === 'any'){
+    await pickAnyMaster();
+  } else if(val){
+    anyMode = false;
+    selMasterId = val; selActualMasterId = val;
+    showDateTimeRow(true);
+    await loadRestTimes(val);
+    const dv = document.getElementById('selDateInput').value;
+    if(dv){ selDate = dv; await loadTaken(dv); }
+    buildTimeSelect();
+  } else {
+    selMasterId = null; selActualMasterId = null;
+    showDateTimeRow(true);
+    buildTimeSelect();
+  }
   updateFooter();
 }
 
 async function pickAnyMaster(){
   anyMode = true;
   selMasterId = 'any'; selActualMasterId = null; selTime = null;
-  document.querySelectorAll('.mc').forEach(el=>el.classList.remove('on'));
-  document.getElementById('mc-any')?.classList.add('on');
+  showDateTimeRow(false);
   await Promise.all(MASTERS.map(m=>loadRestTimes(m.id)));
   const box = document.getElementById('fastestBox');
   box.classList.remove('hidden');
@@ -310,8 +285,7 @@ async function pickAnyMaster(){
   document.getElementById('fastestConfirmBtn').style.display = 'none';
   const found = await findFastestSlot();
   if(!found){
-    document.getElementById('ft-status').textContent = '接下來 14 天都沒有空檔，請手動從下方月曆選擇';
-    if(selDate) renderTimeSlots();
+    document.getElementById('ft-status').textContent = '接下來 14 天都沒有空檔';
     updateFooter();
     return;
   }
@@ -321,6 +295,7 @@ async function pickAnyMaster(){
   document.getElementById('ft-status').textContent = '找到最快空檔：';
   document.getElementById('fv-result').textContent = `${d.getMonth()+1}/${d.getDate()}（週${wkArr[d.getDay()]}）${found.time}　${MNAME[found.masterId]}`;
   document.getElementById('fastestConfirmBtn').style.display = 'block';
+  updateFooter();
 }
 
 let fastestResult = null;
@@ -329,12 +304,12 @@ function acceptFastest(){
   selDate = fastestResult.date;
   selTime = fastestResult.time;
   selActualMasterId = fastestResult.masterId;
-  // 同步月曆畫面到那個日期，讓畫面看起來一致
-  const [dy,dm]=fastestResult.date.split('-').map(Number);
-  calYear=dy; calMonth=dm-1;
-  renderCalendar();
-  document.getElementById('timeCard').style.display='block';
-  loadTaken(fastestResult.date).then(()=>renderTimeSlots());
+  document.getElementById('selDateInput').value = fastestResult.date;
+  const d = new Date(fastestResult.date+'T00:00:00');
+  const wkArr=['日','一','二','三','四','五','六'];
+  document.getElementById('ft-status').textContent = '✓ 已採用：';
+  document.getElementById('fv-result').textContent = `${d.getMonth()+1}/${d.getDate()}（週${wkArr[d.getDay()]}）${fastestResult.time}　${MNAME[fastestResult.masterId]}`;
+  document.getElementById('fastestConfirmBtn').style.display = 'none';
   updateFooter();
   toast('已採用推薦時段','ok');
 }
@@ -382,74 +357,20 @@ async function findFastestSlot(){
   return null;
 }
 
-// ── Date row (next 30 days) ──────────
-const WK=['日','一','二','三','四','五','六'];
-let calYear, calMonth;
-(function initCalState(){
-  const d=new Date();
-  calYear=d.getFullYear(); calMonth=d.getMonth();
-})();
-
-function buildDateRow(){
-  renderCalendar();
-}
-
-function renderCalendar(){
-  const title=document.getElementById('calTitle');
-  const wkRow=document.getElementById('calWkRow');
-  const grid=document.getElementById('calGrid');
-  if(!title||!grid) return;
-  title.textContent=`${calYear} 年 ${calMonth+1} 月`;
-  if(!wkRow.dataset.built){
-    wkRow.innerHTML=WK.map(w=>`<div class="cal-wk-lbl">週${w}</div>`).join('');
-    wkRow.dataset.built='1';
-  }
-  const today=new Date();
-  const todayStr=fmtD(today);
-  const isCurrentMonth=(calYear===today.getFullYear() && calMonth===today.getMonth());
-  document.getElementById('calPrev').disabled=isCurrentMonth;
-
-  const firstDay=new Date(calYear,calMonth,1).getDay();
-  const daysInMonth=new Date(calYear,calMonth+1,0).getDate();
-  const cells=[];
-  for(let i=0;i<firstDay;i++) cells.push(null);
-  for(let d=1;d<=daysInMonth;d++) cells.push(d);
-
-  grid.innerHTML='';
-  cells.forEach(day=>{
-    const cell=document.createElement('div');
-    if(day===null){ cell.className='cal-cell empty'; grid.appendChild(cell); return; }
-    const dateStr=`${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-    cell.className='cal-cell';
-    cell.dataset.date=dateStr;
-    if(dateStr<todayStr){
-      cell.classList.add('disabled');
-      cell.textContent=day;
-    }else{
-      cell.textContent=day;
-      cell.onclick=()=>pickDate(dateStr);
-      if(selDate===dateStr) cell.classList.add('on');
-    }
-    grid.appendChild(cell);
-  });
-}
-
-function calNav(delta){
-  calMonth+=delta;
-  if(calMonth<0){ calMonth=11; calYear--; }
-  if(calMonth>11){ calMonth=0; calYear++; }
-  renderCalendar();
-}
-
 function fmtD(d){
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
-async function pickDate(dateStr){
-  selDate = dateStr; selTime = null;
-  document.querySelectorAll('.cal-cell').forEach(el=>el.classList.toggle('on', el.dataset.date===dateStr));
-  document.getElementById('timeCard').style.display = 'block';
-  await loadTaken(dateStr);
-  renderTimeSlots();
+
+async function onDateInputChange(){
+  const val = document.getElementById('selDateInput').value;
+  selTime = null;
+  if(val && selMasterId && !anyMode){
+    selDate = val;
+    await loadTaken(val);
+  } else {
+    selDate = val || null;
+  }
+  buildTimeSelect();
   updateFooter();
 }
 
@@ -474,55 +395,28 @@ async function loadTaken(dateStr){
     takenCache[dateStr] = data || [];
   }catch(e){ takenCache[dateStr] = []; }
 }
-function renderTimeSlots(){
-  const grid = document.getElementById('timeGrid');
-  grid.innerHTML = '';
-  if(!selDate) return;
-  if(!anyMode && !selMasterId) return;
+function buildTimeSelect(){
+  const sel = document.getElementById('selTimeInput');
+  sel.innerHTML = '';
+  const ph = document.createElement('option');
+  ph.value=''; ph.textContent='選擇時段'; ph.disabled=true; ph.selected=true;
+  sel.appendChild(ph);
+  if(!selDate || !selMasterId || anyMode) return;
   const taken = takenCache[selDate] || [];
-
-  if(anyMode){
-    TIMES.forEach(t=>{
-      // 不指定模式：只要當下時段有任何一位師傅有空，這格就可以點；
-      // 點下去自動分配給「第一位有空」的師傅（跟客人 app 的「不指定」邏輯一致）
-      const freeMaster = MASTERS.find(m=>{
-        const isTaken = taken.some(b=> b.master_id===m.id && b.start_time?.slice(0,5)===t);
-        const isRest = isRestSlot(m.id, selDate, t);
-        return !isTaken && !isRest;
-      });
-      const btn = document.createElement('button');
-      btn.className = 'ts';
-      if(!freeMaster){
-        btn.classList.add('full'); btn.textContent='已滿';
-      }else{
-        btn.innerHTML = `${t}<div style="font-size:9px;opacity:.75;margin-top:2px">${freeMaster.name}</div>`;
-        btn.onclick = ()=>pickTime(t, freeMaster.id);
-        if(selTime===t) btn.classList.add('on');
-      }
-      grid.appendChild(btn);
-    });
-    return;
-  }
-
   TIMES.forEach(t=>{
     const takenBk = taken.find(b=> b.master_id===selMasterId && b.start_time?.slice(0,5)===t);
     const isRest = isRestSlot(selMasterId, selDate, t);
-    const btn = document.createElement('button');
-    btn.className = 'ts';
-    if(takenBk){ btn.classList.add('full'); btn.textContent='已滿（'+(takenBk.customer_name||'')+'）'; }
-    else if(isRest){ btn.classList.add('full'); btn.textContent='休息'; }
-    else{
-      btn.textContent = t;
-      btn.onclick = ()=>pickTime(t);
-      if(selTime===t) btn.classList.add('on');
-    }
-    grid.appendChild(btn);
+    const opt = document.createElement('option');
+    opt.value = t;
+    if(takenBk){ opt.textContent = `${t}　✕已滿（${takenBk.customer_name||''}）`; opt.disabled = true; }
+    else if(isRest){ opt.textContent = `${t}　✕休息`; opt.disabled = true; }
+    else{ opt.textContent = t; }
+    sel.appendChild(opt);
   });
 }
-function pickTime(t, assignedMasterId){
-  selTime = t;
-  if(anyMode) selActualMasterId = assignedMasterId || null;
-  renderTimeSlots();
+function onTimeSelectChange(){
+  const val = document.getElementById('selTimeInput').value;
+  selTime = val || null;
   updateFooter();
 }
 
@@ -633,16 +527,13 @@ async function applySuggestedSlot(last, days, chipEl){
   base.setDate(base.getDate()+days);
   const dateStr = fmtD(base);
   const t = (last.start_time||'').slice(0,5);
-  pickMaster(last.master_id);
-  calYear = base.getFullYear(); calMonth = base.getMonth();
-  renderCalendar();
-  document.querySelectorAll('.cal-cell').forEach(el=>el.classList.toggle('on', el.dataset.date===dateStr));
-  const chip = document.querySelector(`.cal-cell[data-date="${dateStr}"]`);
-  if(chip) chip.scrollIntoView({behavior:'smooth', block:'center'});
+  document.getElementById('selMaster').value = last.master_id;
+  await onMasterChange();
+  document.getElementById('selDateInput').value = dateStr;
   selDate = dateStr;
-  document.getElementById('timeCard').style.display = 'block';
   await loadTaken(dateStr);
   await loadRestTimes(last.master_id);
+  buildTimeSelect();
   // 檢查建議的時段是否還空著，空著才自動代入；已被約走或休息就不自動選，改讓師傅自己挑
   const taken = takenCache[dateStr] || [];
   const isTaken = taken.some(b=> b.master_id===last.master_id && b.start_time?.slice(0,5)===t);
@@ -652,10 +543,10 @@ async function applySuggestedSlot(last, days, chipEl){
     toast(isTaken ? '該建議時段已被約走，請手動選擇時段' : '該建議時段是師傅休息時間，請手動選擇時段', 'err');
   } else {
     selTime = t;
+    document.getElementById('selTimeInput').value = t;
   }
-  renderTimeSlots();
   updateFooter();
-  setTimeout(()=>document.getElementById('timeCard').scrollIntoView({behavior:'smooth',block:'center'}), 100);
+  setTimeout(()=>document.getElementById('selTimeInput').scrollIntoView({behavior:'smooth',block:'center'}), 100);
 }
 
 // ── Footer / submit ───────────────────
@@ -694,7 +585,7 @@ async function submitBooking(){
       toast(`該時段已被「${conflictRows[0].customer_name}」約走，請重新選擇`, 'err');
       btn.disabled = false; btn.textContent = '確認登記';
       await loadTaken2(selDate);
-      renderTimeSlots();
+      buildTimeSelect();
       return;
     }
 
@@ -761,9 +652,10 @@ function startFresh(){
   document.getElementById('noShowWarn').classList.add('hidden');
   document.getElementById('nameMatches').classList.add('hidden');
   document.getElementById('fastestBox').classList.add('hidden');
-  document.querySelectorAll('.mc').forEach(el=>el.classList.remove('on'));
-  document.querySelectorAll('.cal-cell').forEach(el=>el.classList.remove('on'));
-  document.getElementById('timeCard').style.display='none';
+  document.getElementById('selMaster').value='';
+  document.getElementById('selDateInput').value='';
+  showDateTimeRow(true);
+  buildTimeSelect();
   document.getElementById('successPage').classList.add('hidden');
   document.getElementById('mainPage').classList.remove('hidden');
   document.getElementById('f-phone').focus();
@@ -778,7 +670,8 @@ async function startRepeat(){
   document.getElementById('f-note').value = '';
   isNewCustomer = false;
   document.getElementById('lookupStatus').textContent = '✓ 舊客人';
-  pickMaster(lastCreated.masterId);
+  document.getElementById('selMaster').value = lastCreated.masterId;
+  await onMasterChange();
   showSuggest({ date: lastCreated.date, start_time: lastCreated.time+':00', master_id: lastCreated.masterId });
   window.scrollTo(0,0);
 }
