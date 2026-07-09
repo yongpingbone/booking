@@ -1211,7 +1211,8 @@ function PendingBookings({
   const [items, setItems] = React.useState([]);
   const [counts, setCounts] = React.useState({
     new: 0,
-    cancel_req: 0
+    cancel_req: 0,
+    reschedule_req: 0
   });
   const [loading, setLoading] = React.useState(true);
   const [lineNames, setLineNames] = React.useState({});
@@ -1278,6 +1279,10 @@ function PendingBookings({
       q = q.eq('status', 'cancellation_requested').order('last_edited_at', {
         ascending: true
       });
+    } else if (subTab === 'reschedule_req') {
+      q = q.eq('status', 'reschedule_requested').order('last_edited_at', {
+        ascending: true
+      });
     } else {
       // 取消歷史：只看最近 N 天，cancelled + no_show 都顯示
       const since = new Date();
@@ -1320,14 +1325,20 @@ function PendingBookings({
       count: 'exact',
       head: true
     }).eq('status', 'cancellation_requested');
+    let qRR = sb.from('bookings').select('*', {
+      count: 'exact',
+      head: true
+    }).eq('status', 'reschedule_requested');
     if (!canSeeAll) {
       qNew = qNew.eq('master_id', currentMaster.id);
       qCR = qCR.eq('master_id', currentMaster.id);
+      qRR = qRR.eq('master_id', currentMaster.id);
     }
-    const [r1, r2] = await Promise.all([qNew, qCR]);
+    const [r1, r2, r3] = await Promise.all([qNew, qCR, qRR]);
     setCounts({
       new: r1.count || 0,
-      cancel_req: r2.count || 0
+      cancel_req: r2.count || 0,
+      reschedule_req: r3.count || 0
     });
   }
   React.useEffect(() => {
@@ -1351,7 +1362,7 @@ function PendingBookings({
   async function confirmBooking() {
     if (!confirmDialog) return;
     const group = confirmDialog; // array of one or more bookings sharing a party
-    const isReq = !group[0].date;
+    const isReq = !group[0].date || group[0].status === 'reschedule_requested';
     if (isReq && (!confDate || !confTime)) {
       alert('請填入日期和時段');
       return;
@@ -1394,8 +1405,12 @@ function PendingBookings({
     }
 
     // 🔴 防呆：申請制填入前，逐筆檢查目標時段是否已被占用
+    // （改期核准如果選回跟原本一模一樣的日期時間，checkConflict 會查到「衝突」
+    // 其實就是這筆本身——因為改期請求送出後 date/start_time 沒被清空過，
+    // 這種情況要跳過，不然師傅選回原時間反而會被自己擋住）
     if (isReq) {
       for (const p of plan) {
+        if (p.b.status === 'reschedule_requested' && p.b.date === p.date && p.b.start_time === p.time + ':00') continue;
         const conflict = await checkConflict(p.b.master_id, p.date, p.time);
         if (conflict) {
           setSaving(false);
@@ -1523,6 +1538,17 @@ function PendingBookings({
     setItems(p => p.filter(x => x.id !== item.id));
     loadCounts();
   }
+
+  // ★ 不同意改期 → 還原為 confirmed（原本的 date/start_time 從頭到尾沒被動過，不用復原）
+  async function rejectReschedule(item) {
+    if (!window.confirm(`確定不同意 ${item.customer_name} 的改期申請？\n預約將回到原本的時段。\n\n建議透過 LINE 跟客人說明原因。`)) return;
+    await sb.from('bookings').update({
+      status: 'confirmed',
+      last_edited_at: new Date().toISOString()
+    }).eq('id', item.id);
+    setItems(p => p.filter(x => x.id !== item.id));
+    loadCounts();
+  }
   const wk = ['日', '一', '二', '三', '四', '五', '六'];
   const TIMES = [];
   for (let h = 9; h <= 21; h++) {
@@ -1552,6 +1578,24 @@ function PendingBookings({
     };
   };
 
+  // 解析 note 中的改期申請標記（希望時段），格式跟取消申請對稱
+  const parseRescheduleReason = note => {
+    if (!note) return {
+      reason: null,
+      rest: ''
+    };
+    const m = note.match(/^\[改期申請(?:\s+([^\]]+))?\]\s*([^\n]*)\n?([\s\S]*)$/);
+    if (!m) return {
+      reason: null,
+      rest: note
+    };
+    return {
+      reason: (m[2] || '').trim() || '(未填希望時段)',
+      time: m[1] || '',
+      rest: (m[3] || '').trim()
+    };
+  };
+
   // ── Sub-tab switcher ──
   const tabBar = /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1561,7 +1605,7 @@ function PendingBookings({
       maxWidth: 480,
       margin: '0 auto'
     }
-  }, [['new', `新預約${counts.new > 0 ? ` (${counts.new})` : ''}`, '#00e5e5'], ['cancel_req', `取消請求${counts.cancel_req > 0 ? ` (${counts.cancel_req})` : ''}`, '#e94560'], ['history', '取消歷史', '#8b949e']].map(([k, l, c]) => /*#__PURE__*/React.createElement("button", {
+  }, [['new', `新預約${counts.new > 0 ? ` (${counts.new})` : ''}`, '#00e5e5'], ['cancel_req', `取消請求${counts.cancel_req > 0 ? ` (${counts.cancel_req})` : ''}`, '#e94560'], ['reschedule_req', `改期請求${counts.reschedule_req > 0 ? ` (${counts.reschedule_req})` : ''}`, '#a78bfa'], ['history', '取消歷史', '#8b949e']].map(([k, l, c]) => /*#__PURE__*/React.createElement("button", {
     key: k,
     onClick: () => setSubTab(k),
     style: {
@@ -1657,8 +1701,12 @@ function PendingBookings({
         reason: null,
         rest: b.note
       };
+      const rescheduleInfo = subTab === 'reschedule_req' ? parseRescheduleReason(b.note) : {
+        reason: null,
+        rest: b.note
+      };
       let badge = ['#ffb300', 'rgba(255,179,0,.15)', '待確認'];
-      if (subTab === 'cancel_req') badge = ['#e94560', 'rgba(233,69,96,.15)', '取消申請中'];else if (subTab === 'history') {
+      if (subTab === 'cancel_req') badge = ['#e94560', 'rgba(233,69,96,.15)', '取消申請中'];else if (subTab === 'reschedule_req') badge = ['#a78bfa', 'rgba(167,139,250,.15)', '改期申請中'];else if (subTab === 'history') {
         if (b.status === 'no_show') badge = ['#e94560', 'rgba(233,69,96,.15)', '放鳥'];else badge = ['#8b949e', 'rgba(139,148,158,.15)', '已取消'];
       } else if (isReq) badge = ['#ffb300', 'rgba(255,179,0,.15)', '申請制'];
       const baseName = b.customer_name.replace(/-同行\d*$/, '');
@@ -1809,7 +1857,39 @@ function PendingBookings({
           padding: '6px 8px',
           lineHeight: 1.6
         }
-      }, cancelInfo.rest), subTab !== 'cancel_req' && b.note && /*#__PURE__*/React.createElement("div", {
+      }, cancelInfo.rest), subTab === 'reschedule_req' && rescheduleInfo.reason && /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 12,
+          color: '#a78bfa',
+          marginTop: 6,
+          background: 'rgba(167,139,250,.08)',
+          border: '1px solid rgba(167,139,250,.3)',
+          borderRadius: 6,
+          padding: '7px 9px',
+          lineHeight: 1.5
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontWeight: 700,
+          marginBottom: 2
+        }
+      }, "希望時段"), /*#__PURE__*/React.createElement("div", null, rescheduleInfo.reason), rescheduleInfo.time && /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 10,
+          color: '#8b949e',
+          marginTop: 3
+        }
+      }, "申請時間：", rescheduleInfo.time)), subTab === 'reschedule_req' && rescheduleInfo.rest && /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 12,
+          color: '#8b949e',
+          marginTop: 4,
+          background: '#0d1117',
+          borderRadius: 6,
+          padding: '6px 8px',
+          lineHeight: 1.6
+        }
+      }, rescheduleInfo.rest), subTab !== 'cancel_req' && subTab !== 'reschedule_req' && b.note && /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: 12,
           color: '#8b949e',
@@ -1913,6 +1993,57 @@ function PendingBookings({
         }
       }, "✓ 同意取消"), /*#__PURE__*/React.createElement("button", {
         onClick: () => rejectCancel(b),
+        style: {
+          flex: 1,
+          padding: '9px',
+          borderRadius: 8,
+          background: 'none',
+          border: '1.5px solid #74b9ff',
+          color: '#74b9ff',
+          fontSize: 13,
+          fontWeight: 700,
+          cursor: 'pointer'
+        }
+      }, "✗ 不同意")), subTab === 'reschedule_req' && /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: 'flex',
+          gap: 8,
+          marginTop: 12
+        }
+      }, b.customer_phone && lineInfo.uid && /*#__PURE__*/React.createElement("button", {
+        onClick: () => openLineChat(b.customer_phone),
+        style: {
+          flex: 1,
+          padding: '9px',
+          borderRadius: 8,
+          background: '#06c755',
+          border: 'none',
+          color: '#fff',
+          fontSize: 13,
+          fontWeight: 700,
+          cursor: 'pointer'
+        }
+      }, "💬 LINE"), /*#__PURE__*/React.createElement("button", {
+        onClick: () => {
+          setConfirmDialog([b]);
+          setConfDate(b.date || '');
+          setConfTime(b.start_time ? b.start_time.slice(0, 5) : '');
+          setConfTakenSlots(new Map());
+          if (b.date) loadTakenSlots(b.date, b.master_id);
+        },
+        style: {
+          flex: 2,
+          padding: '9px',
+          borderRadius: 8,
+          background: '#a78bfa',
+          border: 'none',
+          color: '#000',
+          fontSize: 13,
+          fontWeight: 700,
+          cursor: 'pointer'
+        }
+      }, "✓ 同意改期，排新時間"), /*#__PURE__*/React.createElement("button", {
+        onClick: () => rejectReschedule(b),
         style: {
           flex: 1,
           padding: '9px',
@@ -2080,7 +2211,7 @@ function PendingBookings({
       fontWeight: 900,
       marginBottom: 16
     }
-  }, "確認預約 - ", confirmDialog[0].customer_name, confirmDialog.length > 1 ? ` 等${confirmDialog.length}人` : ''), confirmDialog.length > 1 && /*#__PURE__*/React.createElement("div", {
+  }, confirmDialog[0].status === 'reschedule_requested' ? "確認改期 - " : "確認預約 - ", confirmDialog[0].customer_name, confirmDialog.length > 1 ? ` 等${confirmDialog.length}人` : ''), confirmDialog.length > 1 && /*#__PURE__*/React.createElement("div", {
     style: {
       background: 'rgba(0,229,229,.1)',
       border: '1px solid rgba(0,229,229,.3)',
@@ -2090,7 +2221,7 @@ function PendingBookings({
       fontSize: 13,
       color: '#00e5e5'
     }
-  }, "👥 這是一組 ", confirmDialog.length, " 人的預約，確認後全部會一起變成已確認"), !confirmDialog[0].date && /*#__PURE__*/React.createElement("div", {
+  }, "👥 這是一組 ", confirmDialog.length, " 人的預約，確認後全部會一起變成已確認"), (!confirmDialog[0].date || confirmDialog[0].status === 'reschedule_requested') && /*#__PURE__*/React.createElement("div", {
     style: {
       background: 'rgba(255,179,0,.1)',
       border: '1px solid rgba(255,179,0,.3)',
@@ -2100,7 +2231,7 @@ function PendingBookings({
       fontSize: 13,
       color: '#ffb300'
     }
-  }, "⚡ 申請制預約，請填入與客人確認的時間"), /*#__PURE__*/React.createElement("div", {
+  }, confirmDialog[0].status === 'reschedule_requested' ? "⚡ 客人申請改期，請填入與客人確認的新時間" : "⚡ 申請制預約，請填入與客人確認的時間"), /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 12
     }
