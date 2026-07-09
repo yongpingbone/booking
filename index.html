@@ -15584,9 +15584,9 @@ function SettingsModule({
       const rowNum = idx + 2; // 對應試算表上實際的列號（第 1 列是表頭）
       const id = (r[idIdx] || "").trim();
       const errors = [];
+      const isNew = !id;
       const orig = id ? existingMap[id] : null;
-      if (!id) errors.push("缺少 id");
-      else if (!orig) errors.push("找不到這個 id 對應的預約（可能已被刪除）");
+      if (id && !orig) errors.push("這個 id 對不到既有預約（可能已被刪除，或打錯字；要新增的話請把 id 欄留空，不要留一個查無此人的值）");
 
       const date = (col("日期") >= 0 ? r[col("日期")] : "").trim();
       const time = (col("時間") >= 0 ? r[col("時間")] : "").trim();
@@ -15625,7 +15625,7 @@ function SettingsModule({
         else seenSlot.set(slotKey, rowNum);
       }
 
-      return { rowNum, id, date, time, masterId, masterName, name, phone, guestCount, colorTag, colorLabel, note, orig, errors };
+      return { rowNum, id, isNew, date, time, masterId, masterName, name, phone, guestCount, colorTag, colorLabel, note, orig, errors };
     });
 
     // 資料庫層級衝突檢查：跟「別的」既有預約比對（排除自己這筆）
@@ -15649,7 +15649,11 @@ function SettingsModule({
     setImporting(true);
     let ok = 0,
       fail = 0;
-    for (const p of okRows) {
+
+    const toUpdate = okRows.filter(p => !p.isNew);
+    const toInsert = okRows.filter(p => p.isNew);
+
+    for (const p of toUpdate) {
       const { error } = await sb.from("bookings").update({
         date: p.date,
         start_time: p.time + ":00",
@@ -15663,6 +15667,34 @@ function SettingsModule({
       }).eq("id", p.id);
       if (error) fail++;else ok++;
     }
+
+    // 新增的量可能很大（例如歷史資料批次匯入），分批 insert 一次送多筆，
+    // 不要逐筆等待，不然幾千筆會跑非常久
+    const CHUNK = 500;
+    for (let i = 0; i < toInsert.length; i += CHUNK) {
+      const chunk = toInsert.slice(i, i + CHUNK).map(p => ({
+        date: p.date,
+        start_time: p.time + ":00",
+        master_id: p.masterId,
+        customer_name: p.name,
+        customer_phone: p.phone || null,
+        guest_count: p.guestCount,
+        color_tag: p.colorTag,
+        note: p.note || null,
+        status: "confirmed",
+        booking_source: "internal",
+        reservation_type: "single",
+        party_size: 1
+      }));
+      const { error } = await sb.from("bookings").insert(chunk);
+      if (error) {
+        console.error("匯入新增失敗", error);
+        fail += chunk.length;
+      } else {
+        ok += chunk.length;
+      }
+    }
+
     setImporting(false);
     setImportResult({
       ok,
@@ -16185,7 +16217,7 @@ function SettingsModule({
       marginBottom: 10,
       lineHeight: 1.6
     }
-  }, "用「下載 CSV」匯出的檔案為底修改（不要刪掉 id 欄），改完選檔上傳，批次更新既有預約。狀態（status）欄不會透過匯入更動。"), /*#__PURE__*/React.createElement("input", {
+  }, "用「下載 CSV」匯出的檔案為底修改（id 欄留著就是更新那一筆；id 欄留空白就是新增一筆新的），改完選檔上傳，會先跑預覽再送出。狀態（status）欄不會透過匯入更動，新增的預約狀態一律是「已確認」。"), /*#__PURE__*/React.createElement("input", {
     type: "file",
     accept: ".csv",
     onChange: handleImportFile,
@@ -16198,20 +16230,27 @@ function SettingsModule({
       marginTop: 12
     }
   }, (() => {
-    const okCount = importRows.filter(p => !p.errors.length).length;
-    const failCount = importRows.length - okCount;
+    const okRowsPreview = importRows.filter(p => !p.errors.length);
+    const newCount = okRowsPreview.filter(p => p.isNew).length;
+    const updateCount = okRowsPreview.length - newCount;
+    const failCount = importRows.length - okRowsPreview.length;
     return /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 12,
         marginBottom: 8,
         color: "var(--text-dim)"
       }
-    }, `共 ${importRows.length} 列：`, /*#__PURE__*/React.createElement("span", {
+    }, `共 ${importRows.length} 列：`, newCount > 0 && /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "#74b9ff",
+        fontWeight: 700
+      }
+    }, `新增 ${newCount} 筆　`), updateCount > 0 && /*#__PURE__*/React.createElement("span", {
       style: {
         color: "#00d09c",
         fontWeight: 700
       }
-    }, `可更新 ${okCount} 筆`), failCount > 0 && /*#__PURE__*/React.createElement("span", {
+    }, `更新 ${updateCount} 筆`), failCount > 0 && /*#__PURE__*/React.createElement("span", {
       style: {
         color: "#e94560",
         fontWeight: 700
@@ -16237,7 +16276,7 @@ function SettingsModule({
       fontWeight: 700,
       color: p.errors.length ? "#e94560" : "var(--text-main)"
     }
-  }, `第 ${p.rowNum} 列　${p.name || p.orig?.customer_name || "(無姓名)"}　${p.date || ""} ${p.time || ""}　${p.masterName || ""}`), p.errors.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, `第 ${p.rowNum} 列　${!p.errors.length ? (p.isNew ? "[新增] " : "[更新] ") : ""}${p.name || p.orig?.customer_name || "(無姓名)"}　${p.date || ""} ${p.time || ""}　${p.masterName || ""}`), p.errors.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       color: "#e94560",
       marginTop: 3
