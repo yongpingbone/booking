@@ -111,9 +111,14 @@ const CONFIRM_WINDOW_MS = 2 * 60 * 60 * 1000;
 async function pushLineToCustomer(userId, text) {
   if (!userId || String(userId).startsWith("__")) return false;
   try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session?.access_token) return false;
     const r = await fetch("https://ikzyzkhuireqztbhrtna.supabase.co/functions/v1/notify-line-push", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${session.access_token}`
+      },
       body: JSON.stringify({ customerLineId: userId, messageText: text })
     });
     const j = await r.json().catch(() => ({}));
