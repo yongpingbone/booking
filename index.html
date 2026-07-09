@@ -468,6 +468,9 @@ const COLOR_DEFAULT_NAMES = {
 };
 // 所有可能的「系統預設名字」（也包含跨色標的舊資料容錯）
 const ALL_DEFAULT_NAMES = new Set(["休假", "卡位", "自訂", "售後"]);
+// CSV 匯出/匯入共用：色標代碼 ↔ 中文標籤（匯出時給人看得懂的字，匯入時換回代碼存進資料庫）
+const COLOR_LABEL_BY_KEY = Object.fromEntries(COLORS.map(c => [c.key, c.label]));
+const COLOR_KEY_BY_LABEL = Object.fromEntries(COLORS.map(c => [c.label, c.key]));
 
 // 計入人數規則：只有「使用者真的有寫名字」才算
 //   - 售後 (aftercare)：永不計入（不管有沒有名字）
@@ -524,6 +527,68 @@ const checkConflict = async (mid, dateStr, timeStr) => {
   } = await sb.from("bookings").select("id,customer_name").eq("master_id", mid).eq("date", dateStr).eq("start_time", timeStr + ":00").neq("status", "cancelled").neq("status", "no_show").limit(1);
   return data && data.length > 0 ? data[0] : null;
 };
+
+// ── CSV 讀寫共用工具（正確處理引號跳脫/逗號/換行，不是單純用逗號切） ──
+function csvField(v) {
+  const s = v === null || v === undefined ? "" : String(v);
+  return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function parseCSV(text) {
+  const s = text.replace(/^\uFEFF/, "");
+  const rows = [];
+  let row = [],
+    field = "",
+    inQuotes = false,
+    i = 0;
+  while (i < s.length) {
+    const c = s[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (s[i + 1] === '"') {
+          field += '"';
+          i += 2;
+          continue;
+        }
+        inQuotes = false;
+        i++;
+        continue;
+      }
+      field += c;
+      i++;
+      continue;
+    }
+    if (c === '"') {
+      inQuotes = true;
+      i++;
+      continue;
+    }
+    if (c === ",") {
+      row.push(field);
+      field = "";
+      i++;
+      continue;
+    }
+    if (c === "\r") {
+      i++;
+      continue;
+    }
+    if (c === "\n") {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+      i++;
+      continue;
+    }
+    field += c;
+    i++;
+  }
+  if (field.length || row.length) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows.filter(r => !(r.length === 1 && r[0] === ""));
+}
 
 // ── Edit log helpers ──
 const saveEditLog = async (bookingId, editorName, changes, cellInfo = null) => {
@@ -15368,6 +15433,9 @@ function SettingsModule({
   const [restMasterId, setRestMasterId] = useState(loginMaster?.id || "");
   const [restSet, setRestSet] = useState(() => new Set(restOf(loginMaster?.id)));
   const [restSaved, setRestSaved] = useState(false);
+  const [importRows, setImportRows] = useState([]);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
   // 切換編輯對象時，載入該師傅目前的休息集合
   useEffect(() => {
     if (restMasterId) setRestSet(new Set(restOf(restMasterId)));
@@ -15476,6 +15544,135 @@ function SettingsModule({
       [field]: val
     } : x));
   };
+
+  // ── CSV 匯入：解析＋逐列驗證（不寫入資料庫，先產生預覽） ──
+  const handleImportFile = async e => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // 允許重選同一個檔案也能觸發 onChange
+    if (!file) return;
+    setImportResult(null);
+    setImportRows([]);
+    const text = await file.text();
+    const table = parseCSV(text);
+    if (!table.length) {
+      msg("CSV 是空的", true);
+      return;
+    }
+    const header = table[0].map(h => h.trim());
+    const idIdx = header.indexOf("id");
+    if (idIdx === -1) {
+      msg("找不到 id 欄位，請用「下載 CSV」匯出的檔案為底修改，不要自己重建欄位", true);
+      return;
+    }
+    const col = name => header.indexOf(name);
+    const dataRows = table.slice(1).filter(r => r.some(v => (v || "").trim() !== ""));
+    if (!dataRows.length) {
+      msg("CSV 沒有資料列", true);
+      return;
+    }
+
+    const ids = dataRows.map(r => r[idIdx]).filter(Boolean);
+    const { data: existing } = await sb.from("bookings").select("id,date,start_time,master_id,customer_name,customer_phone,guest_count,color_tag,note,status").in("id", ids);
+    const existingMap = {};
+    (existing || []).forEach(b => existingMap[b.id] = b);
+
+    const masterByName = {};
+    masters.forEach(m => masterByName[m.name] = m.id);
+
+    const seenSlot = new Map(); // 這批 CSV 內部自己的排班衝突檢查
+    const preview = dataRows.map((r, idx) => {
+      const rowNum = idx + 2; // 對應試算表上實際的列號（第 1 列是表頭）
+      const id = (r[idIdx] || "").trim();
+      const errors = [];
+      const orig = id ? existingMap[id] : null;
+      if (!id) errors.push("缺少 id");
+      else if (!orig) errors.push("找不到這個 id 對應的預約（可能已被刪除）");
+
+      const date = (col("日期") >= 0 ? r[col("日期")] : "").trim();
+      const time = (col("時間") >= 0 ? r[col("時間")] : "").trim();
+      const masterName = (col("師傅") >= 0 ? r[col("師傅")] : "").trim();
+      const name = (col("姓名") >= 0 ? r[col("姓名")] : "").trim();
+      const phone = (col("電話") >= 0 ? r[col("電話")] : "").trim();
+      const guestRaw = (col("人數") >= 0 ? r[col("人數")] : "").trim();
+      const colorLabel = (col("顏色") >= 0 ? r[col("顏色")] : "").trim();
+      const note = col("備註") >= 0 ? r[col("備註")] : "";
+
+      if (!date) errors.push("日期不能空白");
+      else if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) errors.push("日期格式錯誤（要 YYYY-MM-DD）");
+      if (!time) errors.push("時間不能空白");
+      else if (!/^\d{1,2}:\d{2}$/.test(time)) errors.push("時間格式錯誤（要 HH:MM）");
+      if (!masterName) errors.push("師傅不能空白");
+      const masterId = masterByName[masterName];
+      if (masterName && !masterId) errors.push(`找不到師傅「${masterName}」`);
+      if (!name) errors.push("姓名不能空白");
+
+      let guestCount = orig?.guest_count ?? 1;
+      if (guestRaw) {
+        const n = parseInt(guestRaw, 10);
+        if (isNaN(n) || n < 0) errors.push("人數格式錯誤");
+        else guestCount = n;
+      }
+
+      let colorTag = orig?.color_tag ?? "none";
+      if (colorLabel) {
+        if (COLOR_KEY_BY_LABEL[colorLabel]) colorTag = COLOR_KEY_BY_LABEL[colorLabel];
+        else errors.push(`顏色「${colorLabel}」不是可用選項（${COLORS.map(c => c.label).join("/")}）`);
+      }
+
+      if (!errors.length) {
+        const slotKey = `${masterId}_${date}_${time}`;
+        if (seenSlot.has(slotKey)) errors.push(`跟這份 CSV 第 ${seenSlot.get(slotKey)} 列時段衝突`);
+        else seenSlot.set(slotKey, rowNum);
+      }
+
+      return { rowNum, id, date, time, masterId, masterName, name, phone, guestCount, colorTag, colorLabel, note, orig, errors };
+    });
+
+    // 資料庫層級衝突檢查：跟「別的」既有預約比對（排除自己這筆）
+    const okRows = preview.filter(p => !p.errors.length);
+    if (okRows.length) {
+      const dateSet = [...new Set(okRows.map(p => p.date))];
+      const { data: others } = await sb.from("bookings").select("id,date,start_time,master_id").in("date", dateSet).neq("status", "cancelled").neq("status", "no_show");
+      okRows.forEach(p => {
+        const conflict = (others || []).find(o => o.id !== p.id && o.master_id === p.masterId && o.date === p.date && o.start_time?.slice(0, 5) === p.time);
+        if (conflict) p.errors.push("時段跟資料庫裡其他既有預約衝突");
+      });
+    }
+
+    setImportRows(preview);
+  };
+
+  // ── CSV 匯入：實際套用（只處理通過驗證的列） ──
+  const applyImport = async () => {
+    const okRows = importRows.filter(p => !p.errors.length);
+    if (!okRows.length) return;
+    setImporting(true);
+    let ok = 0,
+      fail = 0;
+    for (const p of okRows) {
+      const { error } = await sb.from("bookings").update({
+        date: p.date,
+        start_time: p.time + ":00",
+        master_id: p.masterId,
+        customer_name: p.name,
+        customer_phone: p.phone || null,
+        guest_count: p.guestCount,
+        color_tag: p.colorTag,
+        note: p.note || null,
+        last_edited_at: new Date().toISOString()
+      }).eq("id", p.id);
+      if (error) fail++;else ok++;
+    }
+    setImporting(false);
+    setImportResult({
+      ok,
+      fail,
+      skipped: importRows.length - okRows.length
+    });
+    setImportRows([]);
+    msg(fail ? `匯入完成，成功 ${ok} 筆、失敗 ${fail} 筆` : `匯入完成，成功 ${ok} 筆`);
+  };
+
   return /*#__PURE__*/React.createElement("div", {
     style: {
       flex: 1,
@@ -15944,8 +16141,9 @@ function SettingsModule({
         from += 1000;
       }
       if (!all.length) return;
-      const header = "日期,時間,師傅,狀態,姓名,電話,人數,顏色,備註\n";
-      const rows = all.map(b => [b.date, b.start_time?.slice(0, 5), b.masters?.name || "", b.status || "confirmed", b.customer_name || "", b.customer_phone || "", b.guest_count, b.color_tag, b.note || ""].join(",")).join("\n");
+      const cols = ["id", "日期", "時間", "師傅", "狀態", "姓名", "電話", "人數", "顏色", "備註"];
+      const header = cols.map(csvField).join(",") + "\n";
+      const rows = all.map(b => [b.id, b.date, b.start_time?.slice(0, 5), b.masters?.name || "", b.status || "confirmed", b.customer_name || "", b.customer_phone || "", b.guest_count, COLOR_LABEL_BY_KEY[b.color_tag] || b.color_tag || "", b.note || ""].map(csvField).join(",")).join("\n");
       const blob = new Blob(["\ufeff" + header + rows], {
         type: "text/csv;charset=utf-8"
       });
@@ -15966,7 +16164,107 @@ function SettingsModule({
       cursor: "pointer",
       width: "100%"
     }
-  }, "📥 下載 CSV"))), settTab === "history" && /*#__PURE__*/React.createElement("div", {
+  }, "📥 下載 CSV")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "var(--bg-header)",
+      borderRadius: 10,
+      padding: "14px 16px",
+      border: "1px solid var(--border2)",
+      marginTop: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 700,
+      fontSize: 14,
+      marginBottom: 8
+    }
+  }, "資料匯入"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "var(--text-dim)",
+      marginBottom: 10,
+      lineHeight: 1.6
+    }
+  }, "用「下載 CSV」匯出的檔案為底修改（不要刪掉 id 欄），改完選檔上傳，批次更新既有預約。狀態（status）欄不會透過匯入更動。"), /*#__PURE__*/React.createElement("input", {
+    type: "file",
+    accept: ".csv",
+    onChange: handleImportFile,
+    style: {
+      fontSize: 12,
+      color: "var(--text-dim)"
+    }
+  }), importRows.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 12
+    }
+  }, (() => {
+    const okCount = importRows.filter(p => !p.errors.length).length;
+    const failCount = importRows.length - okCount;
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        marginBottom: 8,
+        color: "var(--text-dim)"
+      }
+    }, `共 ${importRows.length} 列：`, /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "#00d09c",
+        fontWeight: 700
+      }
+    }, `可更新 ${okCount} 筆`), failCount > 0 && /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "#e94560",
+        fontWeight: 700
+      }
+    }, `　有問題 ${failCount} 筆（不會被送出）`));
+  })(), /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxHeight: 280,
+      overflowY: "auto",
+      border: "1px solid var(--border2)",
+      borderRadius: 8
+    }
+  }, importRows.map(p => /*#__PURE__*/React.createElement("div", {
+    key: p.rowNum,
+    style: {
+      padding: "8px 10px",
+      borderBottom: "1px solid var(--border2)",
+      fontSize: 12,
+      background: p.errors.length ? "rgba(233,69,96,0.08)" : "transparent"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 700,
+      color: p.errors.length ? "#e94560" : "var(--text-main)"
+    }
+  }, `第 ${p.rowNum} 列　${p.name || p.orig?.customer_name || "(無姓名)"}　${p.date || ""} ${p.time || ""}　${p.masterName || ""}`), p.errors.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: "#e94560",
+      marginTop: 3
+    }
+  }, p.errors.join("；")))), /*#__PURE__*/React.createElement("button", {
+    onClick: applyImport,
+    disabled: importing || importRows.every(p => p.errors.length),
+    style: {
+      width: "100%",
+      marginTop: 10,
+      padding: "10px",
+      borderRadius: 8,
+      background: "#00b894",
+      border: "none",
+      color: "#fff",
+      fontWeight: 700,
+      fontSize: 13,
+      cursor: importing ? "wait" : "pointer",
+      opacity: importing || importRows.every(p => p.errors.length) ? 0.5 : 1
+    }
+  }, importing ? "匯入中…" : `確認匯入 ${importRows.filter(p => !p.errors.length).length} 筆`))), importResult && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10,
+      fontSize: 12,
+      color: "var(--text-dim)"
+    }
+  }, `上次匯入結果：成功 ${importResult.ok} 筆`, importResult.fail > 0 && `、失敗 ${importResult.fail} 筆`, importResult.skipped > 0 && `、略過 ${importResult.skipped} 筆`))), settTab === "history" && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: 12
     }
