@@ -3864,6 +3864,16 @@ function MainApp({
           date: snap.date,
           start_time: snap.start_time
         });
+        if (snap.customer_phone) {
+          try {
+            const { data: freshBinding } = await sb.from("line_bindings").select("line_user_id").eq("phone", snap.customer_phone).maybeSingle();
+            const lineUid = freshBinding?.line_user_id || null;
+            if (lineUid) {
+              const cancelMsg = `❌ 您的預約已被取消\n日期：${snap.date || ""} ${snap.start_time ? snap.start_time.slice(0, 5) : ""}\n姓名：${snap.customer_name || ""}\n\n如有疑問請致電 02-8285-4865，或透過 LINE 重新預約。`;
+              pushLineToCustomer(lineUid, cancelMsg);
+            }
+          } catch (e) {}
+        }
       }
       msg("已刪除");
     }
@@ -8567,6 +8577,16 @@ function OverviewMonth({
           date: snap.date,
           start_time: snap.start_time
         });
+        if (snap.customer_phone) {
+          try {
+            const { data: freshBinding } = await sb.from("line_bindings").select("line_user_id").eq("phone", snap.customer_phone).maybeSingle();
+            const lineUid = freshBinding?.line_user_id || null;
+            if (lineUid) {
+              const cancelMsg = `❌ 您的預約已被取消\n日期：${snap.date || ""} ${snap.start_time ? snap.start_time.slice(0, 5) : ""}\n姓名：${snap.customer_name || ""}\n\n如有疑問請致電 02-8285-4865，或透過 LINE 重新預約。`;
+              pushLineToCustomer(lineUid, cancelMsg);
+            }
+          } catch (e) {}
+        }
       }
       msg("已刪除");
     }
