@@ -2459,7 +2459,7 @@ function SplitMasterSelect({
     filtered.forEach(async m => {
       const {
         data
-      } = await sb.from("bookings").select("id,customer_name").eq("master_id", m.id).eq("date", dateStr).eq("start_time", time + ":00").neq("status", "cancelled").neq("color_tag", "vacation").limit(1);
+      } = await sb.from("bookings").select("id,customer_name").eq("master_id", m.id).eq("date", dateStr).eq("start_time", time + ":00").neq("status", "cancelled").neq("status", "no_show").neq("color_tag", "vacation").limit(1);
       setAvail(prev => ({
         ...prev,
         [m.id]: data && data.length > 0 ? data[0].customer_name : null
@@ -3651,7 +3651,7 @@ function MainApp({
       // 一次撈所有日期的衝突
       const {
         data: _existing
-      } = await sb.from("bookings").select("id,date,customer_name,color_tag").eq("master_id", dialog.masterId).eq("start_time", dialog.time + ":00").in("date", recurDates).neq("status", "cancelled");
+      } = await sb.from("bookings").select("id,date,customer_name,color_tag").eq("master_id", dialog.masterId).eq("start_time", dialog.time + ":00").in("date", recurDates).neq("status", "cancelled").neq("status", "no_show");
       const _conflictMap = {};
       (_existing || []).forEach(c => {
         _conflictMap[c.date] = c;
@@ -4219,9 +4219,9 @@ function MainApp({
       for (const row of rows) {
         const {
           data: existing
-        } = await sb.from("bookings").select("*").eq("master_id", row.master_id).eq("date", row.date).eq("start_time", row.start_time).neq("status", "cancelled");
+        } = await sb.from("bookings").select("*").eq("master_id", row.master_id).eq("date", row.date).eq("start_time", row.start_time).neq("status", "cancelled").neq("status", "no_show");
         if (existing && existing.length > 0) overwritten.push(...existing);
-        await sb.from("bookings").delete().eq("master_id", row.master_id).eq("date", row.date).eq("start_time", row.start_time).neq("status", "cancelled");
+        await sb.from("bookings").delete().eq("master_id", row.master_id).eq("date", row.date).eq("start_time", row.start_time).neq("status", "cancelled").neq("status", "no_show");
       }
     }
     // 4. 插入新休假
@@ -7752,7 +7752,7 @@ function MainApp({
         const timeStr = b.start_time?.slice(0, 5);
         const {
           data: existing
-        } = await sb.from("bookings").select("id,date,customer_name,color_tag").eq("master_id", b.master_id).eq("start_time", b.start_time).in("date", futureDates).neq("status", "cancelled");
+        } = await sb.from("bookings").select("id,date,customer_name,color_tag").eq("master_id", b.master_id).eq("start_time", b.start_time).in("date", futureDates).neq("status", "cancelled").neq("status", "no_show");
         const cmap = {};
         (existing || []).forEach(c => {
           cmap[c.date] = c;
@@ -8365,7 +8365,7 @@ function OverviewMonth({
       // 一次撈所有日期的衝突
       const {
         data: _existing
-      } = await sb.from("bookings").select("id,date,customer_name,color_tag").eq("master_id", dialog.masterId).eq("start_time", dialog.time + ":00").in("date", recurDates).neq("status", "cancelled");
+      } = await sb.from("bookings").select("id,date,customer_name,color_tag").eq("master_id", dialog.masterId).eq("start_time", dialog.time + ":00").in("date", recurDates).neq("status", "cancelled").neq("status", "no_show");
       const _conflictMap = {};
       (_existing || []).forEach(c => {
         _conflictMap[c.date] = c;
@@ -8952,9 +8952,9 @@ function OverviewMonth({
     for (const row of rows) {
       const {
         data: existing
-      } = await sb.from("bookings").select("*").eq("master_id", row.master_id).eq("date", row.date).eq("start_time", row.start_time).neq("status", "cancelled");
+      } = await sb.from("bookings").select("*").eq("master_id", row.master_id).eq("date", row.date).eq("start_time", row.start_time).neq("status", "cancelled").neq("status", "no_show");
       if (existing && existing.length > 0) overwritten.push(...existing);
-      await sb.from("bookings").delete().eq("master_id", row.master_id).eq("date", row.date).eq("start_time", row.start_time).neq("status", "cancelled");
+      await sb.from("bookings").delete().eq("master_id", row.master_id).eq("date", row.date).eq("start_time", row.start_time).neq("status", "cancelled").neq("status", "no_show");
     }
     let inserted = [];
     if (rows.length > 0) {
@@ -11758,7 +11758,7 @@ function OverviewMonth({
         const timeStr = b.start_time?.slice(0, 5);
         const {
           data: existing
-        } = await sb.from("bookings").select("id,date,customer_name,color_tag").eq("master_id", b.master_id).eq("start_time", b.start_time).in("date", futureDates).neq("status", "cancelled");
+        } = await sb.from("bookings").select("id,date,customer_name,color_tag").eq("master_id", b.master_id).eq("start_time", b.start_time).in("date", futureDates).neq("status", "cancelled").neq("status", "no_show");
         const cmap = {};
         (existing || []).forEach(c => {
           cmap[c.date] = c;
