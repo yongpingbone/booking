@@ -532,7 +532,7 @@ async function lookupPhone(phone){
     ]);
     isNewCustomer = !custRes.data;
     if(custRes.data?.name){ document.getElementById('f-name').value = custRes.data.name; }
-    document.getElementById('lookupStatus').textContent = isNewCustomer ? '🆕 新客人' : '✓ 舊客人';
+    document.getElementById('lookupStatus').textContent = isNewCustomer ? '★ 新客人' : '✓ 舊客人';
 
     const noShowCount = noShowRes.count || 0;
     if(noShowCount >= 3){
