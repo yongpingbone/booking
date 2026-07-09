@@ -4326,7 +4326,7 @@ function MainApp({
     if (!q.trim() || !master) return;
     setSearchLoading(true);
     const isPhone = /\d{4,}/.test(q);
-    let query = sb.from("bookings").select("*").eq("master_id", master.id).neq("status", "cancelled").neq("color_tag", "vacation").order("date", {
+    let query = sb.from("bookings").select("id,customer_name,customer_phone,raw_input,date,start_time").eq("master_id", master.id).neq("status", "cancelled").neq("color_tag", "vacation").order("date", {
       ascending: false
     }).limit(50);
     if (isPhone) {
@@ -8869,7 +8869,7 @@ function OverviewMonth({
     setOvSearchLoading(true);
     const allMasterIds = masters.filter(m => m.role !== "editor").map(m => m.id);
     const isPhone = /\d{4,}/.test(q);
-    let query = sb.from("bookings").select("*").in("master_id", allMasterIds).neq("status", "cancelled").neq("color_tag", "vacation").order("date", {
+    let query = sb.from("bookings").select("id,master_id,customer_name,customer_phone,raw_input,date,start_time").in("master_id", allMasterIds).neq("status", "cancelled").neq("color_tag", "vacation").order("date", {
       ascending: false
     }).limit(80);
     if (isPhone) {
