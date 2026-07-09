@@ -85,6 +85,10 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
   .nb { padding:6px 10px; font-size:12px; min-height:32px; }
   input, select { font-size:16px !important; }
 }
+.store-name-label{max-width:96px}
+@media(min-width:769px) {
+  .store-name-label{max-width:240px}
+}
 </style>
 </head>
 <body class="dark">
@@ -4756,6 +4760,7 @@ function MainApp({
       gap: 6
     }
   }, /*#__PURE__*/React.createElement("div", {
+    className: "store-name-label",
     style: {
       fontWeight: 800,
       fontSize: 13,
@@ -4764,8 +4769,7 @@ function MainApp({
       overflow: "hidden",
       textOverflow: "ellipsis",
       flexShrink: 1,
-      minWidth: 0,
-      maxWidth: 96
+      minWidth: 0
     }
   }, "🦴 永平整復保健"), tab === "schedule" && canViewOthers ? /*#__PURE__*/React.createElement("select", {
     value: master.id,
