@@ -1,0 +1,70 @@
+name: 觸發 Sheet 同步 Worker
+
+on:
+  workflow_dispatch:
+    inputs:
+      endpoint:
+        description: '要呼叫哪個功能'
+        required: true
+        default: 'sync'
+        type: choice
+        options:
+          - sync
+          - reconcile-month
+      weekKey:
+        description: '[sync 用] 週一日期(YYYY-MM-DD)，留空 = 當週'
+        required: false
+        type: string
+      year:
+        description: '[reconcile-month 用] 年份，例如 2026'
+        required: false
+        type: string
+      month:
+        description: '[reconcile-month 用] 月份 1-12'
+        required: false
+        type: string
+      dryRun:
+        description: '[reconcile-month 用] 勾選 = 只乾跑不真的執行'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 呼叫 Worker 並顯示結果
+        env:
+          INTERNAL_SYNC_SECRET: ${{ secrets.INTERNAL_SYNC_SECRET }}
+        run: |
+          set -e
+          if [ -z "$INTERNAL_SYNC_SECRET" ]; then
+            echo "::error::缺少 INTERNAL_SYNC_SECRET 這把 repository secret"
+            exit 1
+          fi
+
+          if [ "${{ inputs.endpoint }}" = "sync" ]; then
+            URL="https://yongping-sheet-sync.yihanhsu123.workers.dev/sync"
+            if [ -n "${{ inputs.weekKey }}" ]; then
+              BODY='{"weekKey": "${{ inputs.weekKey }}"}'
+            else
+              BODY='{}'
+            fi
+          else
+            URL="https://yongping-sheet-sync.yihanhsu123.workers.dev/reconcile-month"
+            BODY='{"year": ${{ inputs.year }}, "month": ${{ inputs.month }}, "dryRun": ${{ inputs.dryRun }}}'
+          fi
+
+          echo "POST $URL"
+          echo "body: $BODY"
+          echo "---"
+
+          curl -sS -X POST "$URL" \
+            -H "X-Internal-Secret: $INTERNAL_SYNC_SECRET" \
+            -H "Content-Type: application/json" \
+            -d "$BODY" \
+            -w "\nHTTP status: %{http_code}\n" \
+            -o response.json
+
+          echo "---"
+          cat response.json | jq . || cat response.json
