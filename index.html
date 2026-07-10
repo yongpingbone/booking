@@ -4402,14 +4402,16 @@ function MainApp({
       const wks = showSun === "1" ? getWeeksSun(y, m - 1) : getWeeksMon(y, m - 1, false);
       const idx = wks.findIndex(wk => wk.includes(d));
       if (idx >= 0 && todayWkRef) {
-        // 找到對應 W row 並 scroll
+        // 找到對應 W row 並 scroll（手動計算，不用scrollIntoView，避免在部分手機瀏覽器上
+        // 捲動範圍跑出container、突破body的overflow:hidden）
         const rows = scrollContainerRef.current?.querySelectorAll("tr");
         if (rows) for (const row of rows) {
           if (row.textContent.includes(`W${idx + 1}`)) {
-            row.scrollIntoView({
-              behavior: "smooth",
-              block: "center"
-            });
+            const c = scrollContainerRef.current;
+            const cRect = c.getBoundingClientRect();
+            const rRect = row.getBoundingClientRect();
+            const delta = rRect.top - cRect.top - cRect.height / 2 + rRect.height / 2;
+            c.scrollTo({ top: c.scrollTop + delta, behavior: "smooth" });
             break;
           }
         }
@@ -4447,12 +4449,17 @@ function MainApp({
         const tds = container.querySelectorAll("td[data-cellkey]");
         const target = [...tds].find(td => td.dataset.cellkey === `${dateStr}__${highlightTime}`);
         if (target) {
-          // scroll-snap-type:x mandatory 跟 scrollIntoView 的平滑捲動放一起容易互相干擾，
-          // 導致捲動動畫卡住沒有正常結束、後續的點擊/捲動事件跟著失效。
-          // 捲動前先暫時關掉吸附，捲完（抓一個比動畫時間長一點的時間）再恢復。
+          // scroll-snap-type:x mandatory 可能跟平滑捲動互相干擾；scrollIntoView() 更嚴重的問題是
+          // 它會自己決定「該捲動哪一層祖先容器」，在某些手機瀏覽器上有機會捲過頭捲到 body 本身
+          // （即使 body 設了 overflow:hidden），造成最上面的分頁列被推出畫面、卡住回不去。
+          // 改成完全手動計算、只對這個 container 本身呼叫 scrollTo，不透過瀏覽器自動判斷，
+          // 就不可能捲到這個容器以外的地方。
           const prevSnap = container.style.scrollSnapType;
           container.style.scrollSnapType = "none";
-          target.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+          const containerRect = container.getBoundingClientRect();
+          const targetRect = target.getBoundingClientRect();
+          const deltaTop = targetRect.top - containerRect.top - containerRect.height / 2 + targetRect.height / 2;
+          container.scrollTo({ top: container.scrollTop + deltaTop, behavior: "smooth" });
           target.style.outline = "2px solid #2ed9c3";
           setTimeout(() => { target.style.outline = ""; }, 2500);
           setTimeout(() => {
@@ -5227,10 +5234,10 @@ function MainApp({
         const todStr = fmtDate(today.getFullYear(), today.getMonth(), today.getDate());
         const target = [...tds].find(td => td.dataset.cellkey?.startsWith(todStr + "__" + tt));
         if (target) {
-          target.scrollIntoView({
-            behavior: "smooth",
-            block: "center"
-          });
+          const cRect = container.getBoundingClientRect();
+          const tRect = target.getBoundingClientRect();
+          const delta = tRect.top - cRect.top - cRect.height / 2 + tRect.height / 2;
+          container.scrollTo({ top: container.scrollTop + delta, behavior: "smooth" });
         }
       }, 250);
     },
@@ -6183,13 +6190,15 @@ function MainApp({
       loadBk();
       loadPendingCount();
     }
-  }), tab === "availability" && /*#__PURE__*/React.createElement(AvailabilityModule, {
+  }), tab === "availability" && /*#__PURE__*/React.createElement("div", {
+    style: { flex: 1, minHeight: 0, overflow: "auto" }
+  }, /*#__PURE__*/React.createElement(AvailabilityModule, {
     masters: masters,
     currentMaster: loginMaster || master,
     isAdmin: isAdmin,
     canSeeAll: isAdmin || (loginMaster || master)?.username === 'qi' || (loginMaster || master)?.name === '許老師',
     msg: msg
-  }), cellHistory && /*#__PURE__*/React.createElement("div", {
+  })), cellHistory && /*#__PURE__*/React.createElement("div", {
     "data-modal-backdrop": "true",
     style: {
       position: "fixed",
@@ -8998,10 +9007,10 @@ function OverviewMonth({
       const rows = container.querySelectorAll("tr");
       for (const row of rows) {
         if (row.textContent.trimStart().startsWith(`W${idx + 1}`)) {
-          row.scrollIntoView({
-            behavior: "smooth",
-            block: "center"
-          });
+          const cRect = container.getBoundingClientRect();
+          const rRect = row.getBoundingClientRect();
+          const delta = rRect.top - cRect.top - cRect.height / 2 + rRect.height / 2;
+          container.scrollTo({ top: container.scrollTop + delta, behavior: "smooth" });
           break;
         }
       }
@@ -9312,10 +9321,10 @@ function OverviewMonth({
         const todStr = fmtDate(today.getFullYear(), today.getMonth(), today.getDate());
         const target = [...tds].find(td => td.dataset.ovcellkey?.includes(todStr + "__" + tt));
         if (target) {
-          target.scrollIntoView({
-            behavior: "smooth",
-            block: "center"
-          });
+          const cRect = container.getBoundingClientRect();
+          const tRect = target.getBoundingClientRect();
+          const delta = tRect.top - cRect.top - cRect.height / 2 + tRect.height / 2;
+          container.scrollTo({ top: container.scrollTop + delta, behavior: "smooth" });
         }
       }, 250);
     },
