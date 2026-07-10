@@ -462,6 +462,82 @@ const COLOR_DEFAULT_NAMES = {
 // 所有可能的「系統預設名字」（也包含跨色標的舊資料容錯）
 const ALL_DEFAULT_NAMES = new Set(["休假", "卡位", "自訂", "售後"]);
 
+// 色標代碼 ↔ 中文標籤，通用資料轉換工具（Sheet 同步解析/寫入時會用到）。
+// 注意：這裡刻意維持完整 6 標籤（含 reserved/aftercare），不是從上面 UI 用的
+// COLORS 陣列（現在只剩 4 個）衍生——Sheet 那邊沿用的還是舊格式，售後/卡位
+// 在 Sheet 上還是各自獨立的標籤，不能因為 APP 這邊介面簡化了就跟著漏掉。
+const SHEET_COLOR_LABELS = [
+  { key: "none", label: "舊客" },
+  { key: "new_customer", label: "新客" },
+  { key: "vacation", label: "休假" },
+  { key: "reserved", label: "卡位" },
+  { key: "custom", label: "自訂" },
+  { key: "aftercare", label: "售後" }
+];
+const COLOR_LABEL_BY_KEY = Object.fromEntries(SHEET_COLOR_LABELS.map(c => [c.key, c.label]));
+const COLOR_KEY_BY_LABEL = Object.fromEntries(SHEET_COLOR_LABELS.map(c => [c.label, c.key]));
+
+function csvField(v) {
+  const s = v === null || v === undefined ? "" : String(v);
+  return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function parseCSV(text) {
+  const s = text.replace(/^\uFEFF/, "");
+  const rows = [];
+  let row = [],
+    field = "",
+    inQuotes = false,
+    i = 0;
+  while (i < s.length) {
+    const c = s[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (s[i + 1] === '"') {
+          field += '"';
+          i += 2;
+          continue;
+        }
+        inQuotes = false;
+        i++;
+        continue;
+      }
+      field += c;
+      i++;
+      continue;
+    }
+    if (c === '"') {
+      inQuotes = true;
+      i++;
+      continue;
+    }
+    if (c === ",") {
+      row.push(field);
+      field = "";
+      i++;
+      continue;
+    }
+    if (c === "\r") {
+      i++;
+      continue;
+    }
+    if (c === "\n") {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+      i++;
+      continue;
+    }
+    field += c;
+    i++;
+  }
+  if (field.length || row.length) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows.filter(r => !(r.length === 1 && r[0] === ""));
+}
+
 // 計入人數規則：只有「使用者真的有寫名字」才算
 //   - 售後 (is_aftercare)：永不計入（不管有沒有名字、不管color_tag是什麼）
 //   - 休假 (vacation)：永不計入（guest_count=0 也會擋掉）
