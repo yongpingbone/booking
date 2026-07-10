@@ -4428,10 +4428,15 @@ function MainApp({
     // 內容擠在一起看起來像重疊的畫面。
     if (scrollContainerRef.current) scrollContainerRef.current.scrollLeft = 0;
     setTimeout(() => {
+      // 防護：這個延遲執行的時候，使用者可能已經切到別的分頁了，
+      // 排班表本身如果不在畫面上（tab不是schedule），就不要再繼續動這裡的DOM/狀態，
+      // 避免操作到過期節點或留下非預期的殘留狀態。
+      if (tab !== "schedule") return;
       const wks = showSun === "1" ? getWeeksSun(y, m - 1) : getWeeksMon(y, m - 1, false);
       const idx = wks.findIndex(wk => wk.includes(d));
       if (idx >= 0) setWeekIdx(idx);
       setTimeout(() => {
+        if (tab !== "schedule") return;
         if (scrollContainerRef.current) scrollContainerRef.current.scrollLeft = 0;
         if (!highlightTime) return;
         // 月曆一次會顯示好幾週，同一個時間（例如 14:00）在每一週都會有一列，
@@ -4450,7 +4455,9 @@ function MainApp({
           target.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
           target.style.outline = "2px solid #2ed9c3";
           setTimeout(() => { target.style.outline = ""; }, 2500);
-          setTimeout(() => { container.style.scrollSnapType = prevSnap; }, 700);
+          setTimeout(() => {
+            if (container) container.style.scrollSnapType = prevSnap;
+          }, 700);
         }
       }, 300);
     }, 500);
