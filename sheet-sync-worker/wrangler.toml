@@ -1,0 +1,27 @@
+name = "yongping-sheet-sync"
+main = "src/index.js"
+compatibility_date = "2026-07-10"
+
+# 每 15 分鐘跑一次。Cloudflare Cron Trigger 用 UTC 時間算，不是台灣時間，
+# 如果之後想限制在營業時段才跑(省一點 R2/Supabase 用量)，要記得換算成 UTC
+# (台灣 9:00-21:00 = UTC 01:00-13:00)。
+[triggers]
+crons = ["*/15 * * * *"]
+
+[[r2_buckets]]
+binding = "SHEET_SYNC_BUCKET"
+bucket_name = "yongping-sheet-sync" # 用 `wrangler r2 bucket create yongping-sheet-sync` 建立，想改名字也可以，改這裡對齊就好
+# 這裡只需要 bucket 名稱，不需要 Access Key / Secret / R2 API Token 那組——
+# Worker 用這個原生 binding 存取 R2，Cloudflare runtime 自動處理授權。
+
+# 不是密鑰、可以直接寫死的設定值
+[vars]
+SUPABASE_PROJECT_REF = "ikzyzkhuireqztbhrtna"
+SYNC_WEEKS_BACK = "0"
+SYNC_WEEKS_AHEAD = "4"
+GOOGLE_SHEET_ID = "1AYYi8F3RktDTVJ5sOuHCGua00doCszvdRJ7Fu6XeOr4" # "2026-永平整復預約表"
+
+# 以下是密鑰，不要寫進這個檔案，用 `wrangler secret put <NAME>` 個別設定：
+#   SUPABASE_SERVICE_ROLE_KEY     Worker 寫入 bookings 表要用
+#   GOOGLE_SERVICE_ACCOUNT_JSON   Worker 讀 Google Sheet 要用(等 sheetParser 實作時才會用到)
+#   INTERNAL_SYNC_SECRET          手動觸發 /sync endpoint 用的共用密鑰，自己隨便生一組高熵字串即可
