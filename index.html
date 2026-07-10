@@ -30,7 +30,7 @@ input, select, button, textarea { font-family: inherit; outline: none; }
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
 body.dark {
   --bg-main:#0d1117; --bg-header:#161b22; --bg-sub:#21262d;
-  --bg-week:#0a0e14; --bg-rest:rgba(255,255,255,0.03);
+  --bg-week:#0a0e14; --bg-rest:rgba(255,255,255,0.12);
   --border:#1e2530; --border2:#30363d; --border-week:#2d3748;
   --text-main:#f0f6fc; --text-muted:#c9d1d9; --text-dim:#666;
   --text-time:#f5a623; --text-week:#4a5568;
@@ -39,7 +39,7 @@ body.dark {
 }
 body.light {
   --bg-main:#f6f8fa; --bg-header:#ffffff; --bg-sub:#f0f2f5;
-  --bg-week:#eaeef2; --bg-rest:rgba(0,0,0,0.03);
+  --bg-week:#eaeef2; --bg-rest:rgba(0,0,0,0.10);
   --border:#d0d7de; --border2:#d0d7de; --border-week:#b0bec5;
   --text-main:#0d1117; --text-muted:#24292f; --text-dim:#888;
   --text-time:#cf6b00; --text-week:#999;
@@ -446,18 +446,11 @@ const COLORS = [{
   label: "休假",
   text: "#e94560"
 }, {
-  key: "reserved",
-  label: "卡位",
-  text: "#22d3ee"
-}, {
   key: "custom",
   label: "自訂",
   text: "#a29bfe"
-}, {
-  key: "aftercare",
-  label: "售後",
-  text: "#00d09c"
 }];
+// 售後(aftercare)不再是互斥標記的一員，改成獨立勾選(is_aftercare)，可以跟上面任一標記並存
 
 // 系統預設名字 — 當使用者選色標但沒輸入名字時，系統會自動填這些字
 const COLOR_DEFAULT_NAMES = {
@@ -473,13 +466,15 @@ const COLOR_LABEL_BY_KEY = Object.fromEntries(COLORS.map(c => [c.key, c.label]))
 const COLOR_KEY_BY_LABEL = Object.fromEntries(COLORS.map(c => [c.label, c.key]));
 
 // 計入人數規則：只有「使用者真的有寫名字」才算
-//   - 售後 (aftercare)：永不計入（不管有沒有名字）
+//   - 售後 (is_aftercare)：永不計入（不管有沒有名字、不管color_tag是什麼）
 //   - 休假 (vacation)：永不計入（guest_count=0 也會擋掉）
 //   - 卡位/自訂：若名字仍是任何系統預設值（卡位/自訂/休假/售後）→ 沒寫真名 → 不算
+//     （卡位 reserved 是舊資料，UI已經不再產生，但既有資料照樣用同一套名字檢查邏輯）
 //   - 舊客/新客：必填名字，必算
 const isCountable = b => {
   if (!b || (b.guest_count || 0) <= 0) return false;
-  if (b.color_tag === "aftercare" || b.color_tag === "vacation") return false;
+  if (b.is_aftercare || b.color_tag === "aftercare") return false;
+  if (b.color_tag === "vacation") return false;
   // 卡位/自訂：嚴格檢查名字是不是系統預設（含舊資料：可能存「卡位 」帶空白、或顏色與名字錯位）
   if (b.color_tag === "reserved" || b.color_tag === "custom") {
     const nm = (b.customer_name || "").replace(/\s+/g, "").trim();
@@ -3766,6 +3761,7 @@ function MainApp({
       guests: "1",
       note: "",
       color: "none",
+      isAftercare: false,
       isSplit: false,
       splitMasterId: "",
       recurType: "none",
@@ -3774,7 +3770,7 @@ function MainApp({
       recurEndCount: 12
     });
   };
-  const COLOR_NO_INPUT = new Set(["reserved", "custom", "vacation", "aftercare"]);
+  const COLOR_NO_INPUT = new Set(["reserved", "custom", "vacation"]);
   const saveBk = async (isContinuous = false) => {
     const needInput = !COLOR_NO_INPUT.has(form.color);
     if (!dialog || needInput && !form.input.trim() || saving) return;
@@ -3841,6 +3837,7 @@ function MainApp({
         start_time: dialog.time + ":00",
         guest_count: 1,
         color_tag: form.color,
+        is_aftercare: !!form.isAftercare,
         note: form.note || null,
         booking_source: "internal",
         status: "confirmed"
@@ -3942,6 +3939,7 @@ function MainApp({
       start_time: dialog.time + ":00",
       guest_count: 1,
       color_tag: form.color,
+      is_aftercare: !!form.isAftercare,
       note: form.note || null,
       booking_source: "internal",
       status: "confirmed",
@@ -3968,6 +3966,7 @@ function MainApp({
           start_time: dialog.time + ":00",
           guest_count: 1,
           color_tag: form.color,
+          is_aftercare: !!form.isAftercare,
           note: "同行拆單",
           booking_source: "internal",
           status: "confirmed",
@@ -3998,6 +3997,7 @@ function MainApp({
             start_time: nextTime + ":00",
             guest_count: 1,
             color_tag: form.color,
+            is_aftercare: !!form.isAftercare,
             note: form.note || null,
             booking_source: "internal",
             status: "confirmed",
@@ -4853,7 +4853,7 @@ function MainApp({
           }
         }
       },
-      className: isDragSel ? "drag-select" : b ? `c-${b.color_tag}` : "",
+      className: isDragSel ? "drag-select" : b ? (b.is_aftercare ? "c-aftercare" : `c-${b.color_tag}`) : "",
       style: {
         padding: "1px 3px",
         borderBottom: "1px solid var(--border)",
@@ -6571,8 +6571,7 @@ function MainApp({
       background: COLOR_NO_INPUT.has(form.color) && !form.input.trim() ? `${{
         "reserved": "rgba(34,211,238,0.10)",
         "custom": "rgba(162,155,254,0.10)",
-        "vacation": "rgba(233,69,96,0.10)",
-        "aftercare": "rgba(0,208,156,0.10)"
+        "vacation": "rgba(233,69,96,0.10)"
       }[form.color] || "var(--input-bg)"}` : "var(--input-bg)",
       border: `1px solid ${COLOR_NO_INPUT.has(form.color) && !form.input.trim() ? {
         "reserved": "#22d3ee88",
@@ -6790,14 +6789,12 @@ function MainApp({
       gap: 5
     }
   }, COLORS.map(cc => {
-    const isSel = form.color === cc.key;
+    const isSel = form.color === cc.key || (cc.key === "custom" && form.color === "reserved");
     const colorMap = {
       "none": "#888",
       "new_customer": "#f5a623",
       "vacation": "#e94560",
-      "reserved": "#22d3ee",
-      "custom": "#a29bfe",
-      "aftercare": "#00d09c"
+      "custom": "#a29bfe"
     };
     const col = colorMap[cc.key] || "#888";
     return /*#__PURE__*/React.createElement("button", {
@@ -6820,7 +6817,22 @@ function MainApp({
         transition: "all 0.15s"
       }
     }, cc.label);
-  }))), /*#__PURE__*/React.createElement("div", {
+  })), /*#__PURE__*/React.createElement("label", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      marginTop: 8,
+      fontSize: 12,
+      color: form.isAftercare ? "#00d09c" : "var(--text-muted)",
+      fontWeight: form.isAftercare ? 700 : 400,
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: !!form.isAftercare,
+    onChange: e => setForm(f => ({ ...f, isAftercare: e.target.checked }))
+  }), "售後（勾選後不列入客人統計，可跟上面任一標記並存）")), /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 10,
       padding: 10,
@@ -7118,6 +7130,7 @@ function MainApp({
           note: b.note || "",
           guest_count: b.guest_count || 1,
           color_tag: b.color_tag || "none",
+          isAftercare: !!b.is_aftercare,
           _editorName: (loginMaster || master)?.name || "",
           _booking: b
         });
@@ -7399,6 +7412,7 @@ function MainApp({
           note: b.note || "",
           guest_count: b.guest_count || 1,
           color_tag: b.color_tag || "none",
+          isAftercare: !!b.is_aftercare,
           _editorName: (loginMaster || master)?.name || "",
           _booking: b
         });
@@ -7608,14 +7622,12 @@ function MainApp({
       gap: 4
     }
   }, COLORS.map(cc => {
-    const isSel = editForm.color_tag === cc.key;
+    const isSel = editForm.color_tag === cc.key || (cc.key === "custom" && editForm.color_tag === "reserved");
     const colorMap = {
       "none": "#888",
       "new_customer": "#f5a623",
       "vacation": "#e94560",
-      "reserved": "#22d3ee",
-      "custom": "#a29bfe",
-      "aftercare": "#00d09c"
+      "custom": "#a29bfe"
     };
     const col = colorMap[cc.key] || "#888";
     return /*#__PURE__*/React.createElement("button", {
@@ -7638,7 +7650,22 @@ function MainApp({
         transition: "all 0.15s"
       }
     }, cc.label);
-  }))), /*#__PURE__*/React.createElement("div", {
+  })), /*#__PURE__*/React.createElement("label", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      marginTop: 8,
+      fontSize: 12,
+      color: editForm.isAftercare ? "#00d09c" : "var(--text-muted)",
+      fontWeight: editForm.isAftercare ? 700 : 400,
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: !!editForm.isAftercare,
+    onChange: e => setEditForm(f => ({ ...f, isAftercare: e.target.checked }))
+  }), "售後（勾選後不列入客人統計，可跟上面任一標記並存）")), /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 10
     }
@@ -7705,6 +7732,7 @@ function MainApp({
         note: editForm.note || null,
         guest_count: editForm.guest_count,
         color_tag: finalColorTag,
+        is_aftercare: !!editForm.isAftercare,
         last_edited_by: (loginMaster || master)?.name || "系統",
         last_edited_at: new Date().toISOString()
       }).eq("id", editForm.id);
@@ -8541,6 +8569,7 @@ function OverviewMonth({
       guests: "1",
       note: "",
       color: "none",
+      isAftercare: false,
       isSplit: false,
       splitMasterId: "",
       recurType: "none",
@@ -8549,7 +8578,7 @@ function OverviewMonth({
       recurEndCount: 12
     });
   };
-  const COLOR_NO_INPUT = new Set(["reserved", "custom", "vacation", "aftercare"]);
+  const COLOR_NO_INPUT = new Set(["reserved", "custom", "vacation"]);
   const saveBk = async (isContinuous = false) => {
     const needInput = !COLOR_NO_INPUT.has(form.color);
     if (!dialog || needInput && !form.input.trim() || saving) return;
@@ -8616,6 +8645,7 @@ function OverviewMonth({
         start_time: dialog.time + ":00",
         guest_count: 1,
         color_tag: form.color,
+        is_aftercare: !!form.isAftercare,
         note: form.note || null,
         booking_source: "internal",
         status: "confirmed"
@@ -8717,6 +8747,7 @@ function OverviewMonth({
       start_time: dialog.time + ":00",
       guest_count: 1,
       color_tag: form.color,
+      is_aftercare: !!form.isAftercare,
       note: form.note || null,
       booking_source: "internal",
       status: "confirmed",
@@ -8743,6 +8774,7 @@ function OverviewMonth({
           start_time: dialog.time + ":00",
           guest_count: 1,
           color_tag: form.color,
+          is_aftercare: !!form.isAftercare,
           note: "同行拆單",
           booking_source: "internal",
           status: "confirmed",
@@ -8773,6 +8805,7 @@ function OverviewMonth({
             start_time: nextTime + ":00",
             guest_count: 1,
             color_tag: form.color,
+            is_aftercare: !!form.isAftercare,
             note: form.note || null,
             booking_source: "internal",
             status: "confirmed",
@@ -9495,6 +9528,7 @@ function OverviewMonth({
         guests: "1",
         note: "",
         color: "none",
+        isAftercare: false,
         isSplit: false,
         splitMasterId: "",
         recurType: "none",
@@ -9749,6 +9783,7 @@ function OverviewMonth({
           guests: "1",
           note: "",
           color: "none",
+          isAftercare: false,
           isSplit: false,
           splitMasterId: "",
           recurType: "none",
@@ -10064,7 +10099,7 @@ function OverviewMonth({
       return /*#__PURE__*/React.createElement("td", {
         key: `${i}-${j}`,
         "data-ovcellkey": cellKey,
-        className: b ? `c-${b.color_tag}` : ovDragCells.has(cellKey) ? "drag-select" : "",
+        className: b ? (b.is_aftercare ? "c-aftercare" : `c-${b.color_tag}`) : ovDragCells.has(cellKey) ? "drag-select" : "",
         draggable: false,
         onMouseDown: e => !b && cellKey && onOvCellMouseDown(cellKey, e),
         onMouseEnter: () => !b && onOvCellMouseEnter(cellKey),
@@ -10794,14 +10829,12 @@ function OverviewMonth({
       gap: 5
     }
   }, COLORS.map(cc => {
-    const isSel = form.color === cc.key;
+    const isSel = form.color === cc.key || (cc.key === "custom" && form.color === "reserved");
     const colorMap = {
       "none": "#888",
       "new_customer": "#f5a623",
       "vacation": "#e94560",
-      "reserved": "#22d3ee",
-      "custom": "#a29bfe",
-      "aftercare": "#00d09c"
+      "custom": "#a29bfe"
     };
     const col = colorMap[cc.key] || "#888";
     return /*#__PURE__*/React.createElement("button", {
@@ -10824,7 +10857,22 @@ function OverviewMonth({
         transition: "all 0.15s"
       }
     }, cc.label);
-  }))), /*#__PURE__*/React.createElement("div", {
+  })), /*#__PURE__*/React.createElement("label", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      marginTop: 8,
+      fontSize: 12,
+      color: form.isAftercare ? "#00d09c" : "var(--text-muted)",
+      fontWeight: form.isAftercare ? 700 : 400,
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: !!form.isAftercare,
+    onChange: e => setForm(f => ({ ...f, isAftercare: e.target.checked }))
+  }), "售後（勾選後不列入客人統計，可跟上面任一標記並存）")), /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 10,
       padding: 10,
@@ -11122,6 +11170,7 @@ function OverviewMonth({
           note: b.note || "",
           guest_count: b.guest_count || 1,
           color_tag: b.color_tag || "none",
+          isAftercare: !!b.is_aftercare,
           _editorName: loginMaster?.name || "",
           _booking: b
         });
@@ -11404,6 +11453,7 @@ function OverviewMonth({
           note: b.note || "",
           guest_count: b.guest_count || 1,
           color_tag: b.color_tag || "none",
+          isAftercare: !!b.is_aftercare,
           _editorName: loginMaster?.name || "",
           _booking: b
         });
@@ -11613,14 +11663,12 @@ function OverviewMonth({
       gap: 4
     }
   }, COLORS.map(cc => {
-    const isSel = editForm.color_tag === cc.key;
+    const isSel = editForm.color_tag === cc.key || (cc.key === "custom" && editForm.color_tag === "reserved");
     const colorMap = {
       "none": "#888",
       "new_customer": "#f5a623",
       "vacation": "#e94560",
-      "reserved": "#22d3ee",
-      "custom": "#a29bfe",
-      "aftercare": "#00d09c"
+      "custom": "#a29bfe"
     };
     const col = colorMap[cc.key] || "#888";
     return /*#__PURE__*/React.createElement("button", {
@@ -11643,7 +11691,22 @@ function OverviewMonth({
         transition: "all 0.15s"
       }
     }, cc.label);
-  }))), /*#__PURE__*/React.createElement("div", {
+  })), /*#__PURE__*/React.createElement("label", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      marginTop: 8,
+      fontSize: 12,
+      color: editForm.isAftercare ? "#00d09c" : "var(--text-muted)",
+      fontWeight: editForm.isAftercare ? 700 : 400,
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: !!editForm.isAftercare,
+    onChange: e => setEditForm(f => ({ ...f, isAftercare: e.target.checked }))
+  }), "售後（勾選後不列入客人統計，可跟上面任一標記並存）")), /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 10
     }
@@ -11710,6 +11773,7 @@ function OverviewMonth({
         note: editForm.note || null,
         guest_count: editForm.guest_count,
         color_tag: finalColorTag,
+        is_aftercare: !!editForm.isAftercare,
         last_edited_by: editForm._editorName || loginMaster?.name || "系統",
         last_edited_at: new Date().toISOString()
       }).eq("id", editForm.id);
@@ -14983,9 +15047,19 @@ function SettingsModule({
       }
 
       let colorTag = orig?.color_tag ?? "none";
+      let isAftercareFromCsv = orig?.is_aftercare ?? false;
       if (colorLabel) {
-        if (COLOR_KEY_BY_LABEL[colorLabel]) colorTag = COLOR_KEY_BY_LABEL[colorLabel];
-        else errors.push(`顏色「${colorLabel}」不是可用選項（${COLORS.map(c => c.label).join("/")}）`);
+        if (colorLabel === "售後") {
+          // 售後不再是color_tag的一員，CSV裡舊格式若還寫「售後」，轉存成is_aftercare
+          isAftercareFromCsv = true;
+        } else if (colorLabel === "卡位") {
+          // 卡位已經跟自訂合併，CSV裡舊格式的「卡位」統一存成custom
+          colorTag = "custom";
+        } else if (COLOR_KEY_BY_LABEL[colorLabel]) {
+          colorTag = COLOR_KEY_BY_LABEL[colorLabel];
+        } else {
+          errors.push(`顏色「${colorLabel}」不是可用選項（${COLORS.map(c => c.label).join("/")}、售後）`);
+        }
       }
 
       if (!errors.length) {
@@ -14994,7 +15068,7 @@ function SettingsModule({
         else seenSlot.set(slotKey, rowNum);
       }
 
-      return { rowNum, id, isNew, date, time, masterId, masterName, name, phone, guestCount, colorTag, colorLabel, note, orig, errors };
+      return { rowNum, id, isNew, date, time, masterId, masterName, name, phone, guestCount, colorTag, colorLabel, isAftercareFromCsv, note, orig, errors };
     });
 
     // 資料庫層級衝突檢查：跟「別的」既有預約比對（排除自己這筆）
@@ -15043,6 +15117,7 @@ function SettingsModule({
         customer_phone: p.phone || null,
         guest_count: p.guestCount,
         color_tag: p.colorTag,
+        is_aftercare: !!p.isAftercareFromCsv,
         note: p.note || null,
         last_edited_at: new Date().toISOString()
       }).eq("id", p.id);
@@ -15061,6 +15136,7 @@ function SettingsModule({
         customer_phone: p.phone || null,
         guest_count: p.guestCount,
         color_tag: p.colorTag,
+        is_aftercare: !!p.isAftercareFromCsv,
         note: p.note || null,
         status: "confirmed",
         booking_source: isHistoricalImport ? "historical_import" : "internal",
@@ -15559,7 +15635,7 @@ function SettingsModule({
       if (!all.length) return;
       const cols = ["id", "日期", "時間", "師傅", "狀態", "姓名", "電話", "人數", "顏色", "備註"];
       const header = cols.map(csvField).join(",") + "\n";
-      const rows = all.map(b => [b.id, b.date, b.start_time?.slice(0, 5), b.masters?.name || "", b.status || "confirmed", b.customer_name || "", b.customer_phone || "", b.guest_count, COLOR_LABEL_BY_KEY[b.color_tag] || b.color_tag || "", b.note || ""].map(csvField).join(",")).join("\n");
+      const rows = all.map(b => [b.id, b.date, b.start_time?.slice(0, 5), b.masters?.name || "", b.status || "confirmed", b.customer_name || "", b.customer_phone || "", b.guest_count, b.is_aftercare ? "售後" : (COLOR_LABEL_BY_KEY[b.color_tag] || b.color_tag || ""), b.note || ""].map(csvField).join(",")).join("\n");
       const blob = new Blob(["\ufeff" + header + rows], {
         type: "text/csv;charset=utf-8"
       });
