@@ -2674,10 +2674,8 @@ function AvailabilityModule({
   canSeeAll,
   msg
 }) {
-  // 四位師傅都能各自設定開放日期/時段。哲瑋、泓文是目前客人 app 已經在用的
-  // 「開放制」；治、麒目前客人 app 還是走「申請制」——在這裡先幫他們把設定
-  // 準備好，但要等客人 app 那邊也接上（下一步跟 Hanna 一起連），設定才會
-  // 真的影響客人能不能線上直接約，現在只是先把資料準備好、UI 可以用。
+  // 四位師傅都能各自設定開放日期/時段，客人 app 現在四位都已經接上了：
+  // 哲瑋、泓文是直接開放預約；治、麒是「有開放當天才直接約，沒開放就落回希望時段申請」的混合制。
   const ZHIWEI_ID = '7ae4e5c5-bfa5-46f6-8a90-a96e8721cea5';
   const HONGWEN_ID = 'b98e3afb-42d1-4149-b278-12d5493885b1';
   const CURRENTLY_LIVE_IDS = new Set([ZHIWEI_ID, HONGWEN_ID]); // 客人 app 目前真的會生效的兩位
@@ -2693,6 +2691,11 @@ function AvailabilityModule({
   const [editDate, setEditDate] = React.useState(null);
   const [editSlots, setEditSlots] = React.useState(null); // null=整天 / Set=部分時段
   const [savingDay, setSavingDay] = React.useState(false);
+  // 保險：掛載時清掉可能殘留的 body 樣式（比照 CRM 模組同樣的保險機制）
+  useEffect(() => {
+    document.body.style.touchAction = "";
+    document.body.style.userSelect = "";
+  }, []);
   const [bulkBusy, setBulkBusy] = React.useState(false);
 
   const monthStart = new Date(ym.y, ym.m, 1);
@@ -5434,7 +5437,6 @@ function MainApp({
     }
   }, "選擇日期查空檔："), /*#__PURE__*/React.createElement("input", {
     type: "date",
-    onClick: e => e.target.showPicker && e.target.showPicker(),
     onChange: e => {
       if (!e.target.value) return;
       const [y, m, d] = e.target.value.split("-").map(Number);
@@ -7096,7 +7098,6 @@ function MainApp({
   }, /*#__PURE__*/React.createElement("input", {
     type: "date",
     value: cpTarget.date,
-    onClick: e => e.target.showPicker && e.target.showPicker(),
     onChange: e => setCpTarget(t => ({
       ...t,
       date: e.target.value
@@ -9515,7 +9516,6 @@ function OverviewMonth({
     }
   }, "選擇日期查空檔："), /*#__PURE__*/React.createElement("input", {
     type: "date",
-    onClick: e => e.target.showPicker && e.target.showPicker(),
     onChange: e => {
       if (!e.target.value) return;
       const [y, m, d] = e.target.value.split("-").map(Number);
@@ -11100,7 +11100,6 @@ function OverviewMonth({
   }, /*#__PURE__*/React.createElement("input", {
     type: "date",
     value: cpTarget.date,
-    onClick: e => e.target.showPicker && e.target.showPicker(),
     onChange: e => setCpTarget(t => ({
       ...t,
       date: e.target.value
