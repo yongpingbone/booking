@@ -21,14 +21,14 @@
 //       所以治的 "*" 會產生一筆獨立預約，customerName 填「舊客」佔位，
 //       不會被誤判成延續符號
 //
-// - 師傅名字：Sheet 分頁用的是「泓文/哲瑋/麒/治」這種暱稱，但 Supabase
-//   masters.name 存的是正式名字——已確認 麒=許老師、治=魏老師(泓文/哲瑋
-//   本身就是正式名字，兩邊一致，不用轉換)。所以每筆記錄同時帶兩個師傅相關
-//   欄位：masterName 是要拿去對 masters.name 用的正式名字，sheetMasterLabel
-//   是這筆資料來源的分頁暱稱(sheetWriter.js 要用它反推分頁名稱寫回備註，
-//   不能直接用 masterName，因為分頁不叫「7月-許老師」)。
+// - 師傅名字：已經用 SQL 直接查過 masters 表，name 欄位存的就是「泓文/哲瑋/
+//   麒/治」這四個值本身，不是「許老師」「魏老師」這種正式稱呼——後面這兩個
+//   說法只是平常口語怎麼稱呼這兩位師傅，不是系統裡的名字，資料庫裡完全查
+//   不到。所以每筆記錄的 masterName / sheetMasterLabel 兩個欄位目前對這四位
+//   師傅來說都是同一個值(見 SHEET_MASTERS 的 masterDbName 說明)。
 //
-// 目前所有已知符號/顏色/名字對照都確認過了，沒有還卡著的疑問。
+// 目前所有已知符號/顏色/名字對照都確認過了(而且是真的查證過，不是猜的)，
+// 沒有還卡著的疑問。
 
 import { serialToDateString, serialToTimeString } from './sheetsSerial.js';
 import { buildIdentityKey, hashContent } from './diff.js';
@@ -57,14 +57,18 @@ const COLOR_HEX_TO_TAG = {
 // 提醒有人要去確認這是不是新發現的符號用法。
 const KNOWN_CONTINUATION_LIKE_SYMBOLS = ['\u201D', '\u201C', "''", '"', "'", '\u3003', '*'];
 
-// name = Sheet 分頁命名用的暱稱；masterDbName = 要拿去對 Supabase masters.name
-// 的正式名字。兩者不一樣時(麒/治)才需要特別列 masterDbName，一樣的話(泓文/哲瑋)
-// 省略、下面的程式會自動 fallback 成 name。
+// 已經用 SQL 查證過 masters.name 直接存「麒/治/泓文/哲瑋」這四個值本身，
+// 沒有「許老師」「魏老師」這種正式稱呼存在資料庫任何地方——那兩個名字只是
+// 平常口語稱呼，不是系統裡的正式名字。之前一度誤加了 masterDbName 轉換
+// (麒→許老師、治→魏老師)，導致這兩位師傅的預約全部「找不到師傅」失敗，
+// 已經移除。四位師傅的 masterName 現在都直接等於 Sheet 分頁暱稱本身，不用
+// 再轉換；masterDbName 這個機制保留著、只是目前沒有任何 master 需要用到，
+// 如果之後真的有名字對不上的狀況，直接在對應的物件加回 masterDbName 就好。
 const SHEET_MASTERS = [
   { name: '泓文', continuationMarks: ["''"], anonymousReturningCustomerMarks: [] },
   { name: '哲瑋', continuationMarks: ["''"], anonymousReturningCustomerMarks: [] }, // 已確認：跟泓文同一套
-  { name: '麒', masterDbName: '許老師', continuationMarks: ['\u201D'], anonymousReturningCustomerMarks: [] },
-  { name: '治', masterDbName: '魏老師', continuationMarks: [], anonymousReturningCustomerMarks: ['*'] },
+  { name: '麒', continuationMarks: ['\u201D'], anonymousReturningCustomerMarks: [] },
+  { name: '治', continuationMarks: [], anonymousReturningCustomerMarks: ['*'] },
 ];
 
 /**

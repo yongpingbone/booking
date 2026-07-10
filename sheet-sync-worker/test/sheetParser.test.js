@@ -242,20 +242,14 @@ test('fetchAndParseWeek: 某個師傅/月分讀取失敗要丟出清楚指出是
   );
 });
 
-test('麒(sheet暱稱) → masterName 要填正式名字「許老師」，sheetMasterLabel 保留「麒」給寫回用', async () => {
+test('四位師傅 masterName 都直接等於 sheet 暱稱本身(已用 SQL 查證 masters.name 沒有「許老師/魏老師」這種正式稱呼)', async () => {
   const rows = buildSheetRows([{ dateSerials: FULL_WEEK_SERIALS, slots: { 0: [[1, '王小明', null]] } }]);
-  const master = SHEET_MASTERS.find((m) => m.name === '麒');
-  const records = await parseGridIntoRecords(rows, master);
-  assert.equal(records[0].masterName, '許老師');
-  assert.equal(records[0].sheetMasterLabel, '麒');
-});
-
-test('治(sheet暱稱) → masterName 要填正式名字「魏老師」', async () => {
-  const rows = buildSheetRows([{ dateSerials: FULL_WEEK_SERIALS, slots: { 0: [[1, '王小明', null]] } }]);
-  const master = SHEET_MASTERS.find((m) => m.name === '治');
-  const records = await parseGridIntoRecords(rows, master);
-  assert.equal(records[0].masterName, '魏老師');
-  assert.equal(records[0].sheetMasterLabel, '治');
+  for (const masterName of ['泓文', '哲瑋', '麒', '治']) {
+    const master = SHEET_MASTERS.find((m) => m.name === masterName);
+    const records = await parseGridIntoRecords(rows, master);
+    assert.equal(records[0].masterName, masterName);
+    assert.equal(records[0].sheetMasterLabel, masterName);
+  }
 });
 
 test('泓文/哲瑋沒有另外設定 masterDbName：masterName 直接等於 sheet 暱稱本身', async () => {
@@ -266,11 +260,11 @@ test('泓文/哲瑋沒有另外設定 masterDbName：masterName 直接等於 she
   assert.equal(records[0].sheetMasterLabel, '泓文');
 });
 
-test('identityKey 是用正式名字(masterName)組的，不是 sheet 暱稱', async () => {
+test('identityKey 是用 masterName 組的', async () => {
   const rows = buildSheetRows([{ dateSerials: FULL_WEEK_SERIALS, slots: { 0: [[1, '王小明', null]] } }]);
   const master = SHEET_MASTERS.find((m) => m.name === '麒');
   const records = await parseGridIntoRecords(rows, master);
-  assert.ok(records[0].identityKey.startsWith('許老師|'));
+  assert.ok(records[0].identityKey.startsWith('麒|'));
 });
 
 test('哲瑋的延續符號跟泓文一樣是兩個直引號(已確認)：會自動合併', async () => {
