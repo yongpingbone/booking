@@ -4442,9 +4442,15 @@ function MainApp({
         const tds = container.querySelectorAll("td[data-cellkey]");
         const target = [...tds].find(td => td.dataset.cellkey === `${dateStr}__${highlightTime}`);
         if (target) {
-          target.scrollIntoView({ behavior: "smooth", block: "center" });
+          // scroll-snap-type:x mandatory 跟 scrollIntoView 的平滑捲動放一起容易互相干擾，
+          // 導致捲動動畫卡住沒有正常結束、後續的點擊/捲動事件跟著失效。
+          // 捲動前先暫時關掉吸附，捲完（抓一個比動畫時間長一點的時間）再恢復。
+          const prevSnap = container.style.scrollSnapType;
+          container.style.scrollSnapType = "none";
+          target.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
           target.style.outline = "2px solid #2ed9c3";
           setTimeout(() => { target.style.outline = ""; }, 2500);
+          setTimeout(() => { container.style.scrollSnapType = prevSnap; }, 700);
         }
       }, 300);
     }, 500);
