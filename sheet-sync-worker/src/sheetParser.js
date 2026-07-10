@@ -325,12 +325,46 @@ async function fetchAndParseWeek(env, weekKey, deps = {}) {
   return allRecords.filter((r) => targetDates.has(r.date));
 }
 
+/**
+ * 抓一整個月、四位師傅全部的記錄(不像 fetchAndParseWeek 只篩一週)。
+ * 目前只有 reconcile.js 的一次性月份校正功能會用到，平常排程走的還是
+ * fetchAndParseWeek。
+ * @param {object} env
+ * @param {number} year
+ * @param {number} month 1-12
+ * @param {object} [deps]
+ * @returns {Promise<Array<object>>}
+ */
+async function fetchAndParseMonth(env, year, month, deps = {}) {
+  const doGetAccessToken = deps.getAccessToken ?? defaultGetAccessToken;
+  const doFetchGridRows = deps.fetchGridRows ?? defaultFetchGridRows;
+
+  const accessToken = await doGetAccessToken(env);
+  const monthPrefix = `${year}-${String(month).padStart(2, '0')}`;
+
+  const allRecords = [];
+  for (const master of SHEET_MASTERS) {
+    const sheetTitle = `${month}月-${master.name}`;
+    let gridResult;
+    try {
+      gridResult = await doFetchGridRows(env, { sheetTitle, range: 'A1:H260', accessToken });
+    } catch (err) {
+      throw new Error(`讀取分頁「${sheetTitle}」失敗: ${err.message}`);
+    }
+    const records = await parseGridIntoRecords(gridResult.rows, master);
+    // 分頁裡的週區塊可能帶到鄰月的日期(跨月那週)，只留真的屬於這個月的
+    allRecords.push(...records.filter((r) => r.date.startsWith(monthPrefix)));
+  }
+  return allRecords;
+}
+
 export {
   parseGridIntoRecords,
   findBlockHeaderRows,
   buildWeekdayColumnMap,
   monthsSpannedByWeek,
   fetchAndParseWeek,
+  fetchAndParseMonth,
   SHEET_MASTERS,
   COLOR_HEX_TO_TAG,
   NEUTRAL_COLOR_HEXES,

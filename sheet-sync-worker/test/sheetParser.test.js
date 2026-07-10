@@ -8,6 +8,7 @@ import {
   buildWeekdayColumnMap,
   monthsSpannedByWeek,
   fetchAndParseWeek,
+  fetchAndParseMonth,
   SHEET_MASTERS,
   resolveColorTag,
 } from '../src/sheetParser.js';
@@ -241,6 +242,50 @@ test('fetchAndParseWeek: 某個師傅/月分讀取失敗要丟出清楚指出是
       ),
     /讀取分頁「7月-/
   );
+});
+
+test('fetchAndParseMonth: 依 SHEET_MASTERS 逐一查詢，且過濾掉跨月週區塊裡不屬於這個月的日期', async () => {
+  const augBoundarySerials = [
+    dateStringToSerial('2026-07-26'),
+    dateStringToSerial('2026-07-27'),
+    dateStringToSerial('2026-07-28'),
+    dateStringToSerial('2026-07-29'),
+    dateStringToSerial('2026-07-30'),
+    dateStringToSerial('2026-07-31'),
+    dateStringToSerial('2026-08-01'), // 週六，已經是8月
+  ];
+  const rows = buildSheetRows([
+    { dateSerials: FULL_WEEK_SERIALS, slots: { 0: [[1, '客人A', null]] } }, // 2026-07-06
+    { dateSerials: augBoundarySerials, slots: { 0: [[0, '客人B', null], [6, '客人C', null]] } }, // 7/26 跟 8/1
+  ]);
+
+  const calledSheetTitles = [];
+  const records = await fetchAndParseMonth({}, 2026, 7, {
+    getAccessToken: async () => 'fake-token',
+    fetchGridRows: async (env, { sheetTitle }) => {
+      calledSheetTitles.push(sheetTitle);
+      return { title: sheetTitle, rows };
+    },
+  });
+
+  assert.deepEqual(calledSheetTitles.sort(), ['7月-哲瑋', '7月-治', '7月-泓文', '7月-麒'].sort());
+  const names = records.map((r) => r.customerName);
+  assert.ok(names.includes('客人A'));
+  assert.ok(names.includes('客人B'));
+  assert.ok(!names.includes('客人C'), '8/1 已經是8月，即使出現在7月分頁的週區塊裡也不該被算進7月結果');
+});
+
+test('fetchAndParseMonth: 只呼叫 4 次(4 位師傅)，不像 fetchAndParseWeek 會因為跨月而變成 8 次', async () => {
+  const rows = buildSheetRows([{ dateSerials: FULL_WEEK_SERIALS, slots: {} }]);
+  const calledSheetTitles = [];
+  await fetchAndParseMonth({}, 2026, 7, {
+    getAccessToken: async () => 'fake-token',
+    fetchGridRows: async (env, { sheetTitle }) => {
+      calledSheetTitles.push(sheetTitle);
+      return { title: sheetTitle, rows };
+    },
+  });
+  assert.equal(calledSheetTitles.length, 4);
 });
 
 test('四位師傅 masterName 都直接等於 sheet 暱稱本身(已用 SQL 查證 masters.name 沒有「許老師/魏老師」這種正式稱呼)', async () => {

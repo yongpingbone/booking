@@ -113,3 +113,71 @@ async function findBookingAtSlot(env, { masterId, date, startTime }) {
 }
 
 export { saveBooking, fetchActiveMasters, findBookingAtSlot };
+
+// ===== 以下兩支只有 reconcile.js 的一次性月份校正功能會用到 =====
+
+/**
+ * 抓某個月份全部還算「有效」的預約(排除 cancelled/no_show)，用來跟 Sheet
+ * 內容比對，找出「DB 有、Sheet 沒有」的那些。
+ * @param {object} env
+ * @param {{year: number, month: number}} params month 1-12
+ * @returns {Promise<{id: string, master_id: string, date: string, start_time: string, customer_name: string, booking_source: string}[]>}
+ */
+async function fetchBookingsInMonth(env, { year, month }) {
+  if (!env.SUPABASE_PROJECT_REF) throw new Error('缺少 env.SUPABASE_PROJECT_REF');
+  if (!env.SUPABASE_SERVICE_ROLE_KEY) throw new Error('缺少 env.SUPABASE_SERVICE_ROLE_KEY');
+
+  const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+  const nextMonth = month === 12 ? { y: year + 1, m: 1 } : { y: year, m: month + 1 };
+  const endDate = `${nextMonth.y}-${String(nextMonth.m).padStart(2, '0')}-01`;
+
+  const url = new URL(`https://${env.SUPABASE_PROJECT_REF}.supabase.co/rest/v1/bookings`);
+  url.searchParams.set('select', 'id,master_id,date,start_time,customer_name,booking_source');
+  url.searchParams.set('date', `gte.${startDate}`);
+  url.searchParams.append('date', `lt.${endDate}`);
+  url.searchParams.set('status', 'not.in.(cancelled,no_show)');
+  url.searchParams.set('limit', '5000');
+
+  const res = await fetch(url, {
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+    },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Supabase 查詢月份預約失敗 (HTTP ${res.status}): ${text}`);
+  }
+  return res.json();
+}
+
+/**
+ * 把一筆預約標記成取消——不是刪除，資料還在，可以回頭查。
+ * @param {object} env
+ * @param {string} id
+ * @returns {Promise<void>}
+ */
+async function cancelBooking(env, id) {
+  if (!env.SUPABASE_PROJECT_REF) throw new Error('缺少 env.SUPABASE_PROJECT_REF');
+  if (!env.SUPABASE_SERVICE_ROLE_KEY) throw new Error('缺少 env.SUPABASE_SERVICE_ROLE_KEY');
+
+  const url = new URL(`https://${env.SUPABASE_PROJECT_REF}.supabase.co/rest/v1/bookings`);
+  url.searchParams.set('id', `eq.${id}`);
+
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify({ status: 'cancelled' }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Supabase 取消預約失敗 (HTTP ${res.status}): ${text}`);
+  }
+}
+
+export { fetchBookingsInMonth, cancelBooking };

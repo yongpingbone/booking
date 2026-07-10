@@ -22,6 +22,7 @@ import { fetchAndParseWeek } from './sheetParser.js';
 import { validateBookingRecord } from './validate.js';
 import { markCellStatus } from './sheetWriter.js';
 import { saveBooking } from './supabaseClient.js';
+import { reconcileMonth } from './reconcile.js';
 import { weekKeysToSync } from './weekKeys.js';
 
 /**
@@ -129,13 +130,17 @@ export default {
   },
 
   /**
-   * 手動觸發：POST /sync，body 可選 { "weekKey": "2026-07-06" }，不給就用當週。
+   * 手動觸發：
+   *   POST /sync -- body 可選 { "weekKey": "2026-07-06" }，不給就用當週。
+   *   POST /reconcile-month -- 一次性月份校正，body { "year": 2026, "month": 7,
+   *     "dryRun": true } —— dryRun 預設 true，只回報會取消哪些，不會真的動手；
+   *     要看過 dry run 結果、確定沒問題後，才帶 "dryRun": false 真的執行。
    * 認證方式比照 notify-master-line 的 dual-auth 模式：這裡先用 shared secret，
    * 之後如果要開放師傅端 app 直接呼叫，可以再加 LINE idToken 驗證。
    */
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    if (url.pathname !== '/sync' || request.method !== 'POST') {
+    if (request.method !== 'POST' || (url.pathname !== '/sync' && url.pathname !== '/reconcile-month')) {
       return new Response('Not found', { status: 404 });
     }
 
@@ -145,8 +150,21 @@ export default {
     }
 
     const body = await request.json().catch(() => ({}));
-    const weekKey = body.weekKey ?? weekKeysToSync()[0];
 
+    if (url.pathname === '/reconcile-month') {
+      if (!body.year || !body.month) {
+        return Response.json({ error: '需要 year 跟 month(1-12)' }, { status: 400 });
+      }
+      const dryRun = body.dryRun !== false; // 沒明確傳 false 就當 true，安全優先
+      try {
+        const result = await reconcileMonth(env, { year: body.year, month: body.month, dryRun });
+        return Response.json(result, { status: 200 });
+      } catch (err) {
+        return Response.json({ error: String(err?.message ?? err) }, { status: 500 });
+      }
+    }
+
+    const weekKey = body.weekKey ?? weekKeysToSync()[0];
     const log = await runSyncForWeek(env, weekKey);
     return Response.json(log, { status: log.ok ? 200 : 500 });
   },

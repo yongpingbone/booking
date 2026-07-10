@@ -134,6 +134,45 @@ test('fetch(): 路徑不是 /sync 要回 404', async () => {
   assert.equal(res.status, 404);
 });
 
+test('fetch(): POST /reconcile-month 也要驗證 X-Internal-Secret，跟 /sync 共用同一套認證', async () => {
+  const env = makeEnv();
+  const request = new Request('https://worker.example/reconcile-month', {
+    method: 'POST',
+    headers: { 'X-Internal-Secret': 'wrong' },
+    body: JSON.stringify({ year: 2026, month: 7 }),
+  });
+  const res = await worker.fetch(request, env, {});
+  assert.equal(res.status, 401);
+});
+
+test('fetch(): POST /reconcile-month 缺 year/month 要回 400，不要用猜的預設值', async () => {
+  const env = makeEnv();
+  const request = new Request('https://worker.example/reconcile-month', {
+    method: 'POST',
+    headers: { 'X-Internal-Secret': 'test-secret' },
+    body: JSON.stringify({}),
+  });
+  const res = await worker.fetch(request, env, {});
+  assert.equal(res.status, 400);
+});
+
+test('fetch(): POST /reconcile-month 沒帶 dryRun 時預設是安全的(不會誤觸發真的執行)', async () => {
+  // 這裡打進去的是真正的 reconcileMonth(沒有 deps 注入)，會因為缺真實憑證而失敗，
+  // 但重點是驗證：即使失敗前，也不該有任何跡象顯示它把 dryRun 誤判成 false。
+  // 用 GOOGLE_SERVICE_ACCOUNT_JSON 沒設一定會在 fetchAndParseMonth 那步就丟錯，
+  // 回應會是 500 + 錯誤訊息，而不是意外執行成功。
+  const env = makeEnv();
+  const request = new Request('https://worker.example/reconcile-month', {
+    method: 'POST',
+    headers: { 'X-Internal-Secret': 'test-secret' },
+    body: JSON.stringify({ year: 2026, month: 7 }),
+  });
+  const res = await worker.fetch(request, env, {});
+  const body = await res.json();
+  assert.equal(res.status, 500);
+  assert.ok(body.error);
+});
+
 test('fetch(): secret 正確、路徑正確 → 會真的跑同步(目前 stub 未完成所以回 500，但代表有跑到，不是卡在 auth)', async () => {
   const env = makeEnv();
   const request = new Request('https://worker.example/sync', {

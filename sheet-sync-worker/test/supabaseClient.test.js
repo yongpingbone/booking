@@ -74,3 +74,72 @@ test('saveBooking: HTTP 非 2xx 時，錯誤訊息要分辨是「新增」還是
     globalThis.fetch = originalFetch;
   }
 });
+
+test('fetchBookingsInMonth: 組出正確的日期範圍查詢(7月 -> gte 7/1 且 lt 8/1)', async () => {
+  const env = makeEnv();
+  let capturedUrl;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    capturedUrl = url.toString();
+    return { ok: true, json: async () => [] };
+  };
+  try {
+    const { fetchBookingsInMonth } = await import('../src/supabaseClient.js');
+    await fetchBookingsInMonth(env, { year: 2026, month: 7 });
+    assert.ok(capturedUrl.includes('date=gte.2026-07-01'));
+    assert.ok(capturedUrl.includes('date=lt.2026-08-01'));
+    assert.ok(capturedUrl.includes('status=not.in.'));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('fetchBookingsInMonth: 12月要正確跨年(lt 隔年1/1，不是13月)', async () => {
+  const env = makeEnv();
+  let capturedUrl;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    capturedUrl = url.toString();
+    return { ok: true, json: async () => [] };
+  };
+  try {
+    const { fetchBookingsInMonth } = await import('../src/supabaseClient.js');
+    await fetchBookingsInMonth(env, { year: 2026, month: 12 });
+    assert.ok(capturedUrl.includes('date=gte.2026-12-01'));
+    assert.ok(capturedUrl.includes('date=lt.2027-01-01'));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('cancelBooking: PATCH 到正確的 id，body 是 status=cancelled', async () => {
+  const env = makeEnv();
+  let capturedUrl, capturedOptions;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    capturedUrl = url.toString();
+    capturedOptions = options;
+    return { ok: true };
+  };
+  try {
+    const { cancelBooking } = await import('../src/supabaseClient.js');
+    await cancelBooking(env, 'booking-abc');
+    assert.ok(capturedUrl.includes('id=eq.booking-abc'));
+    assert.equal(capturedOptions.method, 'PATCH');
+    assert.deepEqual(JSON.parse(capturedOptions.body), { status: 'cancelled' });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('cancelBooking: 失敗時丟出清楚的錯誤', async () => {
+  const env = makeEnv();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: false, status: 500, text: async () => '掛了' });
+  try {
+    const { cancelBooking } = await import('../src/supabaseClient.js');
+    await assert.rejects(() => cancelBooking(env, 'x'), /取消預約失敗/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
