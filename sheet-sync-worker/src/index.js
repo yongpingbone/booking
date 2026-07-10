@@ -21,11 +21,8 @@ import { diffSnapshots } from './diff.js';
 import { fetchAndParseWeek } from './sheetParser.js';
 import { validateBookingRecord } from './validate.js';
 import { markCellStatus } from './sheetWriter.js';
-import { upsertBooking } from './supabaseClient.js';
+import { saveBooking } from './supabaseClient.js';
 import { weekKeysToSync } from './weekKeys.js';
-
-// bookings 表 upsert 時用哪個欄位組合判斷「這是同一筆」，等 schema 確認後調整。
-const BOOKINGS_ON_CONFLICT_COLUMNS = 'master_id,start_time';
 
 /**
  * @param {object} env
@@ -39,7 +36,7 @@ async function runSyncForWeek(env, weekKey, deps = {}) {
     fetchAndParseWeek: doFetchAndParseWeek = fetchAndParseWeek,
     validateBookingRecord: doValidateBookingRecord = validateBookingRecord,
     markCellStatus: doMarkCellStatus = markCellStatus,
-    upsertBooking: doUpsertBooking = upsertBooking,
+    saveBooking: doSaveBooking = saveBooking,
   } = deps;
 
   const runId = crypto.randomUUID();
@@ -76,7 +73,7 @@ async function runSyncForWeek(env, weekKey, deps = {}) {
         continue;
       }
 
-      await doUpsertBooking(env, validation.row, BOOKINGS_ON_CONFLICT_COLUMNS);
+      await doSaveBooking(env, validation.row, validation.existingId);
       results.push({ identityKey: record.identityKey, status: 'synced' });
     }
 
@@ -145,4 +142,4 @@ export default {
   },
 };
 
-export { runSyncForWeek, BOOKINGS_ON_CONFLICT_COLUMNS };
+export { runSyncForWeek };

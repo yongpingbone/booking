@@ -8,38 +8,44 @@
 //   SUPABASE_PROJECT_REF        ("ikzyzkhuireqztbhrtna")，不是密鑰，可以直接寫在 vars 裡
 //   SUPABASE_SERVICE_ROLE_KEY   要用 `wrangler secret put` 設，不要寫進 wrangler.toml
 //
-// on_conflict 用哪個欄位(或哪組欄位組合)當唯一鍵，要看 bookings 表實際的
-// unique constraint 是怎麼下的 —— 這裡先開放成參數，等 schema 確認後
-// 在 index.js 呼叫時固定下來即可，這支本身不用再改。
+// 真實的 unique index(idx_unique_master_datetime)是 partial index：
+//   UNIQUE (master_id, date, start_time)
+//   WHERE date IS NOT NULL AND start_time IS NOT NULL
+//     AND status <> 'cancelled' AND status <> 'no_show'
+// PostgREST 的 on_conflict= 參數沒辦法帶 WHERE 條件，沒辦法正確對到 partial
+// unique index(試過，直接 42P10)。所以這裡不用 Postgres 原生 upsert，改成
+// 明確的「先查有沒有現成那筆、有就 PATCH、沒有就 POST」，邏輯上完全對齊
+// 那個 partial index 的條件(因為判斷「有沒有現成那筆」本來就是靠
+// findBookingAtSlot，那支查詢已經排除 cancelled/no_show 了)。
 
 /**
  * @param {object} env
  * @param {object} row 已經通過 validate.js 驗證、欄位名稱對齊 bookings 表的物件
- * @param {string} onConflictColumns 例如 "master_id,start_time" —— 對應 bookings 的 unique constraint
+ * @param {string|null} existingId 有值就 PATCH 這筆既有資料；null 就新增一筆
  * @returns {Promise<object>} PostgREST 回傳、寫入後的那筆資料
  */
-async function upsertBooking(env, row, onConflictColumns) {
+async function saveBooking(env, row, existingId) {
   if (!env.SUPABASE_PROJECT_REF) throw new Error('缺少 env.SUPABASE_PROJECT_REF');
   if (!env.SUPABASE_SERVICE_ROLE_KEY) throw new Error('缺少 env.SUPABASE_SERVICE_ROLE_KEY(要用 wrangler secret put 設)');
-  if (!onConflictColumns) throw new Error('缺少 onConflictColumns —— bookings 表 upsert 要指定衝突判斷用的欄位');
 
   const url = new URL(`https://${env.SUPABASE_PROJECT_REF}.supabase.co/rest/v1/bookings`);
-  url.searchParams.set('on_conflict', onConflictColumns);
+  const method = existingId ? 'PATCH' : 'POST';
+  if (existingId) url.searchParams.set('id', `eq.${existingId}`);
 
   const res = await fetch(url, {
-    method: 'POST',
+    method,
     headers: {
       'Content-Type': 'application/json',
       apikey: env.SUPABASE_SERVICE_ROLE_KEY,
       Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-      Prefer: 'resolution=merge-duplicates,return=representation',
+      Prefer: 'return=representation',
     },
     body: JSON.stringify(row),
   });
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    throw new Error(`Supabase upsert 失敗 (HTTP ${res.status}): ${text}`);
+    throw new Error(`Supabase ${method === 'PATCH' ? '更新' : '新增'}失敗 (HTTP ${res.status}): ${text}`);
   }
 
   const data = await res.json();
@@ -106,4 +112,4 @@ async function findBookingAtSlot(env, { masterId, date, startTime }) {
   return rows[0] ?? null;
 }
 
-export { upsertBooking, fetchActiveMasters, findBookingAtSlot };
+export { saveBooking, fetchActiveMasters, findBookingAtSlot };
