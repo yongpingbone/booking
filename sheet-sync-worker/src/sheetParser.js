@@ -18,8 +18,9 @@
 //   而不是重複打名字。四位師傅的符號都已確認：
 //     麒 用 ”(U+201D)、泓文/哲瑋 用 ''(兩個直引號) —— 延續符號，自動合併同一筆
 //     治 用 *，但意思不是延續，是「舊客預約、治不想打名字」(Hanna 確認)——
-//       所以治的 "*" 會產生一筆獨立預約，customerName 填「舊客」佔位，
-//       不會被誤判成延續符號
+//       所以治的 "*" 會產生一筆獨立預約，customerName 保留原始的 "*"(不翻
+//       譯成別的字，見下面 parseGridIntoRecords 裡的說明)，不會被誤判成
+//       延續符號
 //
 // - 師傅名字：已經用 SQL 直接查過 masters 表，name 欄位存的就是「泓文/哲瑋/
 //   麒/治」這四個值本身，不是「許老師」「魏老師」這種正式稱呼——後面這兩個
@@ -40,7 +41,6 @@ const REF_ERROR_TEXT = '#REF!';
 const SLOTS_PER_BLOCK = 30; // 8:00 ~ 22:30，每 30 分鐘一格
 // 一個週區塊總共佔幾列："時間"表頭列(1) + 時段列(SLOTS_PER_BLOCK) + "人數"小計列(1) + 空白列(2)
 const BLOCK_ROW_SPAN = 1 + SLOTS_PER_BLOCK + 1 + 2; // = 34
-const ANONYMOUS_RETURNING_CUSTOMER_LABEL = '舊客';
 
 // 底色 → color_tag，對照 booking repo 裡 app 自己用的 COLORS 分類命名，
 // 這樣同步進來的資料跟 app 手動建立的資料在同一套分類底下。
@@ -162,7 +162,11 @@ async function parseGridIntoRecords(rows, master) {
           sheetMasterLabel: master.name,
           date,
           startTime,
-          customerName: isAnonymousReturningCustomer ? ANONYMOUS_RETURNING_CUSTOMER_LABEL : text,
+          customerName: text, // 不翻譯成「舊客」之類的可讀標籤——實測發現資料庫裡
+          // 既有的 治 的「舊客不打名字」預約，customer_name 存的就是原始符號
+          // 本身(例如 "*")，不是翻譯過的文字。翻譯過會導致跟既有資料庫紀錄的
+          // customer_name 對不起來，被 validate.js 的排班衝突判斷誤判成
+          // 「這是不同一筆」，明明是同一筆卻被擋下來。保持原始文字，兩邊才會一致。
           colorTag,
           isNewCustomer: colorTag === 'new_customer',
           slotCount: 1,

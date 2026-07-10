@@ -77,12 +77,12 @@ test('未知符號(不在任何清單裡)：不合併，且被標記 needsReview
   assert.equal(records[0].needsReview, true);
 });
 
-test('治的「*」= 已確認的「舊客不打名字」標記：customerName 填「舊客」，不合併、不標記 needsReview', async () => {
+test('治的「*」= 已確認的「舊客不打名字」標記：customerName 保留原始的「*」(不翻譯，要跟資料庫既有紀錄一致)，不合併、不標記 needsReview', async () => {
   const rows = buildSheetRows([{ dateSerials: FULL_WEEK_SERIALS, slots: { 0: [[2, '*', null]] } }]);
   const master = { name: '治', continuationMarks: [], anonymousReturningCustomerMarks: ['*'] };
   const records = await parseGridIntoRecords(rows, master);
   assert.equal(records.length, 1);
-  assert.equal(records[0].customerName, '舊客');
+  assert.equal(records[0].customerName, '*');
   assert.equal(records[0].needsReview, false);
   assert.equal(records[0].slotCount, 1);
 });
