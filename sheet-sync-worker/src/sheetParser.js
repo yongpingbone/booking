@@ -10,10 +10,15 @@
 //   那幾欄會是空的，代表這欄這個區塊沒有日期)；接著 30 列是每半小時一格的
 //   時段(8:00~22:30)；再來 1 列"人數"小計；再來 2 列空白，然後下一個「時間」
 //   列開始下一週，反覆到月底。
-// - 顏色：黃底(#FFFF00)=新客(已確認)。紅底(#FF0000)=休假或不開放時段(Hanna
-//   確認，預設當休假處理)，不是真正的顧客預約，但格子裡原本寫的文字還是
-//   保留下來當備註，不會被覆蓋成固定文字。其他顏色(米色/白/透明/藍/青)
-//   還是沒有規律、Hanna 也確認 Sheet 端沒有正式定義過，不猜。
+// - 顏色(Hanna 確認的完整規則)：黃底(#FFFF00)=新客。紅底(#FF0000)=休假。
+//   米黃(#FFF2CC)/白(#FFFFFF)單純是視覺分隔，沒有語意(尤其泓文/哲瑋的分頁
+//   大量用米黃色分隔，不能誤判)。除了這幾個，只要格子有明確底色，一律當
+//   自訂(custom)。
+//   格子空白但底色有意義(休假/自訂)時，一樣要算一筆——不能因為沒打字就
+//   跳過，不然像整塊標紅的休假時段會完全漏掉不會同步。空白色塊沒有文字
+//   可以當姓名，比照 app 自己「選色標沒打名字時」的規則(休假→「休假」、
+//   自訂→「自訂」)；連續好幾格都是同一種空白色塊時會合併成一筆
+//   (slotCount 累加)，不會拆成好幾筆重複紀錄。
 // - 延續符號：同一格預約如果橫跨多個時段，後面時段會填一個「同格延續」符號
 //   而不是重複打名字。四位師傅的符號都已確認：
 //     麒 用 ”(U+201D)、泓文/哲瑋 用 ''(兩個直引號) —— 延續符號，自動合併同一筆
@@ -44,11 +49,30 @@ const BLOCK_ROW_SPAN = 1 + SLOTS_PER_BLOCK + 1 + 2; // = 34
 
 // 底色 → color_tag，對照 booking repo 裡 app 自己用的 COLORS 分類命名，
 // 這樣同步進來的資料跟 app 手動建立的資料在同一套分類底下。
-// 只放「已確認」的兩種，其餘一律 'none'，不猜。
+// 分類規則(Hanna 確認)：紅=休假、黃=新客、米黃/白(單純用來分隔、沒有語意)
+// =none、其他任何有明確底色的一律當自訂。
 const COLOR_HEX_TO_TAG = {
   '#FFFF00': 'new_customer', // 已確認
-  '#FF0000': 'vacation', // 已確認(Hanna：紅色默認休假，或者不開放時段)
+  '#FF0000': 'vacation', // 已確認(Hanna：紅色=休假)
 };
+// 這些顏色純粹是視覺分隔用，沒有語意——尤其泓文/哲瑋的分頁大量用米黃色
+// 做區隔，不能被下面的「其他顏色=自訂」規則掃進去，不然會把大量正常預約
+// 誤標成自訂。
+const NEUTRAL_COLOR_HEXES = new Set(['#FFFFFF', '#FFF2CC']);
+// 空白但底色有意義時(休假/自訂)，沒有文字內容可以當 customerName，比照
+// app 自己「選色標沒打名字時」的既有規則(booking repo COLOR_DEFAULT_NAMES)。
+const COLOR_DEFAULT_NAMES = { vacation: '休假', custom: '自訂' };
+
+/**
+ * @param {string|null} colorHex
+ * @returns {'new_customer'|'vacation'|'custom'|'none'}
+ */
+function resolveColorTag(colorHex) {
+  if (!colorHex) return 'none';
+  if (NEUTRAL_COLOR_HEXES.has(colorHex)) return 'none';
+  if (COLOR_HEX_TO_TAG[colorHex]) return COLOR_HEX_TO_TAG[colorHex];
+  return 'custom'; // 不是中性色、也不是已知的黃/紅 → 一律當自訂，不再視為沒有意義
+}
 
 // 目前看過、疑似是「延續符號」的完整集合(不代表每個 master 都用、也不代表意思確認過)。
 // 只有出現在該 master.continuationMarks 清單裡才會真的自動合併成同一筆；
@@ -142,9 +166,35 @@ async function parseGridIntoRecords(rows, master) {
         const date = dateByCol[colIdx];
         const cellData = rows[r]?.[colIdx] ?? { value: null, colorHex: null };
         const text = cellData.value == null ? '' : String(cellData.value).trim();
+        const colorTag = resolveColorTag(cellData.colorHex);
 
         if (text === '') {
-          delete ongoing[colIdx];
+          if (colorTag === 'none') {
+            delete ongoing[colIdx];
+            continue;
+          }
+          // 空白但底色有意義(休假/自訂)：這種整塊色塊沒有文字可以延續判斷，
+          // 用「上一格是不是同一種空白色塊」來判斷要合併還是開新的一筆。
+          const runningBlock = ongoing[colIdx];
+          if (runningBlock?.isBlankColorBlock && runningBlock.colorTag === colorTag) {
+            runningBlock.slotCount += 1;
+            continue;
+          }
+          const record = {
+            masterName: masterDbName,
+            sheetMasterLabel: master.name,
+            date,
+            startTime,
+            customerName: COLOR_DEFAULT_NAMES[colorTag] ?? colorTag,
+            colorTag,
+            isNewCustomer: false,
+            slotCount: 1,
+            needsReview: false,
+            reviewReasons: [],
+            isBlankColorBlock: true, // 內部用，判斷能不能被下一格同色空白延續；不會寫進 DB
+          };
+          records.push(record);
+          ongoing[colIdx] = record;
           continue;
         }
 
@@ -155,7 +205,6 @@ async function parseGridIntoRecords(rows, master) {
         }
 
         const isAnonymousReturningCustomer = (master.anonymousReturningCustomerMarks ?? []).includes(text);
-        const colorTag = COLOR_HEX_TO_TAG[cellData.colorHex] ?? 'none';
 
         const record = {
           masterName: masterDbName,
@@ -284,6 +333,8 @@ export {
   fetchAndParseWeek,
   SHEET_MASTERS,
   COLOR_HEX_TO_TAG,
+  NEUTRAL_COLOR_HEXES,
+  resolveColorTag,
   WEEKDAY_LABELS,
   SLOTS_PER_BLOCK,
   BLOCK_ROW_SPAN,

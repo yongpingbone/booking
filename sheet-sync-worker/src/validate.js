@@ -92,6 +92,11 @@ async function validateBookingRecord(record, env, deps = {}) {
       color_tag: record.colorTag ?? 'none',
       note: record.note || null,
       status: 'confirmed',
+      // 另一個 session 同時在改這個 repo 時新增了 is_aftercare 欄位(售後從
+      // color_tag 的一個值改成獨立勾選)。Sheet 同步進來的預約不會是售後，
+      // 明確填 false，不要留給資料庫的預設值去猜(如果它剛好是 NOT NULL
+      // 沒有預設值，沒填會直接寫入失敗)。
+      is_aftercare: false,
       // bookings_booking_source_check 只允許 'internal'/'online'/'customer_app'/
       // 'historical_import'(已跟 Hanna 用 SQL 查證過)，沒有 'sheet_sync' 這個值。
       // 用 'internal'：Sheet 本來就是師傅自己管理排班的地方，語意上跟直接在

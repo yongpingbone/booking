@@ -9,6 +9,7 @@ import {
   monthsSpannedByWeek,
   fetchAndParseWeek,
   SHEET_MASTERS,
+  resolveColorTag,
 } from '../src/sheetParser.js';
 
 const MONDAY = dateStringToSerial('2026-07-06');
@@ -277,4 +278,145 @@ test('哲瑋的延續符號跟泓文一樣是兩個直引號(已確認)：會自
   assert.equal(records[0].customerName, '陳小華');
   assert.equal(records[0].slotCount, 2);
   assert.equal(records[0].needsReview, false);
+});
+
+// ===== resolveColorTag =====
+
+test('resolveColorTag: 沒有顏色(null) -> none', () => {
+  assert.equal(resolveColorTag(null), 'none');
+});
+
+test('resolveColorTag: 黃底 -> new_customer', () => {
+  assert.equal(resolveColorTag('#FFFF00'), 'new_customer');
+});
+
+test('resolveColorTag: 紅底 -> vacation', () => {
+  assert.equal(resolveColorTag('#FF0000'), 'vacation');
+});
+
+test('resolveColorTag: 米黃色(泓文/哲瑋分頁單純分隔用) -> none', () => {
+  assert.equal(resolveColorTag('#FFF2CC'), 'none');
+});
+
+test('resolveColorTag: 白色 -> none', () => {
+  assert.equal(resolveColorTag('#FFFFFF'), 'none');
+});
+
+test('resolveColorTag: 不是黃/紅/中性色的任何顏色 -> custom', () => {
+  assert.equal(resolveColorTag('#4A86E8'), 'custom'); // 藍
+  assert.equal(resolveColorTag('#00FFFF'), 'custom'); // 青
+  assert.equal(resolveColorTag('#A29BFE'), 'custom'); // 隨便一個沒看過的顏色
+});
+
+// ===== 空白但有顏色的格子(整塊色塊) =====
+
+test('空白格子 + 紅色(休假)：要產生一筆紀錄，customerName 填「休假」，不能因為沒打字就跳過', async () => {
+  const rows = buildSheetRows([{ dateSerials: FULL_WEEK_SERIALS, slots: { 0: [[1, '', '#FF0000']] } }]);
+  const master = SHEET_MASTERS.find((m) => m.name === '泓文');
+  const records = await parseGridIntoRecords(rows, master);
+  assert.equal(records.length, 1);
+  assert.equal(records[0].customerName, '休假');
+  assert.equal(records[0].colorTag, 'vacation');
+  assert.equal(records[0].slotCount, 1);
+});
+
+test('空白格子 + 沒看過的顏色(自訂)：customerName 填「自訂」', async () => {
+  const rows = buildSheetRows([{ dateSerials: FULL_WEEK_SERIALS, slots: { 0: [[1, '', '#4A86E8']] } }]);
+  const master = SHEET_MASTERS.find((m) => m.name === '泓文');
+  const records = await parseGridIntoRecords(rows, master);
+  assert.equal(records.length, 1);
+  assert.equal(records[0].customerName, '自訂');
+  assert.equal(records[0].colorTag, 'custom');
+});
+
+test('空白格子 + 中性色(米黃/白)或完全沒顏色：維持原本行為，不產生紀錄', async () => {
+  const rows = buildSheetRows([
+    {
+      dateSerials: FULL_WEEK_SERIALS,
+      slots: { 0: [[1, '', '#FFF2CC'], [2, '', '#FFFFFF'], [3, '', null]] },
+    },
+  ]);
+  const master = SHEET_MASTERS.find((m) => m.name === '泓文');
+  const records = await parseGridIntoRecords(rows, master);
+  assert.equal(records.length, 0);
+});
+
+test('連續好幾格都是同一種空白色塊：合併成一筆，slotCount 累加，不是拆成好幾筆', async () => {
+  const rows = buildSheetRows([
+    {
+      dateSerials: FULL_WEEK_SERIALS,
+      slots: {
+        0: [[1, '', '#FF0000']],
+        1: [[1, '', '#FF0000']],
+        2: [[1, '', '#FF0000']],
+      },
+    },
+  ]);
+  const master = SHEET_MASTERS.find((m) => m.name === '泓文');
+  const records = await parseGridIntoRecords(rows, master);
+  assert.equal(records.length, 1, '三個連續同色空白格應該合併成一筆，不是三筆');
+  assert.equal(records[0].slotCount, 3);
+  assert.equal(records[0].customerName, '休假');
+});
+
+test('空白色塊中間被真的空格(無顏色)斷開：不能跨過去合併', async () => {
+  const rows = buildSheetRows([
+    {
+      dateSerials: FULL_WEEK_SERIALS,
+      slots: {
+        0: [[1, '', '#FF0000']],
+        // slot 1 完全空白，沒有顏色，中斷
+        2: [[1, '', '#FF0000']],
+      },
+    },
+  ]);
+  const master = SHEET_MASTERS.find((m) => m.name === '泓文');
+  const records = await parseGridIntoRecords(rows, master);
+  assert.equal(records.length, 2, '中間斷開了，應該是兩筆各自 slotCount=1，不是合併成一筆');
+  assert.equal(records[0].slotCount, 1);
+  assert.equal(records[1].slotCount, 1);
+});
+
+test('空白色塊後面接顏色不同的空白色塊：不合併，各自成一筆', async () => {
+  const rows = buildSheetRows([
+    {
+      dateSerials: FULL_WEEK_SERIALS,
+      slots: {
+        0: [[1, '', '#FF0000']], // 休假
+        1: [[1, '', '#4A86E8']], // 自訂，顏色不同
+      },
+    },
+  ]);
+  const master = SHEET_MASTERS.find((m) => m.name === '泓文');
+  const records = await parseGridIntoRecords(rows, master);
+  assert.equal(records.length, 2);
+  assert.equal(records[0].colorTag, 'vacation');
+  assert.equal(records[1].colorTag, 'custom');
+});
+
+test('空白色塊後面接真人姓名：不會被誤判成延續，姓名要正確產生新的一筆', async () => {
+  const rows = buildSheetRows([
+    {
+      dateSerials: FULL_WEEK_SERIALS,
+      slots: {
+        0: [[1, '', '#FF0000']], // 休假
+        1: [[1, '王小明', null]], // 休假結束，換成真的預約
+      },
+    },
+  ]);
+  const master = SHEET_MASTERS.find((m) => m.name === '泓文');
+  const records = await parseGridIntoRecords(rows, master);
+  assert.equal(records.length, 2);
+  assert.equal(records[0].customerName, '休假');
+  assert.equal(records[0].slotCount, 1);
+  assert.equal(records[1].customerName, '王小明');
+  assert.equal(records[1].slotCount, 1);
+});
+
+test('有文字內容、底色是自訂色(不是黃/紅/中性)：colorTag 要正確標成 custom，不是 none', async () => {
+  const rows = buildSheetRows([{ dateSerials: FULL_WEEK_SERIALS, slots: { 0: [[1, '陳先生', '#00FFFF']] } }]);
+  const master = SHEET_MASTERS.find((m) => m.name === '泓文');
+  const records = await parseGridIntoRecords(rows, master);
+  assert.equal(records[0].colorTag, 'custom');
+  assert.equal(records[0].customerName, '陳先生', '有真的名字時不能被顏色的預設名稱蓋掉');
 });
