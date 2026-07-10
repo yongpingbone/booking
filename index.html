@@ -1067,6 +1067,105 @@ function UpdatePasswordScreen({
 // ═══════════════════════════════════════════
 // LOGIN SCREEN
 // ═══════════════════════════════════════════
+// ═══════════════════════════════════════════
+// 📅 每月開放預約提醒：每個月第三個星期一開始，提醒師傅設定下個月是否開放線上預約
+// （用 monthly_reminder_dismissed 表記錄「這位師傅對這個月已經回應過」，
+// 不管選開放還是不開放都算回應過，不會再跳；「稍後再說」只是這次先關掉彈窗，
+// 不寫進資料庫，下次開APP還是會再跳出來）
+// ═══════════════════════════════════════════
+function MonthlyOpenReminder({ authMaster, msg }) {
+  const [show, setShow] = React.useState(false);
+  const [dismissedThisSession, setDismissedThisSession] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+
+  const fmtD = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const now = getTaipeiNow();
+  const nextMonthFirst = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const nextMonthLast = new Date(now.getFullYear(), now.getMonth() + 2, 0);
+  const nextMonthLabel = `${nextMonthFirst.getFullYear()}年${nextMonthFirst.getMonth() + 1}月`;
+  const yearMonthKey = `${nextMonthFirst.getFullYear()}-${String(nextMonthFirst.getMonth() + 1).padStart(2, "0")}`;
+
+  React.useEffect(() => {
+    if (!authMaster?.id) return;
+    (async () => {
+      // 算出這個月第三個星期一是幾號，還沒到就不用檢查了
+      let mondayCount = 0, thirdMonday = null;
+      for (let d = 1; d <= 31; d++) {
+        const dt = new Date(now.getFullYear(), now.getMonth(), d);
+        if (dt.getMonth() !== now.getMonth()) break;
+        if (dt.getDay() === 1) {
+          mondayCount++;
+          if (mondayCount === 3) { thirdMonday = d; break; }
+        }
+      }
+      if (!thirdMonday || now.getDate() < thirdMonday) return;
+
+      try {
+        const { data } = await sb.from("monthly_reminder_dismissed")
+          .select("id").eq("master_id", authMaster.id).eq("year_month", yearMonthKey).limit(1);
+        if (data && data.length > 0) return; // 已經回應過這個月了，不用再跳
+        setShow(true);
+      } catch (e) { /* 查詢失敗就不跳提醒，不要因為這個功能本身出錯擋住整個APP */ }
+    })();
+  }, [authMaster?.id]);
+
+  if (!show || dismissedThisSession) return null;
+
+  const recordDismissal = async (action) => {
+    await sb.from("monthly_reminder_dismissed").upsert(
+      { master_id: authMaster.id, year_month: yearMonthKey, action },
+      { onConflict: "master_id,year_month" }
+    );
+  };
+
+  const doOpen = async () => {
+    setBusy(true);
+    const dates = [];
+    for (let d = new Date(nextMonthFirst); d <= nextMonthLast; d.setDate(d.getDate() + 1)) {
+      const ds = fmtD(new Date(d));
+      if (!isSundayStr(ds)) dates.push(ds);
+    }
+    const payload = dates.map(dt => ({ master_id: authMaster.id, date: dt, is_open: true, open_slots: BUSINESS_HOUR_SLOTS }));
+    const { error } = await sb.from("master_day_availability").upsert(payload, { onConflict: "master_id,date" });
+    if (error) { setBusy(false); msg("開放失敗：" + error.message, true); return; }
+    await recordDismissal("opened");
+    setBusy(false);
+    msg(`✓ 已開放${nextMonthLabel}`);
+    setShow(false);
+  };
+
+  const doClose = async () => {
+    setBusy(true);
+    await recordDismissal("closed");
+    setBusy(false);
+    msg(`✓ 已記錄${nextMonthLabel}不開放`);
+    setShow(false);
+  };
+
+  return /*#__PURE__*/React.createElement("div", {
+    style: { position: "fixed", inset: 0, background: "rgba(0,0,0,.75)", zIndex: 99999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: { background: "var(--bg-header)", borderRadius: 16, padding: "24px 20px", maxWidth: 380, width: "100%" }
+  },
+    /*#__PURE__*/React.createElement("div", { style: { fontSize: 18, fontWeight: 900, marginBottom: 10, color: "var(--text-main)" } }, `📅 ${nextMonthLabel}開放預約了嗎？`),
+    /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, color: "var(--text-muted)", lineHeight: 1.7, marginBottom: 18 } },
+      `別忘了設定${nextMonthLabel}要不要開放線上預約，順便去排班表把休假日也標記起來，客人才不會約到你休假的時段。`
+    ),
+    /*#__PURE__*/React.createElement("button", {
+      onClick: doOpen, disabled: busy,
+      style: { width: "100%", padding: 12, borderRadius: 10, border: "none", background: "#2ed9c3", color: "#00171f", fontWeight: 900, fontSize: 14, cursor: busy ? "wait" : "pointer", marginBottom: 8 }
+    }, `🚀 一鍵開放${nextMonthLabel}`),
+    /*#__PURE__*/React.createElement("button", {
+      onClick: doClose, disabled: busy,
+      style: { width: "100%", padding: 10, borderRadius: 10, border: "1px solid #e94560", background: "none", color: "#e94560", fontWeight: 700, fontSize: 13, cursor: busy ? "wait" : "pointer", marginBottom: 10 }
+    }, `${nextMonthLabel}不開放`),
+    /*#__PURE__*/React.createElement("button", {
+      onClick: () => setDismissedThisSession(true),
+      style: { width: "100%", padding: 8, background: "none", border: "none", color: "var(--text-dim)", fontSize: 12, cursor: "pointer" }
+    }, "稍後再說")
+  ));
+}
+
 function LoginScreen({
   onLogin
 }) {
@@ -4927,7 +5026,10 @@ function MainApp({
       cursor: "pointer"
     },
     title: "除錯：檢查頂部導覽列被什麼元素佔用"
-  }, "\uD83D\uDD0D"), /*#__PURE__*/React.createElement("div", {
+  }, "\uD83D\uDD0D"), /*#__PURE__*/React.createElement(MonthlyOpenReminder, {
+    authMaster: authMaster,
+    msg: msg
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       background: "var(--bg-header)",
       borderBottom: "1px solid var(--border2)",
