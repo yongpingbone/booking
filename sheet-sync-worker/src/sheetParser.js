@@ -252,7 +252,10 @@ async function fetchAndParseWeek(env, weekKey, deps = {}) {
       const sheetTitle = `${month}月-${master.name}`;
       let gridResult;
       try {
-        gridResult = await doFetchGridRows(env, { sheetTitle, range: 'A1:H1010', accessToken });
+        // 一個月最多 6 個週區塊(header 1 列 + 6*34 = 205 列)，抓 260 列留寬裕
+        // 空間；原本抓到 1010 列，一個月分頁其實用不到那麼多，白白增加資料量
+        // 跟解析時間。
+        gridResult = await doFetchGridRows(env, { sheetTitle, range: 'A1:H260', accessToken });
       } catch (err) {
         throw new Error(`讀取分頁「${sheetTitle}」失敗: ${err.message}`);
       }
