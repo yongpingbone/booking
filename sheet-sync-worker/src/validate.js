@@ -92,7 +92,13 @@ async function validateBookingRecord(record, env, deps = {}) {
       color_tag: record.colorTag ?? 'none',
       note: record.note || null,
       status: 'confirmed',
-      booking_source: 'sheet_sync',
+      // bookings_booking_source_check 只允許 'internal'/'online'/'customer_app'/
+      // 'historical_import'(已跟 Hanna 用 SQL 查證過)，沒有 'sheet_sync' 這個值。
+      // 用 'internal'：Sheet 本來就是師傅自己管理排班的地方，語意上跟直接在
+      // 系統裡建預約是同一件事。如果之後想要能單獨篩出「這筆是從 Sheet 同步
+      // 進來的」，需要先對 bookings_booking_source_check 做 ALTER 加值，
+      // 這支才能跟著改，目前沒有那個欄位可用。
+      booking_source: 'internal',
       reservation_type: 'single',
       party_size: 1,
     },

@@ -33,7 +33,7 @@ test('全部合法、沒有衝突 → valid，row 欄位對應正確', async () 
   assert.equal(result.row.start_time, '09:00:00');
   assert.equal(result.row.customer_name, '王小明');
   assert.equal(result.row.status, 'confirmed');
-  assert.equal(result.row.booking_source, 'sheet_sync');
+  assert.equal(result.row.booking_source, 'internal');
 });
 
 test('日期空白', async () => {
