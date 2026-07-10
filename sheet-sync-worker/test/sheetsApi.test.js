@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchGridRows, normalizeCell, colorObjectToHex } from '../src/sheetsApi.js';
+import { fetchGridRows, normalizeCell, colorObjectToHex, getSheetIdByTitle, setCellNote, _resetSheetIdCacheForTests } from '../src/sheetsApi.js';
 
 test('colorObjectToHex: 黃色 {r:1,g:1,b:0} 要轉成 #FFFF00(對應實際 Sheet 裡確認過的 FFFFFF00 新客標記，扣掉 alpha)', () => {
   assert.equal(colorObjectToHex({ red: 1, green: 1, blue: 0 }), '#FFFF00');
@@ -120,4 +120,108 @@ test('fetchGridRows: 回應裡找不到分頁資料(例如分頁名稱打錯)要
 
 test('fetchGridRows: 缺少 env.GOOGLE_SHEET_ID 要丟清楚的錯誤', async () => {
   await assert.rejects(() => fetchGridRows({}, { sheetTitle: 'x', range: 'A1:A1', accessToken: 't' }));
+});
+
+test('getSheetIdByTitle: 重複查同一個/不同分頁名稱，只打一次 API(快取住整份分頁清單)', async () => {
+  _resetSheetIdCacheForTests();
+  let callCount = 0;
+  const fakeFetch = async () => {
+    callCount++;
+    return {
+      ok: true,
+      json: async () => ({
+        sheets: [
+          { properties: { sheetId: 111, title: '7月-泓文' } },
+          { properties: { sheetId: 222, title: '7月-麒' } },
+        ],
+      }),
+    };
+  };
+  const env = { GOOGLE_SHEET_ID: 'id' };
+
+  const id1 = await getSheetIdByTitle(env, { sheetTitle: '7月-泓文', accessToken: 't' }, { fetch: fakeFetch });
+  const id2 = await getSheetIdByTitle(env, { sheetTitle: '7月-麒', accessToken: 't' }, { fetch: fakeFetch });
+  const id3 = await getSheetIdByTitle(env, { sheetTitle: '7月-泓文', accessToken: 't' }, { fetch: fakeFetch });
+
+  assert.equal(id1, 111);
+  assert.equal(id2, 222);
+  assert.equal(id3, 111);
+  assert.equal(callCount, 1, '三次查詢(含重複的)應該只打一次 API，其餘從快取拿');
+});
+
+test('getSheetIdByTitle: 快取過期後(超過 TTL)要重新打 API', async () => {
+  _resetSheetIdCacheForTests();
+  let callCount = 0;
+  let fakeNow = 1_000_000;
+  const fakeFetch = async () => {
+    callCount++;
+    return { ok: true, json: async () => ({ sheets: [{ properties: { sheetId: 111, title: 'x' } }] }) };
+  };
+  const env = { GOOGLE_SHEET_ID: 'id' };
+  const deps = { fetch: fakeFetch, now: () => fakeNow };
+
+  await getSheetIdByTitle(env, { sheetTitle: 'x', accessToken: 't' }, deps);
+  assert.equal(callCount, 1);
+
+  fakeNow += 4 * 60 * 1000; // 4 分鐘後，還在 5 分鐘 TTL 內
+  await getSheetIdByTitle(env, { sheetTitle: 'x', accessToken: 't' }, deps);
+  assert.equal(callCount, 1, '還沒過期，不該重新打 API');
+
+  fakeNow += 2 * 60 * 1000; // 再過 2 分鐘，總共 6 分鐘，超過 TTL
+  await getSheetIdByTitle(env, { sheetTitle: 'x', accessToken: 't' }, deps);
+  assert.equal(callCount, 2, '過期後應該重新打一次 API');
+});
+
+test('getSheetIdByTitle: 快取裡沒有的分頁名稱(例如新加的分頁)要強制重新查一次，不要直接報錯', async () => {
+  _resetSheetIdCacheForTests();
+  let callCount = 0;
+  const responses = [
+    { sheets: [{ properties: { sheetId: 111, title: '7月-泓文' } }] },
+    { sheets: [{ properties: { sheetId: 111, title: '7月-泓文' } }, { properties: { sheetId: 999, title: '7月-新分頁' } }] },
+  ];
+  const fakeFetch = async () => {
+    const body = responses[callCount];
+    callCount++;
+    return { ok: true, json: async () => body };
+  };
+  const env = { GOOGLE_SHEET_ID: 'id' };
+
+  await getSheetIdByTitle(env, { sheetTitle: '7月-泓文', accessToken: 't' }, { fetch: fakeFetch });
+  assert.equal(callCount, 1);
+
+  const id = await getSheetIdByTitle(env, { sheetTitle: '7月-新分頁', accessToken: 't' }, { fetch: fakeFetch });
+  assert.equal(id, 999);
+  assert.equal(callCount, 2, '快取裡沒有的分頁名稱要重新查一次');
+});
+
+test('getSheetIdByTitle: 真的找不到的分頁名稱要丟清楚的錯誤', async () => {
+  _resetSheetIdCacheForTests();
+  const fakeFetch = async () => ({ ok: true, json: async () => ({ sheets: [{ properties: { sheetId: 111, title: 'x' } }] }) });
+  await assert.rejects(
+    () => getSheetIdByTitle({ GOOGLE_SHEET_ID: 'id' }, { sheetTitle: '真的不存在', accessToken: 't' }, { fetch: fakeFetch }),
+    /找不到分頁「真的不存在」/
+  );
+});
+
+test('setCellNote: 組出正確的 batchUpdate request body，只更新 note 欄位', async () => {
+  _resetSheetIdCacheForTests();
+  let capturedBody;
+  const fakeFetch = async (url, options) => {
+    if (url.toString().includes(':batchUpdate')) {
+      capturedBody = JSON.parse(options.body);
+      return { ok: true, json: async () => ({}) };
+    }
+    return { ok: true, json: async () => ({ sheets: [{ properties: { sheetId: 42, title: '7月-泓文' } }] }) };
+  };
+  await setCellNote(
+    { GOOGLE_SHEET_ID: 'id' },
+    { sheetTitle: '7月-泓文', rowIndex: 5, colIndex: 2, note: '⚠️ 測試', accessToken: 't' },
+    { fetch: fakeFetch }
+  );
+  const req = capturedBody.requests[0].updateCells;
+  assert.equal(req.range.sheetId, 42);
+  assert.equal(req.range.startRowIndex, 5);
+  assert.equal(req.range.startColumnIndex, 2);
+  assert.equal(req.fields, 'note');
+  assert.equal(req.rows[0].values[0].note, '⚠️ 測試');
 });

@@ -56,28 +56,38 @@ async function runSyncForWeek(env, weekKey, deps = {}) {
     };
 
     const toProcess = [...diffResult.added, ...diffResult.changed.map((c) => c.current)];
-    const results = [];
+    log.results = []; // 直接掛在 log 上、逐筆 push，不要等迴圈整個跑完才賦值——
+    // 這樣就算中途某一筆意外丟出未預期的例外，前面已經處理過的筆數還是看得到，
+    // 不會因為最後一筆爆炸就把整輪的進度都吞掉(這裡有真的發生過，setCellNote
+    // 撞到 Sheets API 頻率限制，導致整輪的 results 直接消失，事後完全看不出
+    // 卡在第幾筆)。
 
     for (const record of toProcess) {
       let validation;
       try {
         validation = await doValidateBookingRecord(record, env);
       } catch (err) {
-        results.push({ identityKey: record.identityKey, status: 'validation_error', error: String(err?.message ?? err) });
+        log.results.push({ identityKey: record.identityKey, status: 'validation_error', error: String(err?.message ?? err) });
         continue;
       }
 
       if (!validation.valid) {
-        results.push({ identityKey: record.identityKey, status: 'invalid', errors: validation.errors });
-        await doMarkCellStatus(env, record, { type: 'invalid', message: validation.errors.join('; ') });
+        log.results.push({ identityKey: record.identityKey, status: 'invalid', errors: validation.errors });
+        try {
+          await doMarkCellStatus(env, record, { type: 'invalid', message: validation.errors.join('; ') });
+        } catch (err) {
+          // 寫備註失敗(例如 Sheets API 額度用完)不該讓整輪同步中斷——這筆的
+          // 驗證結果已經正確記到 log.results 了，只是師傅暫時看不到 Sheet 上
+          // 的提示，不影響其他筆繼續處理。
+          log.results.push({ identityKey: record.identityKey, status: 'mark_cell_status_failed', error: String(err?.message ?? err) });
+        }
         continue;
       }
 
       await doSaveBooking(env, validation.row, validation.existingId);
-      results.push({ identityKey: record.identityKey, status: 'synced' });
+      log.results.push({ identityKey: record.identityKey, status: 'synced' });
     }
 
-    log.results = results;
     await saveSnapshot(env.SHEET_SYNC_BUCKET, weekKey, current);
 
     log.ok = true;

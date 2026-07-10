@@ -118,6 +118,13 @@ async function setCellNote(env, { sheetTitle, rowIndex, colIndex, note, accessTo
   }
 }
 
+// 分頁名稱 -> sheetId 的對照表快取在記憶體裡。setCellNote() 驗證失敗時可能
+// 短時間內被呼叫很多次(例如一次同步有很多筆驗證失敗)，每次都重新查一次
+// 分頁清單會很快打爆 Sheets API 的「每分鐘讀取次數」限制(實測撞過 429)。
+// 分頁清單改變的頻率很低，快取 5 分鐘很安全。
+let sheetIdCache = null; // { map: Map<title, sheetId>, cachedAtMs }
+const SHEET_ID_CACHE_TTL_MS = 5 * 60 * 1000;
+
 /**
  * @param {object} env 需要 env.GOOGLE_SHEET_ID
  * @param {{sheetTitle: string, accessToken: string}} params
@@ -126,6 +133,14 @@ async function setCellNote(env, { sheetTitle, rowIndex, colIndex, note, accessTo
  */
 async function getSheetIdByTitle(env, { sheetTitle, accessToken }, deps = {}) {
   const doFetch = deps.fetch ?? fetch;
+  const nowMs = (deps.now ?? Date.now)();
+
+  if (sheetIdCache && nowMs - sheetIdCache.cachedAtMs < SHEET_ID_CACHE_TTL_MS) {
+    const cached = sheetIdCache.map.get(sheetTitle);
+    if (cached !== undefined) return cached;
+    // 快取裡沒有這個分頁名稱 —— 可能是新加的分頁，強制重新查一次而不是直接報錯
+  }
+
   const url = new URL(`https://sheets.googleapis.com/v4/spreadsheets/${env.GOOGLE_SHEET_ID}`);
   url.searchParams.set('fields', 'sheets.properties(sheetId,title)');
 
@@ -135,9 +150,17 @@ async function getSheetIdByTitle(env, { sheetTitle, accessToken }, deps = {}) {
     throw new Error(`Sheets API 查詢分頁清單失敗 (HTTP ${res.status}): ${text}`);
   }
   const data = await res.json();
-  const match = (data.sheets ?? []).find((s) => s.properties?.title === sheetTitle);
-  if (!match) throw new Error(`找不到分頁「${sheetTitle}」`);
-  return match.properties.sheetId;
+  const map = new Map((data.sheets ?? []).map((s) => [s.properties?.title, s.properties?.sheetId]));
+  sheetIdCache = { map, cachedAtMs: nowMs };
+
+  const sheetId = map.get(sheetTitle);
+  if (sheetId === undefined) throw new Error(`找不到分頁「${sheetTitle}」`);
+  return sheetId;
 }
 
-export { fetchGridRows, normalizeCell, colorObjectToHex, setCellNote, getSheetIdByTitle };
+/** 測試用：清掉 in-memory cache，避免測試之間互相汙染。 */
+function _resetSheetIdCacheForTests() {
+  sheetIdCache = null;
+}
+
+export { fetchGridRows, normalizeCell, colorObjectToHex, setCellNote, getSheetIdByTitle, _resetSheetIdCacheForTests };
