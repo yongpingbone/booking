@@ -4872,7 +4872,41 @@ function MainApp({
       fontWeight: 700,
       zIndex: 9999
     }
-  }, toast.m), /*#__PURE__*/React.createElement("div", {
+  }, toast.m), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      const spots = [
+        { label: "左上(店名)", x: 20, y: 20 },
+        { label: "中間偏左(排班)", x: window.innerWidth * 0.15, y: 20 },
+        { label: "正中間", x: window.innerWidth * 0.5, y: 20 },
+        { label: "中間偏右(開放)", x: window.innerWidth * 0.75, y: 20 },
+        { label: "右上(設定)", x: window.innerWidth - 20, y: 20 }
+      ];
+      const report = spots.map(s => {
+        const el = document.elementFromPoint(s.x, s.y);
+        if (!el) return `${s.label}: (查無元素)`;
+        const tag = el.tagName;
+        const cls = (el.className && typeof el.className === "string") ? el.className.slice(0, 40) : "";
+        const txt = (el.textContent || "").trim().slice(0, 15);
+        return `${s.label}: <${tag}> class="${cls}" 內容="${txt}"`;
+      }).join("\n");
+      alert("頂部導覽列各位置實際偵測到的元素：\n\n" + report);
+    },
+    style: {
+      position: "fixed",
+      right: 10,
+      bottom: 10,
+      zIndex: 999999,
+      width: 40,
+      height: 40,
+      borderRadius: "50%",
+      border: "2px solid #2ed9c3",
+      background: "rgba(0,0,0,.7)",
+      color: "#2ed9c3",
+      fontSize: 16,
+      cursor: "pointer"
+    },
+    title: "除錯：檢查頂部導覽列被什麼元素佔用"
+  }, "\uD83D\uDD0D"), /*#__PURE__*/React.createElement("div", {
     style: {
       background: "var(--bg-header)",
       borderBottom: "1px solid var(--border2)",
