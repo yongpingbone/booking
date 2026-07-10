@@ -19,13 +19,22 @@
 //   可以當姓名，比照 app 自己「選色標沒打名字時」的規則(休假→「休假」、
 //   自訂→「自訂」)；連續好幾格都是同一種空白色塊時會合併成一筆
 //   (slotCount 累加)，不會拆成好幾筆重複紀錄。
-// - 延續符號：同一格預約如果橫跨多個時段，後面時段會填一個「同格延續」符號
-//   而不是重複打名字。四位師傅的符號都已確認：
-//     麒 用 ”(U+201D)、泓文/哲瑋 用 ''(兩個直引號) —— 延續符號，自動合併同一筆
-//     治 用 *，但意思不是延續，是「舊客預約、治不想打名字」(Hanna 確認)——
+// - 延續符號：一度誤以為代表「同一人療程比較長」，直接查證 app 自己建立
+//   預約的程式碼(index.html 的 guestsNum>1 那段)後發現理解錯了——真正的
+//   意思是「多位同行客人、同師傅、連續時段各佔一格」，app 自己的資料也是
+//   每人各一列，customerName 是「原名-同行」(剛好2人)或「原名-同行1/2/3..」
+//   (超過2人才編號，從1開始，對齊 app 的 for(let i=1;i<guestsNum;i++))。
+//   四位師傅的符號都已確認：
+//     麒 用 ”(U+201D)、泓文/哲瑋 用 ''(兩個直引號) —— 延續符號，
+//       產生獨立的同行者記錄(不是合併成一筆、slotCount 不會累加)
+//     治 用 *，但意思完全不是延續，是「舊客預約、治不想打名字」(Hanna 確認)——
 //       所以治的 "*" 會產生一筆獨立預約，customerName 保留原始的 "*"(不翻
 //       譯成別的字，見下面 parseGridIntoRecords 裡的說明)，不會被誤判成
 //       延續符號
+//   ⚠️ 這裡曾經合併成一筆(slotCount 累加)，導致同行者在資料庫裡對應的既有
+//   預約，被一次性的 reconcile-month 校正功能誤判成「Sheet 上找不到對應」
+//   而錯誤標記取消——這是真的發生過的事故。修正後每位同行者都是獨立記錄，
+//   有自己的 identityKey，不會再被漏掉。
 //
 // - 師傅名字：已經用 SQL 直接查過 masters 表，name 欄位存的就是「泓文/哲瑋/
 //   麒/治」這四個值本身，不是「許老師」「魏老師」這種正式稱呼——後面這兩個
@@ -200,8 +209,32 @@ async function parseGridIntoRecords(rows, master) {
 
         const isConfirmedContinuation = master.continuationMarks.includes(text);
         if (isConfirmedContinuation && ongoing[colIdx]) {
-          ongoing[colIdx].slotCount += 1;
-          continue;
+          // 不是「同一人療程比較長」——查證過 app 自己建立多位同行客人時，
+          // 是同師傅連續時段「每人各佔一格」，各自一筆 bookings 資料列，
+          // customerName 是「原名-同行」或「原名-同行1/2/3...」(超過2人才編號)。
+          // 延續符號代表的正是這個模式，所以這裡要各自產生獨立的一筆記錄，
+          // 不能合併成一筆(合併會導致這幾格在資料庫裡對應的既有預約，被
+          // reconcile-month 誤判成「Sheet 上找不到對應」而錯誤標記取消——
+          // 這是真的發生過的事故，不是假設)。
+          // customerName 最後的編號要看這組同行者總共幾位，這裡先記下來，
+          // 掃完整個 block 之後再統一回頭填(見下面迴圈外的 companions 後處理)。
+          const anchor = ongoing[colIdx];
+          const companionRecord = {
+            masterName: masterDbName,
+            sheetMasterLabel: master.name,
+            date,
+            startTime,
+            customerName: null, // 先留空，掃完這個 anchor 的所有同行者後才知道要編號幾號
+            colorTag: anchor.colorTag,
+            isNewCustomer: false,
+            slotCount: 1,
+            needsReview: false,
+            reviewReasons: [],
+          };
+          records.push(companionRecord);
+          anchor.companions = anchor.companions ?? [];
+          anchor.companions.push(companionRecord);
+          continue; // ongoing[colIdx] 保持指向 anchor 本人，讓下一位同行者能接著算
         }
 
         const isAnonymousReturningCustomer = (master.anonymousReturningCustomerMarks ?? []).includes(text);
@@ -238,6 +271,21 @@ async function parseGridIntoRecords(rows, master) {
         records.push(record);
         ongoing[colIdx] = record;
       }
+    }
+  }
+
+  // 同行者命名後處理：比照 app 自己建立多位同行客人的規則(guestsNum>2 才編號，
+  // 從 1 開始)。要等整個 block 掃完才能知道每組同行者的總人數，所以放在
+  // 主要掃描迴圈外面統一處理。
+  for (const record of records) {
+    if (record.companions?.length) {
+      const totalGuests = record.companions.length + 1; // 本人 + 同行人數
+      record.companions.forEach((companion, idx) => {
+        const i = idx + 1; // 對齊 app 的 for (let i = 1; i < guestsNum; i++)
+        const suffix = totalGuests > 2 ? String(i) : '';
+        companion.customerName = `${record.customerName}-同行${suffix}`;
+      });
+      delete record.companions; // 內部暫存用，不需要留在最終結果裡
     }
   }
 
