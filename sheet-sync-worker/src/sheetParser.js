@@ -17,8 +17,9 @@
 //   格子空白但底色有意義(休假/自訂)時，一樣要算一筆——不能因為沒打字就
 //   跳過，不然像整塊標紅的休假時段會完全漏掉不會同步。空白色塊沒有文字
 //   可以當姓名，比照 app 自己「選色標沒打名字時」的規則(休假→「休假」、
-//   自訂→「自訂」)；連續好幾格都是同一種空白色塊時會合併成一筆
-//   (slotCount 累加)，不會拆成好幾筆重複紀錄。
+//   自訂→「自訂」)。每一格都各自獨立一筆，不合併(原本會合併成一筆、
+//   slotCount 累加，Hanna 看過實際畫面後不喜歡，改成每格獨立，這樣也
+//   跟同行者那次的修正一致，避免同一種「合併後單一格對不到」的風險)。
 // - 延續符號：一度誤以為代表「同一人療程比較長」，直接查證 app 自己建立
 //   預約的程式碼(index.html 的 guestsNum>1 那段)後發現理解錯了——真正的
 //   意思是「多位同行客人、同師傅、連續時段各佔一格」，app 自己的資料也是
@@ -182,13 +183,9 @@ async function parseGridIntoRecords(rows, master) {
             delete ongoing[colIdx];
             continue;
           }
-          // 空白但底色有意義(休假/自訂)：這種整塊色塊沒有文字可以延續判斷，
-          // 用「上一格是不是同一種空白色塊」來判斷要合併還是開新的一筆。
-          const runningBlock = ongoing[colIdx];
-          if (runningBlock?.isBlankColorBlock && runningBlock.colorTag === colorTag) {
-            runningBlock.slotCount += 1;
-            continue;
-          }
+          // 空白但底色有意義(休假/自訂)：Hanna 看過畫面後不喜歡合併成一格
+          // (跟同行者那次一樣的理由——合併會導致單一格在資料庫比對時對不到)，
+          // 每一格都各自獨立一筆，不delete ongoing[colIdx]。
           const record = {
             masterName: masterDbName,
             sheetMasterLabel: master.name,
@@ -200,10 +197,12 @@ async function parseGridIntoRecords(rows, master) {
             slotCount: 1,
             needsReview: false,
             reviewReasons: [],
-            isBlankColorBlock: true, // 內部用，判斷能不能被下一格同色空白延續；不會寫進 DB
           };
           records.push(record);
-          ongoing[colIdx] = record;
+          // 故意不設 ongoing[colIdx] = record——這種空白色塊格不會是延續符號的
+          // 「錨點」，萬一後面接了一個延續符號，要讓它落到「找不到可以延續的
+          // 東西」那個 needsReview 分支，而不是被誤接到休假/自訂區塊上。
+          delete ongoing[colIdx];
           continue;
         }
 
