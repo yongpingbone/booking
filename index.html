@@ -690,6 +690,17 @@ function displayName(n) {
   const cleaned = t.replace(/[\s\-\u2010-\u2015\u2212.()]*\d[\d\s\-\u2010-\u2015\u2212.()]{3,}\s*$/, "").trim();
   return cleaned || t;
 }
+// 排班表等畫面上顯示用的客人姓名（取代單純的 displayName(b.customer_name)）：
+// - 售後(is_aftercare)：不管有沒有填真名，一律顯示「售後」，這是有意義的標記要讓師傅一眼看到
+// - 自訂/卡位：如果客人姓名欄位還是系統預設佔位字(沒填真名)，不要把佔位字當姓名顯示，顯示空白就好
+// - 休假：維持顯示原本文字，「休假」本身是有意義的資訊，跟自訂/卡位這種純佔位不一樣
+function bookingDisplayName(b) {
+  if (!b) return "";
+  if (b.is_aftercare) return "售後";
+  const raw = (b.customer_name || "").trim();
+  if (raw === "自訂" || raw === "卡位") return "";
+  return displayName(b.customer_name);
+}
 function getWeeksMon(y, m, showSun) {
   const dim = new Date(y, m + 1, 0).getDate();
   const off = new Date(y, m, 1).getDay();
@@ -4894,7 +4905,7 @@ function MainApp({
         if (dragMode) return; // 休假模式不攔截 touch
         handleTouchStart(e, b);
         // 長按600ms複製姓名
-        const name = displayName(b.customer_name);
+        const name = bookingDisplayName(b);
         const cpTimer = setTimeout(() => {
           navigator.clipboard.writeText(name).then(() => {
             const el = e.currentTarget;
@@ -4914,7 +4925,7 @@ function MainApp({
       },
       onContextMenu: e => {
         e.preventDefault();
-        const name = displayName(b.customer_name);
+        const name = bookingDisplayName(b);
         navigator.clipboard.writeText(name).then(() => {
           const el = e.currentTarget;
           const orig = el.style.opacity;
@@ -4959,7 +4970,7 @@ function MainApp({
         fontSize: FS.s - 1,
         marginRight: 2
       }
-    }, "★"), displayName(b.customer_name)), canDelete && /*#__PURE__*/React.createElement("span", {
+    }, "★"), bookingDisplayName(b)), canDelete && /*#__PURE__*/React.createElement("span", {
       onClick: e => {
         e.stopPropagation();
         delBk(b.id);
@@ -5575,7 +5586,7 @@ function MainApp({
       fontWeight: 700,
       color: "var(--text-main)"
     }
-  }, displayName(b.customer_name)), /*#__PURE__*/React.createElement("div", {
+  }, bookingDisplayName(b)), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 11,
       color: "var(--text-muted)",
@@ -8275,7 +8286,7 @@ function CustomerOwnerPanel({
     }
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: nameStyle
-  }, displayName(b.customer_name), b.color_tag === "new_customer" && /*#__PURE__*/React.createElement("span", {
+  }, bookingDisplayName(b), b.color_tag === "new_customer" && /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 10,
       color: "#f5a623",
@@ -8316,7 +8327,7 @@ function CustomerOwnerPanel({
     }
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: nameStyle
-  }, displayName(b.customer_name), b.color_tag === "new_customer" && /*#__PURE__*/React.createElement("span", {
+  }, bookingDisplayName(b), b.color_tag === "new_customer" && /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 10,
       color: "#f5a623",
@@ -9688,7 +9699,7 @@ function OverviewMonth({
       fontWeight: 700,
       color: "var(--text-main)"
     }
-  }, displayName(b.customer_name)), /*#__PURE__*/React.createElement("div", {
+  }, bookingDisplayName(b)), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 11,
       color: "var(--text-muted)",
@@ -10204,7 +10215,7 @@ function OverviewMonth({
         },
         onTouchStart: e => {
           ovHandleTouchStart(e, b);
-          const name = displayName(b.customer_name);
+          const name = bookingDisplayName(b);
           const cpTimer = setTimeout(() => {
             navigator.clipboard.writeText(name).then(() => {
               const el = e.currentTarget;
@@ -10224,7 +10235,7 @@ function OverviewMonth({
         },
         onContextMenu: e => {
           e.preventDefault();
-          const name = displayName(b.customer_name);
+          const name = bookingDisplayName(b);
           navigator.clipboard.writeText(name).then(() => {
             const el = e.currentTarget;
             const orig = el.style.opacity;
@@ -10264,7 +10275,7 @@ function OverviewMonth({
           marginRight: 1,
           color: "#f5c842"
         }
-      }, "★"), displayName(b.customer_name)), isVac && /*#__PURE__*/React.createElement("div", {
+      }, "★"), bookingDisplayName(b)), isVac && /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: FS.s,
           fontWeight: 800,
@@ -14181,7 +14192,7 @@ function CRMModule({
       marginBottom: 2,
       color: "#e94560"
     }
-  }, displayName(b.customer_name), " ", /*#__PURE__*/React.createElement("span", {
+  }, bookingDisplayName(b), " ", /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 10,
       background: "rgba(233,69,96,0.15)",
