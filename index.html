@@ -1477,6 +1477,20 @@ function PendingBookings({
       });
     }
 
+    // 🏖️ 防呆：申請制填入前，檢查目標日期是不是在店休期間內
+    // （確認預約這條路徑是師傅手動輸入日期，不像新增預約走過date-input的
+    // 那層驗證，容易漏看店休設定，這裡補上同樣的檢查）
+    if (isReq && confDate) {
+      const { data: _clo } = await sb.from("store_closures").select("reason").lte("start_date", confDate).gte("end_date", confDate).limit(1);
+      if (_clo && _clo.length > 0) {
+        const proceed = confirm(`⚠️ ${confDate} 是店休日（${_clo[0].reason || "未填原因"}），確定要在這天填入預約嗎？\n\n按「確定」會繼續填入，按「取消」則不會送出。`);
+        if (!proceed) {
+          setSaving(false);
+          return;
+        }
+      }
+    }
+
     // 🔴 防呆：申請制填入前，逐筆檢查目標時段是否已被占用
     // （改期核准如果選回跟原本一模一樣的日期時間，checkConflict 會查到「衝突」
     // 其實就是這筆本身——因為改期請求送出後 date/start_time 沒被清空過，
