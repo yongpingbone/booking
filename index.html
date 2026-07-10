@@ -2892,7 +2892,7 @@ function AvailabilityModule({
               borderRadius: 8, background: bg, border, cursor: (isPast || isSun) ? "default" : "pointer",
               opacity: (isPast || isSun) ? 0.4 : 1, fontSize: 13, fontWeight: 700, color: "var(--text-main)"
             }
-          }, d, isSun && !isPast && /*#__PURE__*/React.createElement("span", { style: { fontSize: 7, color: "var(--text-dim)" } }, "僅內部"));
+          }, d, isSun && !isPast && /*#__PURE__*/React.createElement("span", { style: { fontSize: 7, color: "var(--text-dim)" } }, "僅內部"), !isSun && !isPast && isOpen && /*#__PURE__*/React.createElement("span", { style: { fontSize: 7, color: isPartial ? "#f5a623" : "#2ed9c3", fontWeight: 900 } }, isPartial ? "部分" : "整天"));
         })
       ))
     ),
@@ -5289,7 +5289,8 @@ function MainApp({
     style: {
       color: "#a29bfe",
       borderColor: "#a29bfe",
-      fontWeight: 700
+      fontWeight: 700,
+      fontSize: 12
     }
   }, "↩ 還原") : /*#__PURE__*/React.createElement("button", {
     className: "nb",
@@ -5299,7 +5300,8 @@ function MainApp({
       color: "var(--text-dim)",
       borderColor: "var(--border2)",
       opacity: 0.5,
-      cursor: "not-allowed"
+      cursor: "not-allowed",
+      fontSize: 12
     }
   }, "↩ 還原"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
@@ -5344,8 +5346,10 @@ function MainApp({
     onClick: () => openDlg(),
     className: "nb",
     style: {
-      color: "#e94560",
-      borderColor: "#e94560"
+      color: "#fff",
+      background: "#e94560",
+      borderColor: "#e94560",
+      fontWeight: 700
     }
   }, "＋ 新增"))), showSearch && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -9385,8 +9389,10 @@ function OverviewMonth({
     },
     className: "nb",
     style: {
-      color: "#e94560",
-      borderColor: "#e94560"
+      color: "#fff",
+      background: "#e94560",
+      borderColor: "#e94560",
+      fontWeight: 700
     }
   }, "＋ 新增"), /*#__PURE__*/React.createElement("span", {
     style: {
