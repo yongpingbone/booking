@@ -90,7 +90,17 @@ async function runSyncForWeek(env, weekKey, deps = {}) {
   }
 
   log.finishedAt = new Date().toISOString();
-  await appendLog(env.SHEET_SYNC_BUCKET, log, log.finishedAt).catch(() => {
+
+  if (!log.ok) {
+    // 一定印到 Workers Logs，不依賴 R2 寫入成功——R2 本身寫入失敗時
+    // (binding 設錯、bucket 沒接好等) 舊版邏輯會讓這裡完全看不到任何線索。
+    console.error(`[sheet-sync] weekKey=${log.weekKey} runId=${log.runId} 失敗: ${log.error}`);
+  } else {
+    console.log(`[sheet-sync] weekKey=${log.weekKey} runId=${log.runId} 完成，diff=${JSON.stringify(log.diffSummary)}`);
+  }
+
+  await appendLog(env.SHEET_SYNC_BUCKET, log, log.finishedAt).catch((err) => {
+    console.error(`[sheet-sync] log 寫進 R2 失敗(這不影響上面判斷同步本身成功與否): ${err?.message ?? err}`);
     // log 寫入失敗不該讓整個 request/cron 掛掉，這裡故意吞掉，
     // 但同步本身的成敗(log.ok)已經在上面決定好了，不受影響。
   });
