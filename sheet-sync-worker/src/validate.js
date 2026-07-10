@@ -16,15 +16,13 @@
 //     做原生 upsert(ON CONFLICT)。Sheet 同步這邊查出的 bookings 表 unique
 //     index(idx_unique_master_datetime)是 partial index(排除 cancelled/
 //     no_show)，PostgREST 的 on_conflict= 沒辦法正確對到 partial index，
-//     所以改成：先用 findBookingAtSlot 查有沒有同 slot 的既有預約——
-//     customer_name 跟 Sheet 上這筆一樣 → 視為同一筆的更新，把 existingId
-//     帶出去給 supabaseClient.saveBooking() 做 PATCH；
-//     customer_name 不一樣 → 真的衝突(這代表要嘛是雙重預約、要嘛是這個 slot
-//     被別的來源占用了)，不能靜默覆蓋掉別人的預約，擋下來不寫入；
-//     都沒有既有資料 → existingId 是 null，saveBooking() 做 POST 新增。
-//     這個判斷方式(用 customer_name 是否相同來分辨「更新自己」vs「真衝突」)
-//     是我覺得最安全的做法，但畢竟會影響真實顧客資料，正式上線前麻煩過目一下
-//     這個邏輯是否符合預期，這不是單純對錯問題、是產品判斷。
+//     所以改成：先用 findBookingAtSlot 查有沒有同 slot 的既有預約，有的話
+//     把它的 id 帶出去給 supabaseClient.saveBooking() 做 PATCH；沒有的話
+//     existingId 是 null，做 POST 新增。
+//   - 同 slot 既有預約內容(尤其 customer_name)跟 Sheet 上這筆不一樣時，
+//     一律【以 Sheet 為準】直接覆蓋，不擋下來——這是 Hanna 明確、重複強調
+//     過的規則(app 目前測試階段，Sheet 才是真正在使用、最準確的資料來源)。
+//     之前這裡有一版「名字不一樣就當真衝突、擋下來不寫」的邏輯，已經移除。
 
 import { fetchActiveMasters, findBookingAtSlot } from './supabaseClient.js';
 
@@ -68,20 +66,18 @@ async function validateBookingRecord(record, env, deps = {}) {
     if (!Number.isInteger(n) || n < 0) errors.push('人數格式錯誤');
   }
 
-  // 格式/對照都過了才值得花一次查詢去檢查排班衝突
+  // 格式/對照都過了才值得花一次查詢去查同 slot 有沒有既有預約。查到就直接
+  // 拿它的 id 去覆蓋(以 Sheet 為準)，不比對內容是否相同、不當成衝突擋下來。
   let existing = null;
   if (!errors.length) {
     existing = await doFindBookingAtSlot(env, { masterId, date: record.date, startTime: record.startTime });
-    if (existing && existing.customer_name !== record.customerName) {
-      errors.push(`時段跟資料庫裡其他既有預約衝突（現有：${existing.customer_name}，Sheet 上：${record.customerName}）`);
-    }
   }
 
   if (errors.length) return { valid: false, errors };
 
   return {
     valid: true,
-    existingId: existing?.id ?? null, // 有值 → 更新這筆既有資料；null → 新增一筆
+    existingId: existing?.id ?? null, // 有值 → 覆蓋這筆既有資料；null → 新增一筆
     row: {
       date: record.date,
       start_time: `${record.startTime}:00`,

@@ -7,7 +7,7 @@
 //   4. diff 前後兩份快照(diff.js —— 已完成、已測試)
 //   5. 對新增/異動的項目跑驗證，比照 CSV 匯入邏輯(validate —— 已完成)
 //   6. 驗證過的寫進 bookings(supabaseClient —— 已完成，欄位對應待 schema 確認)
-//   7. 驗證失敗/衝突的寫回 Sheet 提示師傅(sheetWriter —— 用儲存格備註，不改
+//   7. 驗證失敗的寫回 Sheet 提示師傅(sheetWriter —— 用儲存格備註，不改
 //      內容/顏色，天生不影響 contentHash，不需要額外的防迴圈標記機制)
 //   8. 不管有沒有變化，這次讀到的完整狀態存成新快照
 //   9. 整輪執行結果寫一份 log

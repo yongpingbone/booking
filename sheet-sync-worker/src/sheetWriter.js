@@ -62,7 +62,7 @@ function resolveCellReference({ date, startTime, sheetMasterLabel }) {
 /**
  * @param {object} env
  * @param {{date: string, startTime: string, sheetMasterLabel: string}} record
- * @param {{type: 'conflict'|'invalid'|'synced', message?: string}} status
+ * @param {{type: 'invalid'|'synced', message?: string}} status
  * @param {object} [deps] 測試用依賴注入：{ getAccessToken, setCellNote }
  * @returns {Promise<void>}
  */
@@ -73,7 +73,10 @@ async function markCellStatus(env, record, status, deps = {}) {
   const { sheetTitle, rowIndex, colIndex } = resolveCellReference(record);
   const accessToken = await doGetAccessToken(env);
 
-  const prefix = { invalid: '⚠️ 同步失敗', conflict: '⚠️ 排班衝突', synced: '✅ 已同步' }[status.type] ?? '⚠️';
+  // 'conflict' 這個類型本來就沒有真的被任何呼叫端用過(validate.js 的排班
+  // 衝突判斷從一開始就是併入一般的 errors 陣列、走 'invalid' 這條路)，現在
+  // 又改成「以 Sheet 為準覆蓋」，衝突這個概念本身也不存在了，移除。
+  const prefix = { invalid: '⚠️ 同步失敗', synced: '✅ 已同步' }[status.type] ?? '⚠️';
   const note = status.message ? `${prefix}：${status.message}` : prefix;
 
   await doSetCellNote(env, { sheetTitle, rowIndex, colIndex, note, accessToken });

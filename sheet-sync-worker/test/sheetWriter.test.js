@@ -83,8 +83,8 @@ test('markCellStatus: 不同 status.type 開頭提示不一樣', async () => {
     setCellNote: async (env, { note }) => notes.push(note),
   };
   const record = { date: '2026-07-01', startTime: '08:00', sheetMasterLabel: '泓文' };
-  await markCellStatus({}, record, { type: 'conflict', message: '時段衝突' }, deps);
+  await markCellStatus({}, record, { type: 'invalid', message: '格式錯誤' }, deps);
   await markCellStatus({}, record, { type: 'synced' }, deps);
-  assert.ok(notes[0].includes('排班衝突'));
+  assert.ok(notes[0].includes('同步失敗'));
   assert.ok(notes[1].includes('已同步'));
 });

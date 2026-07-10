@@ -87,15 +87,15 @@ test('同一格已有既有預約、但顧客姓名一樣 → 視為更新自己
   assert.equal(result.valid, true);
 });
 
-test('同一格已有既有預約、顧客姓名不一樣 → 真衝突，擋下來', async () => {
+test('同一格已有既有預約、顧客姓名不一樣 → 以 Sheet 為準覆蓋，不擋下來(Hanna 明確要求的規則)', async () => {
   const result = await validateBookingRecord(
     baseRecord({ customerName: '王小明' }),
     {},
     deps({ existingBooking: { id: 'b1', customer_name: '陳小華' } })
   );
-  assert.equal(result.valid, false);
-  assert.ok(result.errors.some((e) => e.includes('衝突')));
-  assert.ok(result.errors.some((e) => e.includes('陳小華')));
+  assert.equal(result.valid, true);
+  assert.equal(result.existingId, 'b1', '要帶出既有那筆的 id 才能覆蓋(PATCH)，不是當成新的一筆');
+  assert.equal(result.row.customer_name, '王小明', 'Sheet 上的內容為準');
 });
 
 test('格式錯誤時不該多花一次查詢去檢查衝突(效率+避免拿無效資料去查)', async () => {
