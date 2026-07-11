@@ -120,6 +120,10 @@ jobs:
           elif [ "${{ inputs.endpoint }}" = "custom-post" ]; then
             URL="https://yongping-sheet-sync.yihanhsu123.workers.dev${{ inputs.customPath }}"
             BODY='${{ inputs.customBody }}'
+          elif [ "${{ inputs.endpoint }}" = "custom-get" ]; then
+            URL="https://yongping-sheet-sync.yihanhsu123.workers.dev${{ inputs.customPath }}"
+            METHOD="GET"
+            BODY=""
           else
             URL="https://yongping-sheet-sync.yihanhsu123.workers.dev/reconcile-month"
             BODY='{"year": ${{ inputs.year }}, "month": ${{ inputs.month }}, "dryRun": ${{ inputs.dryRun }}}'
