@@ -5,22 +5,21 @@
 // 📊 提前統計（週報／月報，可選 AI 分析）— 只有 admin 看得到
 // ═══════════════════════════════════════════
 function QuickReportPanel({ isAdmin, currentMaster }) {
-  const [busy, setBusy] = React.useState(null); // 'week' | 'month' | null
+  const [busy, setBusy] = React.useState(null); // 'week' | 'week-ai' | 'month' | 'month-ai' | null
   const [lastMsg, setLastMsg] = React.useState(null);
   const [showResult, setShowResult] = React.useState(false);
 
   if (!isAdmin) return null;
 
-  const run = async (kind) => {
-    const wantAI = window.confirm("是否要加入本期 AI 分析？（哲瑋、泓文）\n\n確定＝連同數字報表一起產生 AI 分析\n取消＝只送出數字報表，不跑 AI 分析");
-    setBusy(kind);
+  const run = async (kind, withAI) => {
+    setBusy(withAI ? `${kind}-ai` : kind);
     try {
       const rpcName = kind === "week" ? "send_weekly_settlement_report" : "send_monthly_settlement_report";
       const { data: reportText, error } = await sb.rpc(rpcName);
       if (error) { alert("報表產生失敗：" + error.message); setBusy(null); return; }
 
       let aiText = null;
-      if (wantAI) {
+      if (withAI) {
         try {
           const today = getTaipeiNow();
           const startDate = kind === "week"
@@ -44,18 +43,36 @@ function QuickReportPanel({ isAdmin, currentMaster }) {
     }
   };
 
+  const btnStyle = (color, kind) => ({
+    flex: 1, padding: "9px 4px", borderRadius: 10, border: `1px solid ${color}`,
+    background: "none", color, fontWeight: 700, fontSize: 12,
+    cursor: busy ? "wait" : "pointer", opacity: busy && busy !== kind ? 0.4 : 1
+  });
+
   return /*#__PURE__*/React.createElement("div", { style: { padding: "12px 12px 0", borderBottom: "1px solid var(--border)", marginBottom: 12 } },
     /*#__PURE__*/React.createElement("div", { style: { fontWeight: 900, fontSize: 14, marginBottom: 8 } }, "📊 提前統計"),
-    /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: "var(--text-dim)", marginBottom: 10 } }, "不用等自動排程，現在就送出數字報表（會推播給管理員）；可選擇是否同時跑 AI 分析。"),
-    /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 12 } },
+    /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: "var(--text-dim)", marginBottom: 10 } }, "不用等自動排程，現在就送出數字報表（會推播給管理員），要不要一起跑AI分析直接選對應按鈕。"),
+    /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: "var(--text-dim)", marginBottom: 4, fontWeight: 700 } }, "本週"),
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 10 } },
       /*#__PURE__*/React.createElement("button", {
-        onClick: () => run("week"), disabled: !!busy,
-        style: { flex: 1, padding: 11, borderRadius: 10, border: "1px solid #74b9ff", background: "none", color: "#74b9ff", fontWeight: 700, fontSize: 13, cursor: busy ? "wait" : "pointer" }
-      }, busy === "week" ? "統計中..." : "本週報表"),
+        onClick: () => run("week", false), disabled: !!busy,
+        style: btnStyle("#74b9ff", "week")
+      }, busy === "week" ? "統計中..." : "只送數字"),
       /*#__PURE__*/React.createElement("button", {
-        onClick: () => run("month"), disabled: !!busy,
-        style: { flex: 1, padding: 11, borderRadius: 10, border: "1px solid #a29bfe", background: "none", color: "#a29bfe", fontWeight: 700, fontSize: 13, cursor: busy ? "wait" : "pointer" }
-      }, busy === "month" ? "統計中..." : "本月報表（至今）")
+        onClick: () => run("week", true), disabled: !!busy,
+        style: btnStyle("#74b9ff", "week-ai")
+      }, busy === "week-ai" ? "統計中..." : "數字＋AI分析")
+    ),
+    /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: "var(--text-dim)", marginBottom: 4, fontWeight: 700 } }, "本月（至今）"),
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 12 } },
+      /*#__PURE__*/React.createElement("button", {
+        onClick: () => run("month", false), disabled: !!busy,
+        style: btnStyle("#a29bfe", "month")
+      }, busy === "month" ? "統計中..." : "只送數字"),
+      /*#__PURE__*/React.createElement("button", {
+        onClick: () => run("month", true), disabled: !!busy,
+        style: btnStyle("#a29bfe", "month-ai")
+      }, busy === "month-ai" ? "統計中..." : "數字＋AI分析")
     ),
     showResult && lastMsg && /*#__PURE__*/React.createElement("div", {
       style: { position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 999, display: "flex", alignItems: "flex-end", justifyContent: "center" },
