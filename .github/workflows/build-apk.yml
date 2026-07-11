@@ -56,9 +56,11 @@ jobs:
         run: |
           cd apk-project
           set -o pipefail
-          bubblewrap build --skipPwaValidation --keyPassword pass1234 --keystorePassword pass1234 2>&1 | tee build-log.txt
+          bubblewrap build --skipPwaValidation 2>&1 | tee build-log.txt
         env:
           BUBBLEWRAP_SKIP_UPDATE_CHECK: true
+          BUBBLEWRAP_KEYSTORE_PASSWORD: pass1234
+          BUBBLEWRAP_KEY_PASSWORD: pass1234
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
