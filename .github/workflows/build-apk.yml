@@ -47,10 +47,21 @@ jobs:
         # 完全繞過 Bubblewrap CLI 的互動式精靈(那個精靈在自動化環境下
         # 有很多難以完全掌握的重繪/時機問題，反覆試過七八輪都還有新的
         # 邊界情況，改成這個方式一次到位)。
+        # 簽章金鑰(android.keystore)如果 repo 裡已經有(下一步驟會存進去)
+        # 就直接沿用，不會每次重新產生——固定金鑰是之後能夠正常更新 App
+        # (而不是每次都要使用者移除舊版重裝)的前提。
         run: |
           cd apk-project
           npm install --no-save @bubblewrap/core
           node generate.js
+
+      - name: 把簽章金鑰存回 repo(只有第一次產生時才會真的有變化要 commit)
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add apk-project/android.keystore
+          git diff --cached --quiet || git commit -m "chore: 存入固定的 APK 簽章金鑰(自動，只會發生一次)"
+          git push || true
 
       - name: Build APK
         run: |
