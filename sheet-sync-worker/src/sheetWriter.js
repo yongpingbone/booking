@@ -73,10 +73,18 @@ async function markCellStatus(env, record, status, deps = {}) {
   const { sheetTitle, rowIndex, colIndex } = resolveCellReference(record);
   const accessToken = await doGetAccessToken(env);
 
-  // 'conflict' 這個類型本來就沒有真的被任何呼叫端用過(validate.js 的排班
-  // 衝突判斷從一開始就是併入一般的 errors 陣列、走 'invalid' 這條路)，現在
-  // 又改成「以 Sheet 為準覆蓋」，衝突這個概念本身也不存在了，移除。
-  const prefix = { invalid: '⚠️ 同步失敗', synced: '✅ 已同步' }[status.type] ?? '⚠️';
+  // synced 時清空備註(null)，不是寫「已同步」這種文字——理由：
+  //   1. 自動清掉這格之前可能留著的舊錯誤備註(Hanna 要求)，不會讓過期的
+  //      錯誤訊息一直卡在 Sheet 上，即使問題早就解決了。
+  //   2. 不會每次同步成功都多一則提示，Sheet 上不會被一堆「已同步」訊息
+  //      洗版——沒事發生時就保持安靜，只有真的需要師傅注意時(驗證失敗)
+  //      才顯示訊息，這樣的提示才有意義。
+  if (status.type === 'synced') {
+    await doSetCellNote(env, { sheetTitle, rowIndex, colIndex, note: null, accessToken });
+    return;
+  }
+
+  const prefix = { invalid: '⚠️ 同步失敗' }[status.type] ?? '⚠️';
   const note = status.message ? `${prefix}：${status.message}` : prefix;
 
   await doSetCellNote(env, { sheetTitle, rowIndex, colIndex, note, accessToken });

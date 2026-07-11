@@ -87,6 +87,15 @@ async function runSyncForWeek(env, weekKey, deps = {}) {
 
       await doSaveBooking(env, validation.row, validation.existingId);
       log.results.push({ identityKey: record.identityKey, status: 'synced' });
+      try {
+        // 清掉這格可能留著的舊備註(例如上一輪驗證失敗留下的錯誤訊息)，
+        // 不然問題明明已經解決了，Sheet 上還會一直顯示過期的錯誤提示。
+        await doMarkCellStatus(env, record, { type: 'synced' });
+      } catch (err) {
+        // 清備註失敗不影響這筆資料本身已經成功寫進資料庫這件事，只是
+        // Sheet 上可能還留著舊備註沒清掉，下一輪還會再試一次。
+        log.results.push({ identityKey: record.identityKey, status: 'clear_cell_status_failed', error: String(err?.message ?? err) });
+      }
     }
 
     await saveSnapshot(env.SHEET_SYNC_BUCKET, weekKey, current);
