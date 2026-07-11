@@ -5,5 +5,5 @@
 |  '--' '  ''  | `-' | `-' |  \   --|   .'.   |  |  \ '-'  | '-' '
 `------' `----' `---' `---'`--'`----'--'   '--`--'   `--`--|  |-'
                                                            `--'    
-? Do you want Bubblewrap to install the JDK (recommended)?
-  (Enter "No" to use your own JDK 17 installation) (Y/n) [57D[57C
+? There are changes in twa-manifest.json. Would you like to apply them to the 
+project before building? (Y/n) [1A[31D[109C[1B
