@@ -292,3 +292,34 @@ test('fetch(): POST /sync 沒帶 weekKey 時，預設抓「這一週」的週一
   const diffDays = Math.abs((new Date(`${body.weekKey}T12:00:00Z`) - today) / (1000 * 60 * 60 * 24));
   assert.ok(diffDays <= 7, `預設的 weekKey(${body.weekKey}) 應該落在這一週附近，不是三個月範圍裡最舊的那一週`);
 });
+
+test('fetch(): POST /sync 帶 weekKeys 陣列(批次補跑)：env 沒設定真實憑證時，每一週都要優雅失敗，不是丟出未捕捉例外炸掉整個請求', async () => {
+  const env = makeEnv();
+  const request = new Request('https://worker.example/sync', {
+    method: 'POST',
+    headers: { 'X-Internal-Secret': 'test-secret' },
+    body: JSON.stringify({ weekKeys: ['2026-07-06', '2026-07-13'] }),
+  });
+  const res = await worker.fetch(request, env, {});
+  const body = await res.json();
+
+  assert.equal(res.status, 500, '兩週都因為缺憑證而失敗，整體狀態碼要反映這件事');
+  assert.equal(body.logs.length, 2, '兩個 weekKey 都要各自有結果，不能因為第一個失敗就沒處理第二個');
+  assert.ok(body.logs.every((l) => l.ok === false));
+  assert.ok(body.logs.every((l) => /GOOGLE_SERVICE_ACCOUNT_JSON/.test(l.error)));
+});
+
+test('fetch(): POST /sync 帶 scope:"current"：內部自己算出三個月範圍的 weekKeys，回應裡看得到算出的範圍', async () => {
+  const env = makeEnv();
+  const request = new Request('https://worker.example/sync', {
+    method: 'POST',
+    headers: { 'X-Internal-Secret': 'test-secret' },
+    body: JSON.stringify({ scope: 'current' }),
+  });
+  const res = await worker.fetch(request, env, {});
+  const body = await res.json();
+
+  assert.ok(Array.isArray(body.weekKeys));
+  assert.ok(body.weekKeys.length >= 12, '三個月範圍至少該有 12+ 個 weekKey(每月約4-5週)');
+  assert.equal(body.logs.length, body.weekKeys.length, '每個算出來的 weekKey 都要有對應的處理結果');
+});

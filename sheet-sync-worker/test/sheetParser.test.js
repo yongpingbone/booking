@@ -9,6 +9,8 @@ import {
   monthsSpannedByWeek,
   fetchAndParseWeek,
   fetchAndParseMonth,
+  ensureMonthCached,
+  fetchAndParseWeekCached,
   SHEET_MASTERS,
   resolveColorTag,
 } from '../src/sheetParser.js';
@@ -577,4 +579,87 @@ test('空白色塊(休假)後面接延續符號：不會被誤接成同行者，
   assert.equal(records[1].customerName, "''");
   assert.equal(records[1].needsReview, true);
   assert.match(records[1].reviewReasons[0], /沒有東西可以延續/);
+});
+
+// ===== 月份 cache(ensureMonthCached / fetchAndParseWeekCached) =====
+
+test('ensureMonthCached: 同一個月份重複查詢，只會真的抓一次', async () => {
+  let fetchCount = 0;
+  const cache = new Map();
+  const deps = {
+    fetchAndParseMonth: async () => {
+      fetchCount++;
+      return [{ date: '2026-07-06', customerName: 'x' }];
+    },
+  };
+  await ensureMonthCached({}, 2026, 7, cache, deps);
+  await ensureMonthCached({}, 2026, 7, cache, deps);
+  await ensureMonthCached({}, 2026, 7, cache, deps);
+  assert.equal(fetchCount, 1, '三次查同一個月份，底層抓取函式只該被呼叫一次');
+});
+
+test('ensureMonthCached: 不同月份各自抓一次，不會互相干擾', async () => {
+  let fetchCalls = [];
+  const cache = new Map();
+  const deps = {
+    fetchAndParseMonth: async (env, year, month) => {
+      fetchCalls.push(`${year}-${month}`);
+      return [];
+    },
+  };
+  await ensureMonthCached({}, 2026, 6, cache, deps);
+  await ensureMonthCached({}, 2026, 7, cache, deps);
+  await ensureMonthCached({}, 2026, 6, cache, deps); // 6月再查一次，不該重抓
+  assert.deepEqual(fetchCalls, ['2026-6', '2026-7']);
+});
+
+test('fetchAndParseWeekCached: 一般週(沒跨月)，結果篩選成該週 7 天', async () => {
+  const cache = new Map();
+  const julyRecords = [
+    { date: '2026-07-06', customerName: 'A' }, // 這週的週一
+    { date: '2026-07-13', customerName: 'B' }, // 下一週的週一，不在這週範圍內
+  ];
+  const deps = { fetchAndParseMonth: async () => julyRecords };
+  const records = await fetchAndParseWeekCached({}, '2026-07-06', cache, deps);
+  assert.equal(records.length, 1);
+  assert.equal(records[0].customerName, 'A');
+});
+
+test('fetchAndParseWeekCached: 跨月的週，正確合併兩個月份 cache 的資料，不遺漏', async () => {
+  const cache = new Map();
+  const deps = {
+    fetchAndParseMonth: async (env, year, month) => {
+      if (month === 6) return [{ date: '2026-06-29', customerName: '六月底' }, { date: '2026-06-30', customerName: '六月底2' }];
+      if (month === 7) return [{ date: '2026-07-01', customerName: '七月初' }, { date: '2026-07-05', customerName: '七月初2' }];
+      return [];
+    },
+  };
+  // 2026-06-29(週一) ~ 2026-07-05(週日)，跨 6月/7月
+  const records = await fetchAndParseWeekCached({}, '2026-06-29', cache, deps);
+  const names = records.map((r) => r.customerName).sort();
+  assert.deepEqual(names, ['七月初', '七月初2', '六月底', '六月底2']);
+});
+
+test('fetchAndParseWeekCached: 同一輪同步裡多個週共用同一個月份，月份分頁只抓一次(核心效益)', async () => {
+  const cache = new Map();
+  let fetchCalls = [];
+  const deps = {
+    fetchAndParseMonth: async (env, year, month) => {
+      fetchCalls.push(`${year}-${month}`);
+      return [
+        { date: '2026-07-06', customerName: 'A' },
+        { date: '2026-07-13', customerName: 'B' },
+        { date: '2026-07-20', customerName: 'C' },
+      ];
+    },
+  };
+  // 7月裡三個不同的週，都落在同一個月份分頁裡
+  const week1 = await fetchAndParseWeekCached({}, '2026-07-06', cache, deps);
+  const week2 = await fetchAndParseWeekCached({}, '2026-07-13', cache, deps);
+  const week3 = await fetchAndParseWeekCached({}, '2026-07-20', cache, deps);
+
+  assert.equal(fetchCalls.length, 1, '三個週都在同一個月份，底層月份抓取只該打一次 API');
+  assert.equal(week1[0].customerName, 'A');
+  assert.equal(week2[0].customerName, 'B');
+  assert.equal(week3[0].customerName, 'C');
 });

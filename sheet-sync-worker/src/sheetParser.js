@@ -405,6 +405,49 @@ async function fetchAndParseMonth(env, year, month, deps = {}) {
   return allRecords;
 }
 
+/**
+ * 確保某個 (year, month) 的資料已經在 cache 裡，沒有就去抓一次存進去。
+ * 用來讓同一輪同步(可能涵蓋十幾個 weekKey，範圍擴大成上/當/下三個月之後
+ * 尤其明顯)裡，同一個月份分頁只會真的打一次 Sheets API，不會因為好幾個
+ * weekKey 剛好落在同一個月就重複抓、浪費 API 額度(這個問題實際發生過)。
+ * @param {object} env
+ * @param {number} year
+ * @param {number} month
+ * @param {Map<string, Array<object>>} cache key 是 "year-month"
+ * @param {object} [deps]
+ * @returns {Promise<Array<object>>} 這個月份的完整記錄(這個 cache 裡的複本)
+ */
+async function ensureMonthCached(env, year, month, cache, deps = {}) {
+  const doFetchAndParseMonth = deps.fetchAndParseMonth ?? fetchAndParseMonth;
+  const key = `${year}-${month}`;
+  if (!cache.has(key)) {
+    cache.set(key, await doFetchAndParseMonth(env, year, month, deps));
+  }
+  return cache.get(key);
+}
+
+/**
+ * 跟 fetchAndParseWeek 做一樣的事(抓某一週的記錄)，但透過呼叫端傳進來、
+ * 跨多次呼叫共用的月份 cache，同一輪同步裡重疊到的月份分頁不會重複抓。
+ * 跨月的週(monthsSpannedByWeek 回傳超過一筆)一樣正確處理——各自從對應的
+ * 月份 cache 拿資料、合併起來再篩選成這週的 7 天，不會漏資料。
+ * @param {object} env
+ * @param {string} weekKey
+ * @param {Map<string, Array<object>>} cache
+ * @param {object} [deps]
+ * @returns {Promise<Array<object>>}
+ */
+async function fetchAndParseWeekCached(env, weekKey, cache, deps = {}) {
+  const months = monthsSpannedByWeek(weekKey);
+  const allRecords = [];
+  for (const { year, month } of months) {
+    const monthRecords = await ensureMonthCached(env, year, month, cache, deps);
+    allRecords.push(...monthRecords);
+  }
+  const targetDates = new Set(weekDateStrings(weekKey));
+  return allRecords.filter((r) => targetDates.has(r.date));
+}
+
 export {
   parseGridIntoRecords,
   findBlockHeaderRows,
@@ -412,6 +455,8 @@ export {
   monthsSpannedByWeek,
   fetchAndParseWeek,
   fetchAndParseMonth,
+  ensureMonthCached,
+  fetchAndParseWeekCached,
   SHEET_MASTERS,
   COLOR_HEX_TO_TAG,
   NEUTRAL_COLOR_HEXES,

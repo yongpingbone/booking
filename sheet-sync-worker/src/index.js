@@ -18,7 +18,7 @@
 
 import { getLatestSnapshot, saveSnapshot, appendLog } from './snapshotStore.js';
 import { diffSnapshots } from './diff.js';
-import { fetchAndParseWeek } from './sheetParser.js';
+import { fetchAndParseWeek, fetchAndParseWeekCached } from './sheetParser.js';
 import { validateBookingRecord } from './validate.js';
 import { markCellStatus } from './sheetWriter.js';
 import { saveBooking } from './supabaseClient.js';
@@ -26,15 +26,17 @@ import { reconcileMonth } from './reconcile.js';
 import { weekKeysToSync, mondayOf, taipeiDateString } from './weekKeys.js';
 
 /**
+ * 實際的診斷/寫入邏輯，接受已經抓好的記錄陣列，不自己去打 Sheets API。
+ * runSyncForWeek()(手動觸發用)跟 scheduled()(排程、多週共用月份 cache用)
+ * 都是透過這支處理，差別只在「記錄怎麼來的」。
  * @param {object} env
  * @param {string} weekKey
- * @param {object} [deps] 測試用依賴注入，production 呼叫端不需要傳這個參數，
- *   不傳就是用檔案最上面 import 進來的真正實作。
+ * @param {Array<object>} currentRecords 這週已經抓好、解析好的記錄
+ * @param {object} [deps] 測試用依賴注入
  * @returns {Promise<object>} 這一輪的 log 物件
  */
-async function runSyncForWeek(env, weekKey, deps = {}) {
+async function runSyncForWeekWithRecords(env, weekKey, currentRecords, deps = {}) {
   const {
-    fetchAndParseWeek: doFetchAndParseWeek = fetchAndParseWeek,
     validateBookingRecord: doValidateBookingRecord = validateBookingRecord,
     markCellStatus: doMarkCellStatus = markCellStatus,
     saveBooking: doSaveBooking = saveBooking,
@@ -46,7 +48,7 @@ async function runSyncForWeek(env, weekKey, deps = {}) {
 
   try {
     const previous = await getLatestSnapshot(env.SHEET_SYNC_BUCKET, weekKey);
-    const current = await doFetchAndParseWeek(env, weekKey);
+    const current = currentRecords;
 
     const diffResult = diffSnapshots(previous?.records ?? null, current);
     log.diffSummary = {
@@ -124,16 +126,102 @@ async function runSyncForWeek(env, weekKey, deps = {}) {
   return log;
 }
 
+/**
+ * @param {object} env
+ * @param {string} weekKey
+ * @param {object} [deps] 測試用依賴注入，production 呼叫端不需要傳這個參數，
+ *   不傳就是用檔案最上面 import 進來的真正實作。
+ * @returns {Promise<object>} 這一輪的 log 物件
+ */
+async function runSyncForWeek(env, weekKey, deps = {}) {
+  const { fetchAndParseWeek: doFetchAndParseWeek = fetchAndParseWeek } = deps;
+
+  let current;
+  try {
+    current = await doFetchAndParseWeek(env, weekKey);
+  } catch (err) {
+    // 抓取本身失敗(例如缺 Google 憑證、Sheets API 掛掉)要跟
+    // runSyncForWeekWithRecords 內部失敗一樣優雅處理成 log.ok=false，
+    // 不能讓例外直接往外丟——這支被 scheduled()/手動 /sync 呼叫，
+    // 丟出未捕捉的例外會讓整個 cron 或 request 掛掉。
+    const runId = crypto.randomUUID();
+    const startedAt = new Date().toISOString();
+    const log = {
+      weekKey,
+      runId,
+      startedAt,
+      ok: false,
+      error: String(err?.stack ?? err?.message ?? err),
+      finishedAt: new Date().toISOString(),
+    };
+    console.error(`[sheet-sync] weekKey=${weekKey} runId=${runId} 抓取失敗: ${log.error}`);
+    await appendLog(env.SHEET_SYNC_BUCKET, log, log.finishedAt).catch((appendErr) => {
+      console.error(`[sheet-sync] log 寫進 R2 失敗: ${appendErr?.message ?? appendErr}`);
+    });
+    return log;
+  }
+
+  return runSyncForWeekWithRecords(env, weekKey, current, deps);
+}
+
+/**
+ * scheduled() 跟手動批次 /sync(weekKeys 陣列)共用：安全地抓某一週的資料
+ * 並處理，抓取本身失敗時回傳 log.ok=false 的結果，不會讓例外往外丟炸掉
+ * 整個迴圈——不然一週抓失敗(例如剛好撞到 API 額度)會連帶讓迴圈裡排在
+ * 後面、原本可以成功的週也一起沒跑到。
+ * @param {object} env
+ * @param {string} weekKey
+ * @param {Map<string, Array<object>>} monthCache
+ * @returns {Promise<object>}
+ */
+async function safelyFetchAndSyncWeek(env, weekKey, monthCache) {
+  let currentRecords;
+  try {
+    currentRecords = await fetchAndParseWeekCached(env, weekKey, monthCache);
+  } catch (err) {
+    const runId = crypto.randomUUID();
+    const startedAt = new Date().toISOString();
+    const log = {
+      weekKey,
+      runId,
+      startedAt,
+      ok: false,
+      error: String(err?.stack ?? err?.message ?? err),
+      finishedAt: new Date().toISOString(),
+    };
+    console.error(`[sheet-sync] weekKey=${weekKey} runId=${runId} 抓取失敗: ${log.error}`);
+    await appendLog(env.SHEET_SYNC_BUCKET, log, log.finishedAt).catch((appendErr) => {
+      console.error(`[sheet-sync] log 寫進 R2 失敗: ${appendErr?.message ?? appendErr}`);
+    });
+    return log;
+  }
+  return runSyncForWeekWithRecords(env, weekKey, currentRecords);
+}
+
 export default {
   /**
    * Cloudflare Cron Trigger 進來的排程同步。範圍固定是上個月/當月/下個月
-   * (weekKeysToSync 自己算，不再需要額外設定)。
+   * (weekKeysToSync 自己算，Hanna 明確要求的標準範圍)。
+   *
+   * 範圍擴大成三個月(13~18 個 weekKey)之後，如果還是像以前一樣每個
+   * weekKey 各自獨立呼叫 fetchAndParseWeek，會導致同一個月份分頁被重複
+   * 抓好幾次(一個月通常有 4~5 個 weekKey 落在裡面)，很容易撞到 Sheets
+   * API 的頻率限制(這個問題今天已經真的發生過一次)。改成：整輪排程共用
+   * 一個月份 cache(monthCache)，用 fetchAndParseWeekCached 抓，同一個
+   * 月份分頁整輪只會真的打一次 API；各 weekKey 依序處理(不是像以前用
+   * ctx.waitUntil 各自平行跑)，一方面 cache 是共用的可變狀態、平行跑會有
+   * 競爭問題，一方面依序執行本身也能讓 API 呼叫更平緩分散，不會瞬間爆量。
    */
   async scheduled(event, env, ctx) {
     const weekKeys = weekKeysToSync(new Date());
-    for (const weekKey of weekKeys) {
-      ctx.waitUntil(runSyncForWeek(env, weekKey));
-    }
+    const monthCache = new Map();
+    ctx.waitUntil(
+      (async () => {
+        for (const weekKey of weekKeys) {
+          await safelyFetchAndSyncWeek(env, weekKey, monthCache);
+        }
+      })()
+    );
   },
 
   /**
@@ -171,6 +259,21 @@ export default {
       }
     }
 
+    if (body.scope === 'current' || (body.weekKeys && Array.isArray(body.weekKeys))) {
+      // scope:"current" —— 不用呼叫端自己列出 weekKeys，直接用跟 scheduled()
+      // 一樣的邏輯(weekKeysToSync())算出目前的上/當/下三個月範圍。用來立即
+      // 補跑目前完整範圍的資料，之後排程會自動接手，不用再手動觸發。
+      // weekKeys 陣列 —— 呼叫端自己指定要跑哪幾個 weekKey(補跑特定範圍用)。
+      const weekKeys = body.scope === 'current' ? weekKeysToSync(new Date()) : body.weekKeys;
+      const monthCache = new Map();
+      const logs = [];
+      for (const weekKey of weekKeys) {
+        logs.push(await safelyFetchAndSyncWeek(env, weekKey, monthCache));
+      }
+      const allOk = logs.every((l) => l.ok);
+      return Response.json({ weekKeys, logs }, { status: allOk ? 200 : 500 });
+    }
+
     // 手動觸發沒指定 weekKey 時，預設抓「這一週」——不能直接用
     // weekKeysToSync()[0]，那支現在回傳的是三個月範圍、由舊到新排序，
     // [0] 會變成上個月第一週，不是「當週」了。
@@ -180,4 +283,4 @@ export default {
   },
 };
 
-export { runSyncForWeek };
+export { runSyncForWeek, runSyncForWeekWithRecords };

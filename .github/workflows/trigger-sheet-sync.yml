@@ -10,6 +10,7 @@ on:
         type: choice
         options:
           - sync
+          - sync-full-scope
           - reconcile-month
       weekKey:
         description: '[sync 用] 週一日期(YYYY-MM-DD)，留空 = 當週'
@@ -50,6 +51,11 @@ jobs:
             else
               BODY='{}'
             fi
+          elif [ "${{ inputs.endpoint }}" = "sync-full-scope" ]; then
+            # 立即補跑目前完整的上/當/下三個月範圍，內部自己算 weekKeys，
+            # 不用在這裡列出來。跟排程用的是同一套範圍邏輯。
+            URL="https://yongping-sheet-sync.yihanhsu123.workers.dev/sync"
+            BODY='{"scope": "current"}'
           else
             URL="https://yongping-sheet-sync.yihanhsu123.workers.dev/reconcile-month"
             BODY='{"year": ${{ inputs.year }}, "month": ${{ inputs.month }}, "dryRun": ${{ inputs.dryRun }}}'
