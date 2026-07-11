@@ -73,7 +73,7 @@ body.dark input[type="date"]::-webkit-calendar-picker-indicator {
 body.light input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(0) sepia(1) saturate(4) hue-rotate(295deg) brightness(0.85);
 }
-.scroll-container { flex:1; min-height:0; overflow:auto; width:100%; position:relative; -webkit-overflow-scrolling:touch; will-change:transform; touch-action:pan-x pan-y; transform:translateZ(0); scroll-snap-type:x mandatory; scroll-padding-left:42px; padding-bottom:120px; }
+.scroll-container { flex:1; min-height:0; overflow:auto; width:100%; position:relative; -webkit-overflow-scrolling:touch; will-change:scroll-position; touch-action:pan-x pan-y; scroll-snap-type:x mandatory; scroll-padding-left:42px; padding-bottom:120px; }
 .cv-row { content-visibility: auto; contain-intrinsic-size: 0 28px; }
 .cv-cell { contain: layout style; }
 .draggable-card { cursor:grab; touch-action:pan-x pan-y; width:100%; height:100%; display:flex; align-items:center; transition:opacity 0.2s,transform 0.2s; }
@@ -742,22 +742,32 @@ function useLS(k, def) {
     localStorage.setItem(k, val);
   }];
 }
-const thTime = (fs, isTop = false) => ({
-  padding: "2px 4px",
-  background: "var(--bg-header)",
-  borderBottom: "1px solid var(--border)",
-  borderRight: "1px solid var(--border)",
-  color: "var(--text-time)",
-  fontSize: fs,
-  fontWeight: 700,
-  position: "sticky",
-  left: 0,
-  top: isTop ? 0 : undefined,
-  zIndex: isTop ? 15 : 10,
-  minWidth: 42,
-  width: 42,
-  textAlign: "center"
-});
+// 時間欄寬度依cw按比例縮放的共用公式——thTime跟table的colgroup/總寬度計算
+// 都要用同一套，不要各自寫一份，不然改了一邊、另一邊(尤其colgroup，在
+// tableLayout:fixed底下權重比儲存格自己的width還高)沒跟著改，等於白改。
+// 比例0.81是手機預設cw=52時剛好等於原本固定寫死的42(42/52≈0.81)。
+function timeColWidth(cw) {
+  return Math.round(Math.max(36, (cw || 52) * 0.81));
+}
+const thTime = (fs, isTop = false, cwForScale = 52) => {
+  const w = timeColWidth(cwForScale);
+  return {
+    padding: "2px 4px",
+    background: "var(--bg-header)",
+    borderBottom: "1px solid var(--border)",
+    borderRight: "1px solid var(--border)",
+    color: "var(--text-time)",
+    fontSize: fs,
+    fontWeight: 700,
+    position: "sticky",
+    left: 0,
+    top: isTop ? 0 : undefined,
+    zIndex: isTop ? 15 : 10,
+    minWidth: w,
+    width: w,
+    textAlign: "center"
+  };
+};
 const thDay = (fs, cw) => ({
   padding: "3px",
   background: "var(--bg-header)",
@@ -5949,13 +5959,13 @@ function MainApp({
       borderCollapse: "separate",
       borderSpacing: 0,
       tableLayout: "fixed",
-      width: `${42 + ACTIVE_DAYS.length * cw}px`
+      width: `${timeColWidth(cw) + ACTIVE_DAYS.length * cw}px`
     }
   }, /*#__PURE__*/React.createElement("colgroup", null, /*#__PURE__*/React.createElement("col", {
     style: {
-      width: 42,
-      minWidth: 42,
-      maxWidth: 42
+      width: timeColWidth(cw),
+      minWidth: timeColWidth(cw),
+      maxWidth: timeColWidth(cw)
     }
   }), ACTIVE_DAYS.map((_, i) => /*#__PURE__*/React.createElement("col", {
     key: i,
@@ -5966,7 +5976,7 @@ function MainApp({
     }
   }))), /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", {
     className: "th-corner",
-    style: thTime(FS.t, true)
+    style: thTime(FS.t, true, cw)
   }, "時間"), view === "month" ? ACTIVE_DAYS.map((d, i) => /*#__PURE__*/React.createElement("th", {
     key: i,
     style: {
@@ -5996,7 +6006,7 @@ function MainApp({
       }
     }, /*#__PURE__*/React.createElement("td", {
       style: {
-        ...thTime(FS.s),
+        ...thTime(FS.s, false, cw),
         borderTop: "1px solid var(--border-week)"
       }
     }, "W", wi + 1), wk.map((d, i) => {
@@ -6113,7 +6123,7 @@ function MainApp({
         }
       } : undefined,
       style: {
-        ...thTime(FS.t),
+        ...thTime(FS.t, false, cw),
         borderBottom: "1px solid var(--border)",
         cursor: dragMode ? "pointer" : "default",
         background: dragMode ? "rgba(233,69,96,0.06)" : "var(--bg-header)"
@@ -6124,7 +6134,7 @@ function MainApp({
       }
     }, /*#__PURE__*/React.createElement("td", {
       style: {
-        ...thTime(FS.s),
+        ...thTime(FS.s, false, cw),
         borderBottom: "2px solid var(--border-week)",
         color: "var(--text-time)"
       }
@@ -6170,7 +6180,7 @@ function MainApp({
     }
   }, /*#__PURE__*/React.createElement("td", {
     style: {
-      ...thTime(FS.s),
+      ...thTime(FS.s, false, cw),
       color: "var(--text-dim)",
       fontSize: FS.s - 1
     }
@@ -9350,8 +9360,8 @@ function OverviewMonth({
     position: "sticky",
     left: 0,
     zIndex: 5,
-    minWidth: 42,
-    width: 42,
+    minWidth: timeColWidth(ocw),
+    width: timeColWidth(ocw),
     textAlign: "center",
     whiteSpace: "nowrap"
   };
@@ -10004,13 +10014,13 @@ function OverviewMonth({
       borderCollapse: "separate",
       borderSpacing: 0,
       tableLayout: "fixed",
-      width: `${42 + totalCols * ocw}px`
+      width: `${timeColWidth(ocw) + totalCols * ocw}px`
     }
   }, /*#__PURE__*/React.createElement("colgroup", null, /*#__PURE__*/React.createElement("col", {
     style: {
-      width: 42,
-      minWidth: 42,
-      maxWidth: 42
+      width: timeColWidth(ocw),
+      minWidth: timeColWidth(ocw),
+      maxWidth: timeColWidth(ocw)
     }
   }), Array.from({
     length: 7
