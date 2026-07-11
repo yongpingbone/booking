@@ -14890,8 +14890,6 @@ function SettingsModule({
   useEffect(() => {
     if (restMasterId) setRestSet(new Set(restOf(restMasterId)));
   }, [restMasterId]);
-  const [onlineSettings, setOnlineSettings] = useState([]);
-  const [onlineLoading, setOnlineLoading] = useState(false);
   const loadHistory = async () => {
     setHistLoading(true);
     let q = sb.from("booking_edit_logs").select("*").order("edited_at", {
@@ -14904,44 +14902,6 @@ function SettingsModule({
     } = await q;
     setHistLogs(data || []);
     setHistLoading(false);
-  };
-  const loadOnlineSettings = async () => {
-    setOnlineLoading(true);
-    const {
-      data
-    } = await sb.from("online_booking_settings").select("*").order("year_month", {
-      ascending: false
-    });
-    setOnlineSettings(data || []);
-    setOnlineLoading(false);
-  };
-  const toggleOnlineMonth = async yearMonth => {
-    const setting = onlineSettings.find(s => s.year_month === yearMonth);
-    if (!setting) return;
-    const newVal = !setting.is_open;
-    await sb.from("online_booking_settings").update({
-      is_open: newVal
-    }).eq("year_month", yearMonth);
-    setOnlineSettings(prev => prev.map(s => s.year_month === yearMonth ? {
-      ...s,
-      is_open: newVal
-    } : s));
-    msg(newVal ? "✓ 已開放" : "✓ 已關閉");
-  };
-  const addNewMonth = async () => {
-    const now = new Date();
-    const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    const yearMonth = next.getFullYear() + "-" + String(next.getMonth() + 1).padStart(2, "0");
-    const {
-      error
-    } = await sb.from("online_booking_settings").insert([{
-      year_month: yearMonth,
-      is_open: false
-    }]);
-    if (!error) {
-      await loadOnlineSettings();
-      msg("✓ 已新增");
-    } else msg("新增失敗", true);
   };
   const openEdit = m => {
     setEditMaster(m);
@@ -15043,13 +15003,12 @@ function SettingsModule({
       background: "var(--bg-header)",
       borderBottom: "1px solid var(--border)"
     }
-  }, [["masters", "帳號管理"], ["online", "線上預約"], ["rest", "休息時段"], ["export", "批次刪除"], ["history", "歷史紀錄"]].map(([k, l]) => /*#__PURE__*/React.createElement("button", {
+  }, [["masters", "帳號管理"], ["rest", "休息時段"], ["export", "批次刪除"], ["history", "歷史紀錄"]].map(([k, l]) => /*#__PURE__*/React.createElement("button", {
     key: k,
     className: `tab-btn${settTab === k ? " active" : ""}`,
     onClick: () => {
       setSettTab(k);
       if (k === "history") loadHistory();
-      if (k === "online") loadOnlineSettings();
     }
   }, l))), settTab === "masters" && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -15140,199 +15099,7 @@ function SettingsModule({
       fontSize: 10,
       cursor: "pointer"
     }
-  }, m.is_active ? "啟用" : "停用"))))), settTab === "online" && /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: 12
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: "var(--bg-header)",
-      borderRadius: 10,
-      padding: "14px 16px",
-      border: "1px solid var(--border2)",
-      marginBottom: 12
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontWeight: 700,
-      fontSize: 14,
-      marginBottom: 12
-    }
-  }, "📅 月份開放管理"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 12,
-      color: "var(--text-muted)",
-      marginBottom: 12,
-      lineHeight: 1.6
-    }
-  }, "• 管理員可在此開啟/關閉各月份的線上預約", /*#__PURE__*/React.createElement("br", null), "• 同時師傅需在「帳號管理」勾選「線上」才能被客人線上預約", /*#__PURE__*/React.createElement("br", null), "• 線上預約 = 月份開放 ✓ + 師傅允許 ✓"), /*#__PURE__*/React.createElement("button", {
-    onClick: async () => {
-      await loadOnlineSettings();
-      msg("✓ 已重新載入");
-    },
-    style: {
-      width: "100%",
-      padding: "8px",
-      borderRadius: 6,
-      background: "#74b9ff",
-      border: "none",
-      color: "#fff",
-      fontSize: 12,
-      fontWeight: 700,
-      cursor: "pointer",
-      marginBottom: 12
-    }
-  }, onlineLoading ? "載入中..." : "重新載入")), onlineSettings.length === 0 ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: "center",
-      color: "var(--text-dim)",
-      padding: 20
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 10
-    }
-  }, "尚無月份設置"), /*#__PURE__*/React.createElement("button", {
-    onClick: addNewMonth,
-    style: {
-      padding: "8px 16px",
-      borderRadius: 6,
-      background: "#2ed9c3",
-      border: "none",
-      color: "#fff",
-      fontSize: 12,
-      fontWeight: 700,
-      cursor: "pointer"
-    }
-  }, "+ 新增下個月")) : /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 8
-    }
-  }, onlineSettings.map(s => /*#__PURE__*/React.createElement("div", {
-    key: s.year_month,
-    style: {
-      background: "var(--bg-header)",
-      borderRadius: 10,
-      padding: "12px 14px",
-      border: "1px solid var(--border2)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between"
-    }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontWeight: 700,
-      fontSize: 13
-    }
-  }, s.year_month), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11,
-      color: "var(--text-muted)",
-      marginTop: 2
-    }
-  }, "狀態: ", /*#__PURE__*/React.createElement("span", {
-    style: {
-      color: s.is_open ? "#2ed9c3" : "#e94560",
-      fontWeight: 700
-    }
-  }, s.is_open ? "✓ 已開放" : "✗ 已關閉"))), /*#__PURE__*/React.createElement("button", {
-    onClick: () => toggleOnlineMonth(s.year_month),
-    style: {
-      padding: "6px 14px",
-      borderRadius: 6,
-      border: `2px solid ${s.is_open ? "#2ed9c3" : "#e94560"}`,
-      background: s.is_open ? "#2ed9c320" : "#e9456020",
-      color: s.is_open ? "#2ed9c3" : "#e94560",
-      fontSize: 12,
-      fontWeight: 700,
-      cursor: "pointer"
-    }
-  }, s.is_open ? "關閉" : "開放"))), /*#__PURE__*/React.createElement("button", {
-    onClick: addNewMonth,
-    style: {
-      padding: "10px",
-      borderRadius: 6,
-      background: "#a29bfe20",
-      border: "2px dashed #a29bfe",
-      color: "#a29bfe",
-      fontSize: 12,
-      fontWeight: 700,
-      cursor: "pointer",
-      marginTop: 8
-    }
-  }, "+ 新增下個月")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: "var(--bg-header)",
-      borderRadius: 10,
-      padding: "14px 16px",
-      border: "1px solid var(--border2)",
-      marginTop: 16
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontWeight: 700,
-      fontSize: 14,
-      marginBottom: 12
-    }
-  }, "👥 師傅線上預約權限"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 12,
-      color: "var(--text-muted)",
-      marginBottom: 12
-    }
-  }, "在「帳號管理」tab中，點擊師傅卡片上的「線上」按鈕來開啟/關閉各師傅的線上預約權限"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexDirection: "column",
-      gap: 6
-    }
-  }, masters.filter(m => m.is_active).map(m => /*#__PURE__*/React.createElement("div", {
-    key: m.id,
-    style: {
-      background: "var(--bg-sub)",
-      borderRadius: 8,
-      padding: "10px 12px",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 8,
-      flex: 1
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: 8,
-      height: 8,
-      borderRadius: "50%",
-      background: m.display_color || "#74b9ff"
-    }
-  }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontWeight: 700,
-      fontSize: 12
-    }
-  }, m.name), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 10,
-      color: "var(--text-muted)"
-    }
-  }, m.role))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "3px 8px",
-      borderRadius: 6,
-      fontSize: 11,
-      fontWeight: 700,
-      border: `1px solid ${m.allow_online_booking ? "#2ed9c3" : "#e94560"}`,
-      background: m.allow_online_booking ? "#2ed9c320" : "#e9456020",
-      color: m.allow_online_booking ? "#2ed9c3" : "#e94560"
-    }
-  }, m.allow_online_booking ? "✓ 可預約" : "✗ 不可預約")))))), settTab === "rest" && /*#__PURE__*/React.createElement("div", {
+  }, m.is_active ? "啟用" : "停用"))))), settTab === "rest" && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: 12
     }
