@@ -31,10 +31,16 @@ on:
         default: true
         type: boolean
 
+permissions:
+  contents: write
+
 jobs:
   trigger:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: 呼叫 Worker 並顯示結果
         env:
           INTERNAL_SYNC_SECRET: ${{ secrets.INTERNAL_SYNC_SECRET }}
@@ -89,3 +95,13 @@ jobs:
 
           echo "---"
           cat response.json | jq . || cat response.json
+
+      - name: 把結果存回 repo(Claude 看不到 Actions log 內容，用這個方式讓它讀得到)
+        run: |
+          mkdir -p sheet-sync-worker/.debug
+          cp response.json sheet-sync-worker/.debug/last-run-response.json
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add sheet-sync-worker/.debug/last-run-response.json
+          git diff --cached --quiet || git commit -m "chore: 更新 debug 執行結果(自動)"
+          git push
