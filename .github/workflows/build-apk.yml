@@ -61,32 +61,68 @@ jobs:
           exp_internal 1
           set timeout 60
           spawn bubblewrap init --manifest https://yongpingbone.github.io/booking/manifest.json --directory .
-          # 統一用一個迴圈處理所有已知的題目類型，不管出現順序——之前拆成
-          # 好幾個各自獨立的 expect 區塊，實測發現會卡在某些題目對不上的
-          # 情況(不確定確切原因，懷疑跟 TCL 的 buffer/match 時機有關)，
-          # 改成這樣不管題目用什麼順序、出現幾次都能接住，更穩固。
-          # 每答完一題用 exp_continue 回到迴圈開頭繼續等下一題，直到程式
-          # 自然執行完(eof)或真的遇到完全沒見過的新題目(timeout)。
+
+          # 第一階段(迴圈)：處理順序不固定、可能出現 0~N 次的題目——
+          # JDK/SDK 安裝詢問(理論上設定檔已經跳過，這裡是防呆)、Web app
+          # details 精靈的各欄位(用 regex 統一接受預設值)、方向鍵選單。
+          # 遇到 "*correct*"(精靈跑完、要求確認整體內容)就跳出迴圈，
+          # 進入第二階段。
           expect {
             "*install the JDK*"     { send "n\r"; exp_continue }
             "*Path to your existing JDK*" { send "$env(JAVA_HOME)\r"; exp_continue }
             "*install the Android*" { send "n\r"; exp_continue }
             "*Path to the Android*" { send "$env(ANDROID_HOME)\r"; exp_continue }
-            "*create one now*" { send "Yes\r"; exp_continue }
-            "*First and Last names*" { send "Yongping\r"; exp_continue }
-            "*Organizational Unit*" { send "Health\r"; exp_continue }
-            "*Organization*" { send "Health\r"; exp_continue }
-            "*Locality*" { send "Taipei\r"; exp_continue }
-            "*Province*" { send "TW\r"; exp_continue }
-            "*Country Code*" { send "TW\r"; exp_continue }
-            "*Keystore password*" { send "pass1234\r"; exp_continue }
-            "*Key password*" { send "pass1234\r"; exp_continue }
             "*Use arrow keys*" { send "\r"; exp_continue }
             -re {\([^\r\n)]*\)[ \t]} { send "\r"; exp_continue }
-            "*correct*" { send "y\r"; exp_continue }
-            eof { }
-            timeout { send_error "\n>>> INIT_TIMEOUT，遇到沒處理過的新題目，目前緩衝內容如上 <<<\n"; exit 1 }
+            "*correct*" { send "y\r" }
+            timeout { send_error "\n>>> INIT_TIMEOUT(第一階段)，目前緩衝內容如上 <<<\n"; exit 1 }
           }
+
+          # 第二階段(依序、各自獨立)：keystore 相關欄位嚴格照順序、只會
+          # 出現一次——不能用迴圈處理，因為這幾題的提示文字互相是子字串
+          # 關係(例如 "Organization" 是 "Organizational Unit" 的子字串)，
+          # 用同一個累積中的 buffer 跑迴圈時，舊的已回答內容還留在 buffer
+          # 裡，會被後面的題目誤重複比對到，導致答案送錯欄位(實測發生過：
+          # Country Code 收到 Organizational Unit 的答案，無限重複卡住)。
+          # 各自獨立的 expect 呼叫，每叫一次就消費掉對應的 buffer，不會有
+          # 這個問題。
+          expect {
+            "*create one now*" { send "Yes\r" }
+            timeout { send_error "\n>>> TIMEOUT at create-one-now <<<\n"; exit 1 }
+          }
+          expect {
+            "*First and Last names*" { send "Yongping\r" }
+            timeout { send_error "\n>>> TIMEOUT at names <<<\n"; exit 1 }
+          }
+          expect {
+            "*Organizational Unit*" { send "Health\r" }
+            timeout { send_error "\n>>> TIMEOUT at org unit <<<\n"; exit 1 }
+          }
+          expect {
+            "*Organization*" { send "Health\r" }
+            timeout { send_error "\n>>> TIMEOUT at org <<<\n"; exit 1 }
+          }
+          expect {
+            "*Locality*" { send "Taipei\r" }
+            timeout { send_error "\n>>> TIMEOUT at locality <<<\n"; exit 1 }
+          }
+          expect {
+            "*Province*" { send "TW\r" }
+            timeout { send_error "\n>>> TIMEOUT at province <<<\n"; exit 1 }
+          }
+          expect {
+            "*Country Code*" { send "TW\r" }
+            timeout { send_error "\n>>> TIMEOUT at country code <<<\n"; exit 1 }
+          }
+          expect {
+            "*Keystore password*" { send "pass1234\r" }
+            timeout { send_error "\n>>> TIMEOUT at keystore password <<<\n"; exit 1 }
+          }
+          expect {
+            "*Key password*" { send "pass1234\r" }
+            timeout { send_error "\n>>> TIMEOUT at key password <<<\n"; exit 1 }
+          }
+          expect eof
           ' | tee init-log.txt
         env:
           BUBBLEWRAP_SKIP_UPDATE_CHECK: true
