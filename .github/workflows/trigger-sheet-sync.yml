@@ -18,6 +18,7 @@ on:
           - sweep-notes-execute
           - clean-garbage-dryrun
           - clean-garbage-execute
+          - custom-post
       weekKey:
         description: '[sync 用] 週一日期(YYYY-MM-DD)，留空 = 當週'
         required: false
@@ -28,6 +29,14 @@ on:
         type: string
       month:
         description: '[reconcile-month 用] 月份 1-12'
+        required: false
+        type: string
+      customPath:
+        description: '[custom-post 用] Worker 上的路徑，例如 /debug/restore-bookings'
+        required: false
+        type: string
+      customBody:
+        description: '[custom-post 用] 完整的 JSON body 字串'
         required: false
         type: string
       dryRun:
@@ -103,6 +112,9 @@ jobs:
           elif [ "${{ inputs.endpoint }}" = "clean-garbage-execute" ]; then
             URL="https://yongping-sheet-sync.yihanhsu123.workers.dev/debug/clean-garbage-bookings"
             BODY='{"dryRun": false}' 
+          elif [ "${{ inputs.endpoint }}" = "custom-post" ]; then
+            URL="https://yongping-sheet-sync.yihanhsu123.workers.dev${{ inputs.customPath }}"
+            BODY='${{ inputs.customBody }}'
           else
             URL="https://yongping-sheet-sync.yihanhsu123.workers.dev/reconcile-month"
             BODY='{"year": ${{ inputs.year }}, "month": ${{ inputs.month }}, "dryRun": ${{ inputs.dryRun }}}'
