@@ -13,6 +13,7 @@ on:
           - sync-full-scope
           - reconcile-month
           - debug-invalid-records
+          - debug-inspect-cell
       weekKey:
         description: '[sync 用] 週一日期(YYYY-MM-DD)，留空 = 當週'
         required: false
@@ -73,6 +74,13 @@ jobs:
           elif [ "${{ inputs.endpoint }}" = "debug-invalid-records" ]; then
             # 診斷用，列出目前還卡在失敗狀態的記錄跟原因，不用改資料。
             URL="https://yongping-sheet-sync.yihanhsu123.workers.dev/debug/invalid-records"
+            METHOD="GET"
+            BODY=""
+          elif [ "${{ inputs.endpoint }}" = "debug-inspect-cell" ]; then
+            # 診斷用，直接讀某一格實際的備註內容，順便嘗試清除、清除後馬上
+            # 再讀一次。目前固定查 7月-麒 2026-07-09 14:00 這格(Kelie)，
+            # 之後如果要查別格，改這裡的 query string 即可。
+            URL="https://yongping-sheet-sync.yihanhsu123.workers.dev/debug/inspect-cell?date=2026-07-09&startTime=14:00&sheetMasterLabel=%E9%BA%92&clear=true"
             METHOD="GET"
             BODY=""
           else
