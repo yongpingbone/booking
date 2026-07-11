@@ -18,7 +18,7 @@
 // Sheet、sheetWriter 寫備註這兩段需要真的打 sheets.googleapis.com，我的
 // sandbox 連不到，部署後第一次跑務必看 log。
 
-import { getLatestSnapshot, saveSnapshot, appendLog } from './snapshotStore.js';
+import { getLatestSnapshot, saveSnapshot, appendLog, deleteAllLogs, deleteStaleSnapshots } from './snapshotStore.js';
 import { diffSnapshots } from './diff.js';
 import { fetchAndParseWeek, fetchAndParseWeekCached, SHEET_MASTERS, monthsSpannedByWeek } from './sheetParser.js';
 import { validateBookingRecord } from './validate.js';
@@ -552,6 +552,24 @@ export default {
           }
         }
         return Response.json({ restoredCount: results.filter((r) => r.ok).length, failedCount: results.filter((r) => !r.ok).length, results }, { status: 200 });
+      } catch (err) {
+        return Response.json({ error: String(err?.stack ?? err?.message ?? err) }, { status: 500 });
+      }
+    }
+
+    if (url.pathname === '/debug/cleanup-r2' && request.method === 'POST') {
+      const providedSecret = request.headers.get('X-Internal-Secret');
+      if (!env.INTERNAL_SYNC_SECRET || providedSecret !== env.INTERNAL_SYNC_SECRET) {
+        return new Response('Unauthorized', { status: 401 });
+      }
+      // 清理 R2：所有 logs/(純除錯用，同步邏輯不會讀)一律刪；
+      // snapshots/ 只刪「已經不在目前三個月同步範圍內」的舊 weekKey，
+      // 目前範圍內的完全不動(那是下次 diff 比對的基準，不能刪)。
+      try {
+        const currentWeekKeys = weekKeysToSync(new Date());
+        const deletedLogCount = await deleteAllLogs(env.SHEET_SYNC_BUCKET);
+        const { deletedCount: deletedSnapshotCount, keptWeekKeys } = await deleteStaleSnapshots(env.SHEET_SYNC_BUCKET, currentWeekKeys);
+        return Response.json({ deletedLogCount, deletedSnapshotCount, keptWeekKeys }, { status: 200 });
       } catch (err) {
         return Response.json({ error: String(err?.stack ?? err?.message ?? err) }, { status: 500 });
       }

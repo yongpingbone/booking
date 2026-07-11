@@ -740,3 +740,36 @@ test('沒有消失的記錄不受這個邏輯影響(不會誤取消還存在的�
 
   assert.equal(cancelCalled, false);
 });
+
+test('fetch(): POST /debug/cleanup-r2 也要驗證 X-Internal-Secret', async () => {
+  const env = makeEnv();
+  const request = new Request('https://worker.example/debug/cleanup-r2', {
+    method: 'POST',
+    headers: { 'X-Internal-Secret': 'wrong' },
+  });
+  const res = await worker.fetch(request, env, {});
+  assert.equal(res.status, 401);
+});
+
+test('fetch(): POST /debug/cleanup-r2 實際清理，範圍內的 snapshot 完全不動', async () => {
+  const env = makeEnv();
+  const { saveSnapshot, appendLog } = await import('../src/snapshotStore.js');
+  const { weekKeysToSync } = await import('../src/weekKeys.js');
+
+  const currentWeekKeys = weekKeysToSync(new Date());
+  await saveSnapshot(env.SHEET_SYNC_BUCKET, currentWeekKeys[0], [{ a: 1 }]); // 範圍內
+  await saveSnapshot(env.SHEET_SYNC_BUCKET, '2020-01-06', [{ a: 2 }]); // 早就過期
+  await appendLog(env.SHEET_SYNC_BUCKET, { weekKey: 'x' });
+
+  const request = new Request('https://worker.example/debug/cleanup-r2', {
+    method: 'POST',
+    headers: { 'X-Internal-Secret': 'test-secret' },
+  });
+  const res = await worker.fetch(request, env, {});
+  const body = await res.json();
+
+  assert.equal(res.status, 200);
+  assert.equal(body.deletedLogCount, 1);
+  assert.equal(body.deletedSnapshotCount, 2, '過期週的 latest.json + history 兩個物件');
+  assert.ok(body.keptWeekKeys.includes(currentWeekKeys[0]));
+});

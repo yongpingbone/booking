@@ -102,4 +102,55 @@ async function listLogs(bucket, { date, limit = 100 } = {}) {
   return result.objects.map((o) => o.key).sort().reverse();
 }
 
-export { getLatestSnapshot, saveSnapshot, appendLog, listLogs, latestKey, historyKey, logKey };
+/**
+ * 刪掉所有 logs/ 底下的物件——這些純粹是除錯用的歷史紀錄，同步邏輯本身
+ * 完全不會讀它，刪掉不影響任何功能。會處理分頁(R2 list 一次最多回傳
+ * 有限筆數，物件多的話要用 cursor 繼續抓下一批)。
+ * @param {R2Bucket} bucket
+ * @returns {Promise<number>} 刪除的物件數量
+ */
+async function deleteAllLogs(bucket) {
+  let deletedCount = 0;
+  let cursor;
+  do {
+    const result = await bucket.list({ prefix: 'logs/', cursor });
+    for (const obj of result.objects) {
+      await bucket.delete(obj.key);
+      deletedCount++;
+    }
+    cursor = result.truncated ? result.cursor : undefined;
+  } while (cursor);
+  return deletedCount;
+}
+
+/**
+ * 刪掉「已經不在目前同步範圍內」的舊 snapshots——包含 latest.json 跟底下
+ * 全部的 history/*.json。目前範圍內的 weekKey 完全不會被動到(這是下次
+ * diff 比對的基準，不能刪)。
+ * @param {R2Bucket} bucket
+ * @param {string[]} currentWeekKeys 目前還在同步範圍內的 weekKey 清單
+ * @returns {Promise<{deletedCount: number, keptWeekKeys: string[]}>}
+ */
+async function deleteStaleSnapshots(bucket, currentWeekKeys) {
+  const currentSet = new Set(currentWeekKeys);
+  let deletedCount = 0;
+  const keptWeekKeys = new Set();
+  let cursor;
+  do {
+    const result = await bucket.list({ prefix: 'snapshots/', cursor });
+    for (const obj of result.objects) {
+      // key 格式: snapshots/{weekKey}/latest.json 或 snapshots/{weekKey}/history/{ts}.json
+      const weekKey = obj.key.split('/')[1];
+      if (currentSet.has(weekKey)) {
+        keptWeekKeys.add(weekKey);
+        continue;
+      }
+      await bucket.delete(obj.key);
+      deletedCount++;
+    }
+    cursor = result.truncated ? result.cursor : undefined;
+  } while (cursor);
+  return { deletedCount, keptWeekKeys: [...keptWeekKeys] };
+}
+
+export { getLatestSnapshot, saveSnapshot, appendLog, listLogs, latestKey, historyKey, logKey, deleteAllLogs, deleteStaleSnapshots };

@@ -6,6 +6,8 @@ import {
   saveSnapshot,
   appendLog,
   listLogs,
+  deleteAllLogs,
+  deleteStaleSnapshots,
   latestKey,
   historyKey,
 } from '../src/snapshotStore.js';
@@ -72,4 +74,49 @@ test('listLogs: 指定日期時不會撈到其他天的 log', async () => {
   const keys = await listLogs(bucket, { date: '2026-07-10' });
   assert.equal(keys.length, 1);
   assert.ok(keys[0].includes('today'));
+});
+
+test('deleteAllLogs: 刪掉所有 logs/ 底下的物件，不影響 snapshots/', async () => {
+  const bucket = new MockR2Bucket();
+  await appendLog(bucket, { weekKey: 'x', runId: '1' }, '2026-07-10T00:00:00.000Z');
+  await appendLog(bucket, { weekKey: 'y', runId: '2' }, '2026-07-11T00:00:00.000Z');
+  await saveSnapshot(bucket, '2026-07-06', [{ a: 1 }]);
+
+  const deletedCount = await deleteAllLogs(bucket);
+
+  assert.equal(deletedCount, 2);
+  const remaining = await bucket.list({ prefix: '' });
+  assert.ok(remaining.objects.every((o) => !o.key.startsWith('logs/')));
+  assert.ok(remaining.objects.some((o) => o.key.startsWith('snapshots/')), 'snapshots 不該被動到');
+});
+
+test('deleteAllLogs: 沒有任何 log 時回傳 0，不出錯', async () => {
+  const bucket = new MockR2Bucket();
+  const deletedCount = await deleteAllLogs(bucket);
+  assert.equal(deletedCount, 0);
+});
+
+test('deleteStaleSnapshots: 只刪不在目前範圍內的 weekKey，範圍內的完全不動', async () => {
+  const bucket = new MockR2Bucket();
+  await saveSnapshot(bucket, '2026-06-01', [{ a: 1 }], '2026-06-01T00:00:00.000Z'); // 過期，該刪
+  await saveSnapshot(bucket, '2026-07-06', [{ a: 2 }], '2026-07-06T00:00:00.000Z'); // 範圍內，該留
+  await saveSnapshot(bucket, '2026-08-10', [{ a: 3 }], '2026-08-10T00:00:00.000Z'); // 範圍內，該留
+
+  const { deletedCount, keptWeekKeys } = await deleteStaleSnapshots(bucket, ['2026-07-06', '2026-08-10']);
+
+  assert.equal(deletedCount, 2, '2026-06-01 的 latest.json + history 兩個物件都該被刪');
+  assert.deepEqual(keptWeekKeys.sort(), ['2026-07-06', '2026-08-10']);
+
+  const staleSnapshot = await getLatestSnapshot(bucket, '2026-06-01');
+  assert.equal(staleSnapshot, null, '過期的快照真的被刪了，讀不到');
+
+  const keptSnapshot = await getLatestSnapshot(bucket, '2026-07-06');
+  assert.notEqual(keptSnapshot, null, '範圍內的快照要完全保留，讀得到');
+});
+
+test('deleteStaleSnapshots: 全部都在範圍內時，什麼都不刪', async () => {
+  const bucket = new MockR2Bucket();
+  await saveSnapshot(bucket, '2026-07-06', [{ a: 1 }]);
+  const { deletedCount } = await deleteStaleSnapshots(bucket, ['2026-07-06']);
+  assert.equal(deletedCount, 0);
 });
