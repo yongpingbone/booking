@@ -27,7 +27,7 @@ import { saveBooking, findGarbageBookings, cancelBooking, setBookingStatus, upse
 import { reconcileMonth } from './reconcile.js';
 import { weekKeysToSync, mondayOf, taipeiDateString } from './weekKeys.js';
 import { getAccessToken } from './googleAuth.js';
-import { getCellNote, listSheetTabs, setCellNote, scanTabForNotes, clearMultipleCellNotes } from './sheetsApi.js';
+import { getCellNote, listSheetTabs, setCellNote, scanTabForNotes, clearMultipleCellNotes, fetchGridRows } from './sheetsApi.js';
 
 /**
  * 實際的診斷/寫入邏輯，接受已經抓好的記錄陣列，不自己去打 Sheets API。
@@ -394,6 +394,39 @@ export default {
         }
       }
       return Response.json({ scannedWeekKeys: weekKeys, invalidCount: invalidRecords.length, invalidRecords }, { status: 200 });
+    }
+
+    if (url.pathname === '/debug/scan-colors' && request.method === 'GET') {
+      const providedSecret = request.headers.get('X-Internal-Secret');
+      if (!env.INTERNAL_SYNC_SECRET || providedSecret !== env.INTERNAL_SYNC_SECRET) {
+        return new Response('Unauthorized', { status: 401 });
+      }
+      // 診斷用：直接掃某個分頁範圍內每一格「實際」的顏色分佈，拿來跟資料庫
+      // 裡的 color_tag 統計對照，確認落差是出在「抓取/顏色判斷」這一段，
+      // 還是後面某個步驟把資料弄掉了。
+      const sheetTitle = url.searchParams.get('sheetTitle');
+      const range = url.searchParams.get('range') || 'A1:H260';
+      if (!sheetTitle) {
+        return Response.json({ error: '需要 sheetTitle' }, { status: 400 });
+      }
+      try {
+        const accessToken = await getAccessToken(env);
+        const rows = await fetchGridRows(env, { sheetTitle, range, accessToken });
+        const colorCounts = {};
+        const yellowCells = [];
+        rows.forEach((row, rowIndex) => {
+          row.forEach((cell, colIndex) => {
+            const key = cell.colorHex ?? 'null(無底色)';
+            colorCounts[key] = (colorCounts[key] ?? 0) + 1;
+            if (cell.colorHex === '#FFFF00') {
+              yellowCells.push({ rowIndex, colIndex, value: cell.value });
+            }
+          });
+        });
+        return Response.json({ sheetTitle, range, colorCounts, yellowCellCount: yellowCells.length, yellowCells: yellowCells.slice(0, 30) }, { status: 200 });
+      } catch (err) {
+        return Response.json({ error: String(err?.stack ?? err?.message ?? err) }, { status: 500 });
+      }
     }
 
     if (url.pathname === '/debug/inspect-cell' && request.method === 'GET') {
