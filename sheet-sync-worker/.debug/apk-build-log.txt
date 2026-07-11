@@ -5,5 +5,6 @@
 |  '--' '  ''  | `-' | `-' |  \   --|   .'.   |  |  \ '-'  | '-' '
 `------' `----' `---' `---'`--'`----'--'   '--`--'   `--`--|  |-'
                                                            `--'    
-? There are changes in twa-manifest.json. Would you like to apply them to the 
-project before building? (Y/n) [1A[31D[109C[1B
+Please, enter passwords for the keystore ./android.keystore and alias android.
+
+? Password for the Key Store: [30D[30C
