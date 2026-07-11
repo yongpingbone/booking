@@ -123,7 +123,7 @@ jobs:
             timeout { send_error "\n>>> TIMEOUT at key password <<<\n"; exit 1 }
           }
           expect eof
-          ' | tee init-log.txt
+          ' 2>&1 | tee init-log.txt
         env:
           BUBBLEWRAP_SKIP_UPDATE_CHECK: true
 
