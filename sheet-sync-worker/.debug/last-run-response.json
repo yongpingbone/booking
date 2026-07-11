@@ -1,1 +1,1 @@
-{"error":"需要 year 跟 month(1-12)"}
+{"error":"TypeError: rows.forEach is not a function\n    at Object.fetch (index.js:1379:14)"}
