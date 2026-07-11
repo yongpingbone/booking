@@ -60,7 +60,7 @@ jobs:
           expect -c '
           exp_internal 1
           set timeout 20
-          spawn bubblewrap init --manifest https://yongpingbone.netlify.app/manifest.json --directory .
+          spawn bubblewrap init --manifest https://yongpingbone.github.io/booking/manifest.json --directory .
           # 前兩個是防呆用——理論上設定檔已經寫好，這兩題不會出現；萬一
           # 環境變數抓錯導致設定檔沒生效，這裡還有一層防線，不會直接卡死。
           #
