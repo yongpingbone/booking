@@ -1304,14 +1304,22 @@ function LoginScreen({
           if (!cancelled) setLineChecking(false);
           return;
         }
-        await liff.init({ liffId: MASTER_LOGIN_LIFF_ID });
+        // 逾時保護：liff.init()如果卡住不回應(不resolve也不reject)，
+        // 單靠try-catch攔不住——Promise永遠pending，await會永遠等下去，
+        // 連finally都執行不到，畫面就會卡在「檢查LINE登入狀態中...」出不來。
+        // 這是實際發生過的問題(黑畫面)，用Promise.race保證最多等5秒，
+        // 逾時就當作失敗處理，強制繼續往下走顯示帳密登入畫面。
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("LIFF init timeout after 5s")), 5000)
+        );
+        await Promise.race([liff.init({ liffId: MASTER_LOGIN_LIFF_ID }), timeoutPromise]);
         if (cancelled) return;
         setLineAvailable(true);
         if (liff.isLoggedIn()) {
           await loginViaLine();
         }
       } catch (e) {
-        // liff初始化失敗(常見於LIFF App設定錯誤、或不在支援的環境)，
+        // liff初始化失敗(常見於LIFF App設定錯誤、逾時、或不在支援的環境)，
         // 靜默失敗即可，使用者完全看不出差異，照樣用帳密登入
         console.warn("[LIFF] 初始化失敗", e);
       } finally {
