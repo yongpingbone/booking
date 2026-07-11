@@ -31,4 +31,14 @@ the PWA:
 
 [32m?[39m [1mDomain:[22m[0m [0m[2m(yongpingbone.netlify.app) [22m[37D[37C
 === build-log.txt ===
-(不存在)
+,-----.        ,--.  ,--.  ,--.
+|  |) /_,--.,--|  |-.|  |-.|  |,---.,--.   ,--,--.--.,--,--.,---.
+|  .-.  |  ||  | .-. | .-. |  | .-. |  |.'.|  |  .--' ,-.  | .-. |
+|  '--' '  ''  | `-' | `-' |  \   --|   .'.   |  |  \ '-'  | '-' '
+`------' `----' `---' `---'`--'`----'--'   '--`--'   `--`--|  |-'
+                                                           `--'    
+
+
+[7mcli[0m [31mERROR ENOENT: no such file or directory, open '/home/runner/work/booking/booking/apk-build/twa-manifest.json'[0m
+
+
