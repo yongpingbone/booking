@@ -1,0 +1,22 @@
+=== Netlify manifest ===
+200
+=== Netlify icon(帶 /booking/) ===
+404
+=== Netlify icon(不帶 /booking/) ===
+200
+=== Netlify 根目錄列出 ===
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0d1117">
+<meta name="apple-mobile-web-app-title" content="永平預約">
+<link rel="manifest" href="/booking/manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstat
+=== GitHub Pages manifest ===
+200
+=== GitHub Pages icon ===
+200
