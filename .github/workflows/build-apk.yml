@@ -73,12 +73,16 @@ jobs:
           BUBBLEWRAP_KEYSTORE_PASSWORD: pass1234
           BUBBLEWRAP_KEY_PASSWORD: pass1234
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: yongping-app
-          path: apk-project/app-release-signed.apk
-          retention-days: 30
+      - name: 發布成 GitHub Release(永久保存，網址固定不會過期)
+        # 用固定的 tag(latest-apk)，每次都覆蓋同一個 Release，網址永遠
+        # 一樣，不會像 Artifact 一樣最多只能留到 400 天就消失。
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest-apk --yes --cleanup-tag || true
+          gh release create latest-apk apk-project/app-release-signed.apk \
+            --title "永平整復保健 App(自動打包)" \
+            --notes "自動打包產生，隨時可能更新。下載 app-release-signed.apk 安裝(僅支援 Android)。打包時間：$(date -u '+%Y-%m-%d %H:%M UTC')"
 
       - name: 把 build log 存回 repo 供除錯用(不管成功失敗都存)
         if: always()
