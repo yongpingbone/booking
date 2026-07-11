@@ -1,6 +1,8 @@
 // weekKeys.js
 //
-// 算出「這次同步要涵蓋哪幾個 weekKey」。
+// 算出「這次同步要涵蓋哪幾個 weekKey」。範圍是上個月、當月、下個月(以台北
+// 時間為準)這三個月，Hanna 明確要求的標準範圍——每次同步都重新算一次，
+// 時間往前走時這個範圍會自然跟著往後滾動，不用手動調整。
 //
 // 重要：師傅跟客人感知的「這一週」是台灣時間，Cloudflare Worker 內部跑的是 UTC，
 // 傍晚以後兩邊看到的「今天日期」可能差一天，所以這裡明確用 Asia/Taipei 時區
@@ -58,18 +60,35 @@ function mondayOf(dateStr) {
 
 /**
  * @param {Date} referenceDate 預設用現在時間，測試時可以傳固定值
- * @param {{weeksBack?: number, weeksAhead?: number}} [options]
- * @returns {string[]} 由舊到新排序的 weekKey 陣列
+ * @returns {string[]} 由舊到新排序的 weekKey 陣列，涵蓋上個月、當月、下個月
+ *   (以台北時間為準)這三個月完整範圍內、每一個有週區塊重疊到的星期一。
  */
-function weekKeysToSync(referenceDate = new Date(), { weeksBack = 0, weeksAhead = 4 } = {}) {
+function weekKeysToSync(referenceDate = new Date()) {
   const todayStr = taipeiDateString(referenceDate);
-  const currentMonday = mondayOf(todayStr);
+  const [y, m] = todayStr.split('-').map(Number); // m 是 1-12
+
+  const prevMonth = m === 1 ? { y: y - 1, m: 12 } : { y, m: m - 1 };
+  const nextMonth = m === 12 ? { y: y + 1, m: 1 } : { y, m: m + 1 };
+  const afterNextMonth = nextMonth.m === 12 ? { y: nextMonth.y + 1, m: 1 } : { y: nextMonth.y, m: nextMonth.m + 1 };
+
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const rangeStart = `${prevMonth.y}-${pad2(prevMonth.m)}-01`;
+
+  // 下個月最後一天 = 下下個月第一天往前推一天
+  const afterNextMonthFirst = `${afterNextMonth.y}-${pad2(afterNextMonth.m)}-01`;
+  const lastDayProbe = new Date(`${afterNextMonthFirst}T12:00:00Z`);
+  lastDayProbe.setUTCDate(lastDayProbe.getUTCDate() - 1);
+  const rangeEnd = taipeiDateString(lastDayProbe);
+
+  const startMonday = mondayOf(rangeStart);
+  const endMonday = mondayOf(rangeEnd);
 
   const keys = [];
-  for (let offset = -weeksBack; offset <= weeksAhead; offset++) {
-    const probe = new Date(`${currentMonday}T12:00:00Z`);
-    probe.setUTCDate(probe.getUTCDate() + offset * 7);
-    keys.push(taipeiDateString(probe));
+  const cursor = new Date(`${startMonday}T12:00:00Z`);
+  const endDate = new Date(`${endMonday}T12:00:00Z`);
+  while (cursor.getTime() <= endDate.getTime()) {
+    keys.push(taipeiDateString(cursor));
+    cursor.setUTCDate(cursor.getUTCDate() + 7);
   }
   return keys;
 }

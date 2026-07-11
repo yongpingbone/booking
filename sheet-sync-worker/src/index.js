@@ -23,7 +23,7 @@ import { validateBookingRecord } from './validate.js';
 import { markCellStatus } from './sheetWriter.js';
 import { saveBooking } from './supabaseClient.js';
 import { reconcileMonth } from './reconcile.js';
-import { weekKeysToSync } from './weekKeys.js';
+import { weekKeysToSync, mondayOf, taipeiDateString } from './weekKeys.js';
 
 /**
  * @param {object} env
@@ -126,13 +126,11 @@ async function runSyncForWeek(env, weekKey, deps = {}) {
 
 export default {
   /**
-   * Cloudflare Cron Trigger 進來的排程同步。
+   * Cloudflare Cron Trigger 進來的排程同步。範圍固定是上個月/當月/下個月
+   * (weekKeysToSync 自己算，不再需要額外設定)。
    */
   async scheduled(event, env, ctx) {
-    const weekKeys = weekKeysToSync(new Date(), {
-      weeksBack: Number(env.SYNC_WEEKS_BACK ?? 0),
-      weeksAhead: Number(env.SYNC_WEEKS_AHEAD ?? 4),
-    });
+    const weekKeys = weekKeysToSync(new Date());
     for (const weekKey of weekKeys) {
       ctx.waitUntil(runSyncForWeek(env, weekKey));
     }
@@ -173,7 +171,10 @@ export default {
       }
     }
 
-    const weekKey = body.weekKey ?? weekKeysToSync()[0];
+    // 手動觸發沒指定 weekKey 時，預設抓「這一週」——不能直接用
+    // weekKeysToSync()[0]，那支現在回傳的是三個月範圍、由舊到新排序，
+    // [0] 會變成上個月第一週，不是「當週」了。
+    const weekKey = body.weekKey ?? mondayOf(taipeiDateString(new Date()));
     const log = await runSyncForWeek(env, weekKey);
     return Response.json(log, { status: log.ok ? 200 : 500 });
   },

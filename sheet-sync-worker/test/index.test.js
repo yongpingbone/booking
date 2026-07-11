@@ -276,3 +276,19 @@ test('synced 之後清備註失敗，不該讓整輪同步中斷(資料已經成
   assert.equal(entries[0].status, 'synced');
   assert.equal(entries[1].status, 'clear_cell_status_failed');
 });
+
+test('fetch(): POST /sync 沒帶 weekKey 時，預設抓「這一週」的週一，不是三個月範圍裡最舊的那個(避免用當下真實日期造成 test 不穩定，只驗證格式跟落在合理範圍)', async () => {
+  const env = makeEnv();
+  const request = new Request('https://worker.example/sync', {
+    method: 'POST',
+    headers: { 'X-Internal-Secret': 'test-secret' },
+    body: JSON.stringify({}),
+  });
+  const res = await worker.fetch(request, env, {});
+  const body = await res.json();
+  assert.match(body.weekKey, /^\d{4}-\d{2}-\d{2}$/);
+
+  const today = new Date();
+  const diffDays = Math.abs((new Date(`${body.weekKey}T12:00:00Z`) - today) / (1000 * 60 * 60 * 24));
+  assert.ok(diffDays <= 7, `預設的 weekKey(${body.weekKey}) 應該落在這一週附近，不是三個月範圍裡最舊的那一週`);
+});

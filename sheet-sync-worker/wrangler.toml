@@ -17,8 +17,8 @@ bucket_name = "yongping-sheet-sync" # 用 `wrangler r2 bucket create yongping-sh
 # 不是密鑰、可以直接寫死的設定值
 [vars]
 SUPABASE_PROJECT_REF = "ikzyzkhuireqztbhrtna"
-SYNC_WEEKS_BACK = "0"
-SYNC_WEEKS_AHEAD = "4"
+# 同步範圍(上個月/當月/下個月)是 weekKeys.js 自己算的固定邏輯，不需要
+# 額外設定；原本這裡的 SYNC_WEEKS_BACK / SYNC_WEEKS_AHEAD 已經移除。
 GOOGLE_SHEET_ID = "1AYYi8F3RktDTVJ5sOuHCGua00doCszvdRJ7Fu6XeOr4" # "2026-永平整復預約表"
 
 # 以下是密鑰，不要寫進這個檔案，用 `wrangler secret put <NAME>` 個別設定：

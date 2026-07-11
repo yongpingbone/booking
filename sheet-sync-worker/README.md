@@ -4,7 +4,7 @@
 
 - `src/diff.js` — 比對前後兩份快照，抓出新增/異動/刪除/不變
 - `src/snapshotStore.js` — R2 存快照歷史 + log（原生 R2 binding，不需要 Access Key/Secret）
-- `src/weekKeys.js` — 算出要同步哪幾週（台灣時區正確處理）
+- `src/weekKeys.js` — 算出要同步哪幾週（台灣時區正確處理；範圍固定是上個月/當月/下個月，見檔案內註解）
 - `src/sheetsSerial.js` — Google Sheets 序列日期/時間 ↔ 字串互轉
 - `src/googleAuth.js` — 服務帳號 JSON 簽 JWT 換 access token（純 Web Crypto，Workers 相容；用讀寫 scope，見下方權限說明）
 - `src/sheetsApi.js` — 呼叫 Sheets API v4 讀格子內容+底色，也能寫儲存格備註

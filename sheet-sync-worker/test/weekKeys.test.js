@@ -34,18 +34,44 @@ test('mondayOf: 跨月的週 也要算對(星期一在上個月)', () => {
   assert.equal(mondayOf('2026-08-01'), '2026-07-27');
 });
 
-test('weekKeysToSync: 預設(0 週回顧 + 4 週往後) 回傳 5 個 weekKey，由舊到新', () => {
-  // 用固定時間點測試，2026-07-10 是星期五，屬於 2026-07-06 那週
-  const keys = weekKeysToSync(new Date('2026-07-10T04:00:00Z'));
-  assert.deepEqual(keys, ['2026-07-06', '2026-07-13', '2026-07-20', '2026-07-27', '2026-08-03']);
+test('weekKeysToSync: 涵蓋上個月、當月、下個月三個月完整範圍', () => {
+  // 2026-07-11 是週六，屬於 2026-07-06 那週。上月=6月、當月=7月、下月=8月。
+  const keys = weekKeysToSync(new Date('2026-07-11T12:00:00Z'));
+  assert.deepEqual(keys, [
+    '2026-06-01',
+    '2026-06-08',
+    '2026-06-15',
+    '2026-06-22',
+    '2026-06-29',
+    '2026-07-06',
+    '2026-07-13',
+    '2026-07-20',
+    '2026-07-27',
+    '2026-08-03',
+    '2026-08-10',
+    '2026-08-17',
+    '2026-08-24',
+    '2026-08-31',
+  ]);
 });
 
-test('weekKeysToSync: weeksBack=1 時，第一個 key 是上週一', () => {
-  const keys = weekKeysToSync(new Date('2026-07-10T04:00:00Z'), { weeksBack: 1, weeksAhead: 1 });
-  assert.deepEqual(keys, ['2026-06-29', '2026-07-06', '2026-07-13']);
+test('weekKeysToSync: 1月時「上個月」要正確跨年到去年12月', () => {
+  const keys = weekKeysToSync(new Date('2026-01-05T12:00:00Z'));
+  assert.equal(keys[0], '2025-12-01', '上個月要是去年12月，不是月份數字變成0或負數');
+  assert.ok(keys.includes('2026-01-05'), '要包含當月(1月)的週');
+  assert.ok(keys.some((k) => k.startsWith('2026-02')), '要包含下個月(2月)的週');
 });
 
-test('weekKeysToSync: weeksAhead=0 時只回傳這一週', () => {
-  const keys = weekKeysToSync(new Date('2026-07-10T04:00:00Z'), { weeksBack: 0, weeksAhead: 0 });
-  assert.deepEqual(keys, ['2026-07-06']);
+test('weekKeysToSync: 12月時「下個月」要正確跨年到明年1月', () => {
+  const keys = weekKeysToSync(new Date('2026-12-20T12:00:00Z'));
+  const lastKey = keys[keys.length - 1];
+  assert.ok(lastKey.startsWith('2027-01'), '最後一個 weekKey 要落在明年1月，不是月份數字變成13');
+  assert.ok(keys.some((k) => k.startsWith('2026-11')), '要包含上個月(11月)的週');
+});
+
+test('weekKeysToSync: 結果由舊到新排序、沒有重複', () => {
+  const keys = weekKeysToSync(new Date('2026-07-11T12:00:00Z'));
+  const sorted = [...keys].sort();
+  assert.deepEqual(keys, sorted);
+  assert.equal(new Set(keys).size, keys.length);
 });
