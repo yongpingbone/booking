@@ -4828,21 +4828,17 @@ function MainApp({
       "data-empty": !b ? "1" : "0",
       "data-vac": isVac ? "1" : "0",
       onMouseDown: e => {
-        // Pointer 事件已處理 dragMode；這裡只保留 Shift+drag 給滑鼠
         if (d && !dragMode) onCellMouseDown(d, t, e);
       },
       onMouseEnter: () => {
         if (d && !dragMode) onCellMouseEnter(d, t);
       },
-      onMouseUp: () => {},
-      onPointerDown: e => {},
-      onTouchStart: e => {},
-      onTouchMove: e => {},
-      onTouchEnd: e => {},
       onClick: e => {
         if (isDragging) return;
         if (dragMode) {
-          // 行動裝置已用 touchEnd 處理；滑鼠單擊也已用 mouseUp 處理 → 這裡跳過
+          // 休假模式：單點 = toggle 加選/取消選（toggleVacationCell 本身已經處理好空格加選、
+          // 已休假格切換待移除兩種情況）
+          toggleVacationCell(d, t);
           return;
         }
         if (b) {
