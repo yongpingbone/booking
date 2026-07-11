@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchGridRows, normalizeCell, colorObjectToHex, getSheetIdByTitle, setCellNote, getCellNote, listSheetTabs, scanTabForNotes, _resetSheetIdCacheForTests } from '../src/sheetsApi.js';
+import { fetchGridRows, normalizeCell, colorObjectToHex, getSheetIdByTitle, setCellNote, getCellNote, listSheetTabs, scanTabForNotes, clearMultipleCellNotes, _resetSheetIdCacheForTests } from '../src/sheetsApi.js';
 
 test('colorObjectToHex: 黃色 {r:1,g:1,b:0} 要轉成 #FFFF00(對應實際 Sheet 裡確認過的 FFFFFF00 新客標記，扣掉 alpha)', () => {
   assert.equal(colorObjectToHex({ red: 1, green: 1, blue: 0 }), '#FFFF00');
@@ -314,4 +314,58 @@ test('scanTabForNotes: 完全沒有備註時回傳空陣列', async () => {
   });
   const found = await scanTabForNotes({ GOOGLE_SHEET_ID: 'id' }, { sheetTitle: 'x', range: 'A1:B1', accessToken: 't' }, { fetch: fakeFetch });
   assert.deepEqual(found, []);
+});
+
+test('clearMultipleCellNotes: 好幾格包成一次 batchUpdate 呼叫(只打一次 API，不管幾格)', async () => {
+  _resetSheetIdCacheForTests();
+  let apiCallCount = 0;
+  let capturedRequests;
+  const fakeFetch = async (url, options) => {
+    apiCallCount++;
+    if (url.toString().includes(':batchUpdate')) {
+      capturedRequests = JSON.parse(options.body).requests;
+      return { ok: true, json: async () => ({}) };
+    }
+    return { ok: true, json: async () => ({ sheets: [{ properties: { sheetId: 99, title: '7月-麒' } }] }) };
+  };
+  await clearMultipleCellNotes(
+    { GOOGLE_SHEET_ID: 'id' },
+    {
+      sheetTitle: '7月-麒',
+      cells: [
+        { rowIndex: 5, colIndex: 2 },
+        { rowIndex: 8, colIndex: 3 },
+        { rowIndex: 10, colIndex: 6 },
+      ],
+      accessToken: 't',
+    },
+    { fetch: fakeFetch }
+  );
+  assert.equal(apiCallCount, 2, '一次查 sheetId + 一次 batchUpdate，不是三次個別呼叫');
+  assert.equal(capturedRequests.length, 3);
+  assert.equal(capturedRequests[0].updateCells.range.sheetId, 99);
+  assert.equal(capturedRequests[0].updateCells.range.startRowIndex, 5);
+  assert.equal(capturedRequests[0].updateCells.rows[0].values[0].note, null);
+});
+
+test('clearMultipleCellNotes: 空陣列時完全不打 API', async () => {
+  let apiCallCount = 0;
+  const fakeFetch = async () => {
+    apiCallCount++;
+    return { ok: true, json: async () => ({}) };
+  };
+  await clearMultipleCellNotes({ GOOGLE_SHEET_ID: 'id' }, { sheetTitle: 'x', cells: [], accessToken: 't' }, { fetch: fakeFetch });
+  assert.equal(apiCallCount, 0);
+});
+
+test('clearMultipleCellNotes: 失敗時丟出清楚的錯誤', async () => {
+  _resetSheetIdCacheForTests();
+  const fakeFetch = async (url) => {
+    if (url.toString().includes(':batchUpdate')) return { ok: false, status: 429, text: async () => '額度用完' };
+    return { ok: true, json: async () => ({ sheets: [{ properties: { sheetId: 1, title: 'x' } }] }) };
+  };
+  await assert.rejects(
+    () => clearMultipleCellNotes({ GOOGLE_SHEET_ID: 'id' }, { sheetTitle: 'x', cells: [{ rowIndex: 0, colIndex: 0 }], accessToken: 't' }, { fetch: fakeFetch }),
+    /批次清除「x」備註失敗/
+  );
 });

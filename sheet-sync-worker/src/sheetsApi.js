@@ -260,4 +260,52 @@ async function scanTabForNotes(env, { sheetTitle, range, accessToken }, deps = {
   return found;
 }
 
-export { fetchGridRows, normalizeCell, colorObjectToHex, setCellNote, getSheetIdByTitle, getCellNote, listSheetTabs, scanTabForNotes, _resetSheetIdCacheForTests };
+/**
+ * 一次把同一個分頁裡好幾格的備註都清空，包成一個 batchUpdate 呼叫、一次
+ * API 請求——實測發現：同一分頁裡兩三百格各自呼叫 setCellNote(一格一次
+ * API 請求)，會很快撞到 Sheets API 的寫入頻率限制(HTTP 429)。包成一個
+ * 請求就完全不會有這個問題，不管幾格都算同一次 API 呼叫。
+ * @param {object} env 需要 env.GOOGLE_SHEET_ID
+ * @param {{sheetTitle: string, cells: Array<{rowIndex: number, colIndex: number}>, accessToken: string}} params
+ * @param {object} [deps]
+ * @returns {Promise<void>}
+ */
+async function clearMultipleCellNotes(env, { sheetTitle, cells, accessToken }, deps = {}) {
+  const doFetch = deps.fetch ?? fetch;
+  if (!env.GOOGLE_SHEET_ID) throw new Error('缺少 env.GOOGLE_SHEET_ID');
+  if (cells.length === 0) return;
+
+  const sheetId = await getSheetIdByTitle(env, { sheetTitle, accessToken }, { fetch: doFetch });
+
+  const requests = cells.map(({ rowIndex, colIndex }) => ({
+    updateCells: {
+      range: { sheetId, startRowIndex: rowIndex, endRowIndex: rowIndex + 1, startColumnIndex: colIndex, endColumnIndex: colIndex + 1 },
+      rows: [{ values: [{ note: null }] }],
+      fields: 'note',
+    },
+  }));
+
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${env.GOOGLE_SHEET_ID}:batchUpdate`;
+  const res = await doFetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ requests }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Sheets API 批次清除「${sheetTitle}」備註失敗 (HTTP ${res.status}): ${text}`);
+  }
+}
+
+export {
+  fetchGridRows,
+  normalizeCell,
+  colorObjectToHex,
+  setCellNote,
+  getSheetIdByTitle,
+  getCellNote,
+  listSheetTabs,
+  scanTabForNotes,
+  clearMultipleCellNotes,
+  _resetSheetIdCacheForTests,
+};

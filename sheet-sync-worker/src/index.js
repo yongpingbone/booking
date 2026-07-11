@@ -25,7 +25,7 @@ import { saveBooking } from './supabaseClient.js';
 import { reconcileMonth } from './reconcile.js';
 import { weekKeysToSync, mondayOf, taipeiDateString } from './weekKeys.js';
 import { getAccessToken } from './googleAuth.js';
-import { getCellNote, listSheetTabs, setCellNote, scanTabForNotes } from './sheetsApi.js';
+import { getCellNote, listSheetTabs, setCellNote, scanTabForNotes, clearMultipleCellNotes } from './sheetsApi.js';
 
 /**
  * 實際的診斷/寫入邏輯，接受已經抓好的記錄陣列，不自己去打 Sheets API。
@@ -425,18 +425,29 @@ export default {
               found.push({ sheetTitle, error: String(err?.message ?? err) });
               continue;
             }
-            for (const n of notesInTab) {
-              const entry = { sheetTitle, rowIndex: n.rowIndex, colIndex: n.colIndex, note: n.note };
-              if (!dryRun) {
-                try {
-                  await setCellNote(env, { sheetTitle, rowIndex: n.rowIndex, colIndex: n.colIndex, note: null, accessToken });
-                  entry.cleared = true;
-                } catch (err) {
-                  entry.cleared = false;
-                  entry.clearError = String(err?.message ?? err);
+            for (const n of notesInTab) found.push({ sheetTitle, rowIndex: n.rowIndex, colIndex: n.colIndex, note: n.note });
+
+            if (!dryRun && notesInTab.length > 0) {
+              // 同一分頁裡不管找到幾格都包成一次 batchUpdate 呼叫——實測
+              // 發現一格一格個別呼叫 setCellNote，兩三百格很快就撞到
+              // Sheets API 的寫入頻率限制(HTTP 429)。包成一次呼叫不管
+              // 幾格都算同一次 API 請求，不會有這個問題。
+              try {
+                await clearMultipleCellNotes(env, { sheetTitle, cells: notesInTab, accessToken });
+                for (const n of notesInTab) {
+                  const entry = found.find((f) => f.sheetTitle === sheetTitle && f.rowIndex === n.rowIndex && f.colIndex === n.colIndex);
+                  if (entry) entry.cleared = true;
+                }
+              } catch (err) {
+                const clearError = String(err?.message ?? err);
+                for (const n of notesInTab) {
+                  const entry = found.find((f) => f.sheetTitle === sheetTitle && f.rowIndex === n.rowIndex && f.colIndex === n.colIndex);
+                  if (entry) {
+                    entry.cleared = false;
+                    entry.clearError = clearError;
+                  }
                 }
               }
-              found.push(entry);
             }
           }
         }
