@@ -18,6 +18,7 @@ on:
           - sweep-notes-execute
           - clean-garbage-dryrun
           - clean-garbage-execute
+          - cleanup-r2
           - custom-post
       weekKey:
         description: '[sync 用] 週一日期(YYYY-MM-DD)，留空 = 當週'
@@ -112,6 +113,9 @@ jobs:
           elif [ "${{ inputs.endpoint }}" = "clean-garbage-execute" ]; then
             URL="https://yongping-sheet-sync.yihanhsu123.workers.dev/debug/clean-garbage-bookings"
             BODY='{"dryRun": false}' 
+          elif [ "${{ inputs.endpoint }}" = "cleanup-r2" ]; then
+            URL="https://yongping-sheet-sync.yihanhsu123.workers.dev/debug/cleanup-r2"
+            BODY='{}'
           elif [ "${{ inputs.endpoint }}" = "custom-post" ]; then
             URL="https://yongping-sheet-sync.yihanhsu123.workers.dev${{ inputs.customPath }}"
             BODY='${{ inputs.customBody }}'
