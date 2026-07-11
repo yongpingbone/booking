@@ -411,7 +411,7 @@ export default {
       }
       try {
         const accessToken = await getAccessToken(env);
-        const rows = await fetchGridRows(env, { sheetTitle, range, accessToken });
+        const { rows } = await fetchGridRows(env, { sheetTitle, range, accessToken });
         const colorCounts = {};
         const yellowCells = [];
         rows.forEach((row, rowIndex) => {
