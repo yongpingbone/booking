@@ -1229,11 +1229,19 @@ function LoginScreen({
   const [lineChecking, setLineChecking] = useState(true); // 剛進畫面先嘗試LINE自動登入，這段期間顯示載入中
   const [lineAvailable, setLineAvailable] = useState(false); // liff初始化成功、且環境支援，才顯示LINE登入按鈕
   const [lineBusy, setLineBusy] = useState(false);
+  // 鎖：防止「頁面載入時的自動登入」跟「手動點擊LINE登入按鈕」幾乎同時
+  // 觸發loginViaLine——這是實際發生過的bug根因：兩個呼叫各自向後端要了
+  // 一組新的一次性登入憑證，其中一組驗證成功後，另一組就變成「已失效」，
+  // 導致「Email link is invalid or has expired」錯誤。用ref鎖同一時間
+  // 只允許一個loginViaLine真正執行。
+  const lineLoginLockRef = useRef(false);
 
   // 用LINE的idToken向line-master-login這支function換取一次性登入憑證，
   // 換到後用verifyOtp完成真正的Supabase session登入——這條路徑完全不需要
   // 密碼，跟帳密登入是兩條獨立的路，互不影響
   const loginViaLine = async () => {
+    if (lineLoginLockRef.current) return; // 已經有一個在執行中，直接擋掉
+    lineLoginLockRef.current = true;
     setLineBusy(true);
     setError("");
     try {
@@ -1281,6 +1289,8 @@ function LoginScreen({
     } catch (e) {
       setLineBusy(false);
       setError("LINE 登入發生例外錯誤：" + String(e?.message || e));
+    } finally {
+      lineLoginLockRef.current = false;
     }
   };
 
