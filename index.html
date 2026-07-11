@@ -4169,6 +4169,13 @@ function MainApp({
         date: "",
         time: ""
       });
+      if (b.customer_phone) {
+        await sb.rpc("upsert_customer_visit", {
+          p_phone: b.customer_phone,
+          p_name: b.customer_name,
+          p_visit_date: getTaipeiDateStr()
+        });
+      }
       msg("複製成功！");
       loadBk();
     } else msg("複製失敗", true);
@@ -4213,6 +4220,13 @@ function MainApp({
         date: targetDateStr,
         start_time: targetTimeStr + ":00"
       });
+      if (clipBoard.customer_phone) {
+        await sb.rpc("upsert_customer_visit", {
+          p_phone: clipBoard.customer_phone,
+          p_name: clipBoard.customer_name,
+          p_visit_date: getTaipeiDateStr()
+        });
+      }
       msg(`已貼上「${clipBoard.customer_name}」✓`);
       loadBk();
     } else msg("貼上失敗", true);
@@ -8079,6 +8093,13 @@ function MainApp({
             date: b.date,
             start_time: b.start_time
           });
+          if (b.customer_phone) {
+            await sb.rpc("upsert_customer_visit", {
+              p_phone: b.customer_phone,
+              p_name: b.customer_name,
+              p_visit_date: getTaipeiDateStr()
+            });
+          }
         }
         msg(`✅ 成功建立 ${ins.length} 筆${skipDates.size > 0 ? `（跳過 ${skipDates.size} 筆）` : ""}`);
         setExtendRecur(null);
@@ -12121,6 +12142,13 @@ function OverviewMonth({
             date: b.date,
             start_time: b.start_time
           });
+          if (b.customer_phone) {
+            await sb.rpc("upsert_customer_visit", {
+              p_phone: b.customer_phone,
+              p_name: b.customer_name,
+              p_visit_date: getTaipeiDateStr()
+            });
+          }
         }
         msg(`✅ 成功建立 ${ins.length} 筆${skipDates.size > 0 ? `（跳過 ${skipDates.size} 筆）` : ""}`);
         setExtendRecur(null);
