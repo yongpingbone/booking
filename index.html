@@ -15,6 +15,7 @@
 <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <style>
 :root{
   --vv-top:0px; --vv-left:0px;
@@ -1211,6 +1212,12 @@ function MonthlyOpenReminder({ authMaster, msg }) {
   ));
 }
 
+// LIFF App ID——這是給「師傅登入」專用的LIFF App，需要在LINE Developers Console
+// 同一個Channel(2009934614)底下新增一個Endpoint指向本網站的LIFF App才會拿到。
+// 目前是占位值，還沒有真正的LIFF App，liff.init會失敗，但因為整段都包在
+// try-catch裡且失敗時不影響原本帳密登入，先部署也不會壞掉任何東西。
+const MASTER_LOGIN_LIFF_ID = "TODO_FILL_IN_LIFF_ID";
+
 function LoginScreen({
   onLogin
 }) {
@@ -1219,6 +1226,82 @@ function LoginScreen({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showPw, setShowPw] = useState(false);
+  const [lineChecking, setLineChecking] = useState(true); // 剛進畫面先嘗試LINE自動登入，這段期間顯示載入中
+  const [lineAvailable, setLineAvailable] = useState(false); // liff初始化成功、且環境支援，才顯示LINE登入按鈕
+  const [lineBusy, setLineBusy] = useState(false);
+
+  // 用LINE的idToken向line-master-login這支function換取一次性登入憑證，
+  // 換到後用verifyOtp完成真正的Supabase session登入——這條路徑完全不需要
+  // 密碼，跟帳密登入是兩條獨立的路，互不影響
+  const loginViaLine = async () => {
+    setLineBusy(true);
+    setError("");
+    try {
+      const idToken = liff.getIDToken();
+      if (!idToken) {
+        setLineBusy(false);
+        return;
+      }
+      const res = await fetch("https://ikzyzkhuireqztbhrtna.supabase.co/functions/v1/line-master-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken })
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!j.success) {
+        // not_bound / account_inactive 這些情況安靜退回帳密登入，不要用錯誤訊息
+        // 嚇到使用者——這是預期內、正常會發生的情況(例如師傅還沒被綁定LINE)
+        setLineBusy(false);
+        return;
+      }
+      const { data: otpData, error: otpErr } = await sb.auth.verifyOtp({
+        email: j.email,
+        token: j.hashedToken,
+        type: "magiclink"
+      });
+      if (otpErr || !otpData?.session) {
+        setLineBusy(false);
+        return;
+      }
+      const { data: masterData, error: dbErr } = await sb.from("masters").select("*").eq("username", j.email.replace("@yongping.com", "")).eq("is_active", true).single();
+      if (dbErr || !masterData) {
+        setLineBusy(false);
+        return;
+      }
+      onLogin(masterData);
+    } catch (e) {
+      setLineBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (typeof liff === "undefined" || MASTER_LOGIN_LIFF_ID.startsWith("TODO_")) {
+          // LIFF SDK沒載入成功、或LIFF App還沒設定好，直接跳過，
+          // 完全不影響帳密登入的正常使用
+          if (!cancelled) setLineChecking(false);
+          return;
+        }
+        await liff.init({ liffId: MASTER_LOGIN_LIFF_ID });
+        if (cancelled) return;
+        setLineAvailable(true);
+        if (liff.isLoggedIn()) {
+          await loginViaLine();
+        }
+      } catch (e) {
+        // liff初始化失敗(常見於LIFF App設定錯誤、或不在支援的環境)，
+        // 靜默失敗即可，使用者完全看不出差異，照樣用帳密登入
+        console.warn("[LIFF] 初始化失敗", e);
+      } finally {
+        if (!cancelled) setLineChecking(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const doLogin = async () => {
     if (!username.trim() || !password.trim()) return;
     setLoading(true);
@@ -1289,7 +1372,28 @@ function LoginScreen({
       color: "#666",
       marginTop: 6
     }
-  }, "預約管理系統")), /*#__PURE__*/React.createElement("div", {
+  }, "預約管理系統")), lineChecking && /*#__PURE__*/React.createElement("div", {
+    style: { textAlign: "center", fontSize: 12, color: "#8b949e", marginBottom: 12 }
+  }, "檢查 LINE 登入狀態中..."), lineAvailable && !lineChecking && /*#__PURE__*/React.createElement("div", {
+    style: { marginBottom: 20 }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => liff.isLoggedIn() ? loginViaLine() : liff.login(),
+    disabled: lineBusy,
+    style: {
+      width: "100%",
+      padding: "13px",
+      borderRadius: 10,
+      background: "#06c755",
+      border: "none",
+      color: "#fff",
+      fontSize: 15,
+      fontWeight: 700,
+      cursor: lineBusy ? "wait" : "pointer",
+      marginBottom: 14
+    }
+  }, lineBusy ? "登入中..." : "💬 使用 LINE 登入"), /*#__PURE__*/React.createElement("div", {
+    style: { display: "flex", alignItems: "center", gap: 10, color: "#444", fontSize: 11 }
+  }, /*#__PURE__*/React.createElement("div", { style: { flex: 1, height: 1, background: "#30363d" } }), "或使用帳號密碼", /*#__PURE__*/React.createElement("div", { style: { flex: 1, height: 1, background: "#30363d" } }))), /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#161b22",
       border: "1px solid #30363d",
