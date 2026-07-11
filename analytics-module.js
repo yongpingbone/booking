@@ -248,7 +248,7 @@ window.AnalyticsModule = function AnalyticsModule({
   };
   return /*#__PURE__*/React.createElement("div", {
     style: {
-      paddingBottom: 60,
+      paddingBottom: 140,
       flex: 1,
       overflow: "auto"
     }
