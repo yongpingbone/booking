@@ -34,6 +34,13 @@ jobs:
       - name: Install Bubblewrap
         run: npm install -g @bubblewrap/cli
 
+      - name: 預先寫好 Bubblewrap 設定檔(build 這步也需要，不是只有 init 需要)
+        run: |
+          SDK_PATH="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          mkdir -p ~/.bubblewrap
+          echo "{\"jdkPath\": \"$JAVA_HOME\", \"androidSdkPath\": \"$SDK_PATH\"}" > ~/.bubblewrap/config.json
+          cat ~/.bubblewrap/config.json
+
       - name: 產生 Android 專案 + 簽章金鑰(完全不透過互動精靈)
         # twa-manifest.json 是預先產生好、存在 apk-project/ 底下的檔案，
         # 不是這裡才產生的——用 @bubblewrap/core 的底層 API 直接呼叫，
