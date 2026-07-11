@@ -6013,6 +6013,13 @@ function MainApp({
     ref: scrollContainerRef,
     onTouchStart: e => {
       if (e.touches.length === 2) {
+        // Samsung Internet瀏覽器有個已知多年未修的bug：即使viewport設了
+        // user-scalable=no，雙指手勢還是可能被瀏覽器判定為「原生頁面縮放」，
+        // 一旦觸發，畫面上所有position:sticky元素都會直接失效(這是瀏覽器
+        // 本身的bug，Samsung官方論壇上追蹤超過4年還沒修好)。這裡在touchstart
+        // 當下就立即preventDefault，比原本只在touchmove才擋，更早一步告訴
+        // 瀏覽器這個手勢由我們自己的JS處理，盡量降低被誤判成原生縮放的機率。
+        e.preventDefault();
         pinchStartRef.current = { dist: pinchDist(e.touches), cw: Number(cw), rh: Number(rh) };
         clearTimeout(longPressTimer.current);
         touchStartPos.current = null;
@@ -10111,6 +10118,10 @@ function OverviewMonth({
     ref: ovScrollRef,
     onTouchStart: e => {
       if (e.touches.length === 2) {
+        // 同MainApp那邊的修正：提早在touchstart就preventDefault，緩解
+        // Samsung Internet瀏覽器忽略user-scalable=no、誤判成原生縮放
+        // 進而讓sticky失效的已知瀏覽器bug。
+        e.preventDefault();
         ovPinchStartRef.current = { dist: ovPinchDist(e.touches), cw: Number(ocw), rh: Number(orh) };
         clearTimeout(ovLongPressTimer.current);
         ovTouchStartPos.current = null;
