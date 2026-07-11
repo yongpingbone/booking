@@ -414,6 +414,7 @@ export default {
         const { rows } = await fetchGridRows(env, { sheetTitle, range, accessToken });
         const colorCounts = {};
         const yellowCells = [];
+        const redCells = [];
         rows.forEach((row, rowIndex) => {
           row.forEach((cell, colIndex) => {
             const key = cell.colorHex ?? 'null(無底色)';
@@ -421,9 +422,23 @@ export default {
             if (cell.colorHex === '#FFFF00') {
               yellowCells.push({ rowIndex, colIndex, value: cell.value });
             }
+            if (cell.colorHex === '#FF0000') {
+              redCells.push({ rowIndex, colIndex, value: cell.value });
+            }
           });
         });
-        return Response.json({ sheetTitle, range, colorCounts, yellowCellCount: yellowCells.length, yellowCells: yellowCells.slice(0, 30) }, { status: 200 });
+        return Response.json(
+          {
+            sheetTitle,
+            range,
+            colorCounts,
+            yellowCellCount: yellowCells.length,
+            yellowCells: yellowCells.slice(0, 30),
+            redCellCount: redCells.length,
+            redCells: redCells.slice(0, 30),
+          },
+          { status: 200 }
+        );
       } catch (err) {
         return Response.json({ error: String(err?.stack ?? err?.message ?? err) }, { status: 500 });
       }
