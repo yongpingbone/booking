@@ -40,6 +40,9 @@ async function runSyncForWeekWithRecords(env, weekKey, currentRecords, deps = {}
     validateBookingRecord: doValidateBookingRecord = validateBookingRecord,
     markCellStatus: doMarkCellStatus = markCellStatus,
     saveBooking: doSaveBooking = saveBooking,
+    forceNoteRecheck = false, // 一次性強制重新檢查所有 synced 記錄的備註狀態，
+    // 用來處理 noteCleared 這個追蹤欄位上線之前就已經卡住的舊資料(這批舊
+    // 快照裡根本沒有 noteCleared 這個欄位，正常的追蹤邏輯偵測不到)。
   } = deps;
 
   const runId = crypto.randomUUID();
@@ -123,7 +126,7 @@ async function runSyncForWeekWithRecords(env, weekKey, currentRecords, deps = {}
     );
     const toProcessKeys = new Set(toProcess.map((r) => r.identityKey));
     const noteRetryOnly = diffResult.unchanged.filter(
-      (r) => previousNoteFailedKeys.has(r.identityKey) && !toProcessKeys.has(r.identityKey)
+      (r) => !toProcessKeys.has(r.identityKey) && (forceNoteRecheck || previousNoteFailedKeys.has(r.identityKey))
     );
     log.diffSummary.noteRetried = noteRetryOnly.length;
 
@@ -245,9 +248,10 @@ async function runSyncForWeek(env, weekKey, deps = {}) {
  * @param {object} env
  * @param {string} weekKey
  * @param {Map<string, Array<object>>} monthCache
+ * @param {boolean} [forceNoteRecheck]
  * @returns {Promise<object>}
  */
-async function safelyFetchAndSyncWeek(env, weekKey, monthCache) {
+async function safelyFetchAndSyncWeek(env, weekKey, monthCache, forceNoteRecheck = false) {
   let currentRecords;
   try {
     currentRecords = await fetchAndParseWeekCached(env, weekKey, monthCache);
@@ -268,7 +272,7 @@ async function safelyFetchAndSyncWeek(env, weekKey, monthCache) {
     });
     return log;
   }
-  return runSyncForWeekWithRecords(env, weekKey, currentRecords);
+  return runSyncForWeekWithRecords(env, weekKey, currentRecords, { forceNoteRecheck });
 }
 
 export default {
@@ -371,11 +375,13 @@ export default {
       // 一樣的邏輯(weekKeysToSync())算出目前的上/當/下三個月範圍。用來立即
       // 補跑目前完整範圍的資料，之後排程會自動接手，不用再手動觸發。
       // weekKeys 陣列 —— 呼叫端自己指定要跑哪幾個 weekKey(補跑特定範圍用)。
+      // forceNoteRecheck:true —— 一次性強制重新檢查所有已同步記錄的備註
+      // 狀態，用來處理 noteCleared 追蹤機制上線前就已經卡住的舊資料。
       const weekKeys = body.scope === 'current' ? weekKeysToSync(new Date()) : body.weekKeys;
       const monthCache = new Map();
       const logs = [];
       for (const weekKey of weekKeys) {
-        logs.push(await safelyFetchAndSyncWeek(env, weekKey, monthCache));
+        logs.push(await safelyFetchAndSyncWeek(env, weekKey, monthCache, body.forceNoteRecheck === true));
       }
       const allOk = logs.every((l) => l.ok);
       return Response.json({ weekKeys, logs }, { status: allOk ? 200 : 500 });

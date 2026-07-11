@@ -30,6 +30,11 @@ on:
         required: false
         default: true
         type: boolean
+      forceNoteRecheck:
+        description: '[sync-full-scope 用] 勾選 = 強制重新檢查所有已同步記錄的備註狀態(一次性修復用)'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -64,7 +69,7 @@ jobs:
             # 立即補跑目前完整的上/當/下三個月範圍，內部自己算 weekKeys，
             # 不用在這裡列出來。跟排程用的是同一套範圍邏輯。
             URL="https://yongping-sheet-sync.yihanhsu123.workers.dev/sync"
-            BODY='{"scope": "current"}'
+            BODY='{"scope": "current", "forceNoteRecheck": ${{ inputs.forceNoteRecheck }}}'
           elif [ "${{ inputs.endpoint }}" = "debug-invalid-records" ]; then
             # 診斷用，列出目前還卡在失敗狀態的記錄跟原因，不用改資料。
             URL="https://yongping-sheet-sync.yihanhsu123.workers.dev/debug/invalid-records"

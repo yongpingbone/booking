@@ -520,3 +520,29 @@ test('清備註持續失敗：每一輪都會繼續重試，不會放棄', async
 
   assert.equal(markCalls, 3, '三輪都該嘗試清備註，即使一直失敗');
 });
+
+test('forceNoteRecheck:true 時，即使沒有記錄追蹤到 noteCleared:false，也會強制重新檢查所有已同步記錄的備註(處理追蹤機制上線前就卡住的舊資料)', async () => {
+  const env = makeEnv();
+  const fakeRecords = [{ identityKey: 'x', contentHash: 'same-hash' }];
+  let markCalls = 0;
+  const deps = {
+    validateBookingRecord: async () => ({ valid: true, row: {}, existingId: null }),
+    saveBooking: async () => {},
+    markCellStatus: async () => {
+      markCalls++;
+    },
+  };
+
+  // 第一輪：正常同步成功(noteCleared 會被記成 true，沒有任何異常)
+  await runSyncForWeekWithRecords(env, '2026-07-06', fakeRecords, deps);
+  assert.equal(markCalls, 1);
+
+  // 第二輪：正常情況下(沒有追蹤到失敗)不會再重試
+  await runSyncForWeekWithRecords(env, '2026-07-06', fakeRecords, deps);
+  assert.equal(markCalls, 1, '沒有 forceNoteRecheck 時，正常成功的記錄不該被重新檢查');
+
+  // 第三輪：帶 forceNoteRecheck，即使沒有追蹤到任何失敗，也要強制重新檢查一次
+  const log3 = await runSyncForWeekWithRecords(env, '2026-07-06', fakeRecords, { ...deps, forceNoteRecheck: true });
+  assert.equal(markCalls, 2, 'forceNoteRecheck 應該強制重新呼叫一次 markCellStatus');
+  assert.equal(log3.diffSummary.noteRetried, 1);
+});
