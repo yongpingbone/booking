@@ -14,6 +14,8 @@ on:
           - reconcile-month
           - debug-invalid-records
           - debug-inspect-cell
+          - sweep-notes-dryrun
+          - sweep-notes-execute
       weekKey:
         description: '[sync 用] 週一日期(YYYY-MM-DD)，留空 = 當週'
         required: false
@@ -83,6 +85,15 @@ jobs:
             URL="https://yongping-sheet-sync.yihanhsu123.workers.dev/debug/inspect-cell?date=2026-07-09&startTime=14:00&sheetMasterLabel=%E9%BA%92&clear=true"
             METHOD="GET"
             BODY=""
+          elif [ "${{ inputs.endpoint }}" = "sweep-notes-dryrun" ]; then
+            # 全面掃描三個月範圍內所有分頁，找出所有掛著備註的格子(不管有沒有
+            # 對應到追蹤中的記錄)，只回報不清除。
+            URL="https://yongping-sheet-sync.yihanhsu123.workers.dev/debug/sweep-notes"
+            BODY='{"dryRun": true}'
+          elif [ "${{ inputs.endpoint }}" = "sweep-notes-execute" ]; then
+            # 跟上面一樣的範圍，但真的執行清除。
+            URL="https://yongping-sheet-sync.yihanhsu123.workers.dev/debug/sweep-notes"
+            BODY='{"dryRun": false}' 
           else
             URL="https://yongping-sheet-sync.yihanhsu123.workers.dev/reconcile-month"
             BODY='{"year": ${{ inputs.year }}, "month": ${{ inputs.month }}, "dryRun": ${{ inputs.dryRun }}}'
