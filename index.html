@@ -113,10 +113,22 @@ const CONFIRM_WINDOW_MS = 2 * 60 * 60 * 1000;
 
 // 推播 LINE 給客人（透過 Edge Function，token 由後端保管）
 async function pushLineToCustomer(userId, text) {
-  if (!userId || String(userId).startsWith("__")) return false;
+  if (!userId || String(userId).startsWith("__")) return { ok: false, reason: "no_line_binding" };
   try {
-    const { data: { session } } = await sb.auth.getSession();
-    if (!session?.access_token) return false;
+    let { data: { session } } = await sb.auth.getSession();
+    if (!session?.access_token) {
+      // session過期不是罕見狀況——師傅端瀏覽器開著沒操作一段時間就會發生。
+      // 之前這裡一偵測到空token就直接放棄，導致「確認/核准取消」這些動作
+      // 資料庫都成功寫入，但通知客人這一步完全靜默失敗，師傅完全不會發現，
+      // 客人也完全不知道自己的預約狀態已經變了。這裡先主動刷新一次session
+      // 再重試，大部分情況都能救回來，不用等使用者自己重新整理頁面。
+      const { data: refreshed } = await sb.auth.refreshSession();
+      session = refreshed?.session;
+    }
+    if (!session?.access_token) {
+      console.error("[推播客人] session無法取得，通知未送出");
+      return { ok: false, reason: "no_session" };
+    }
     const r = await fetch("https://ikzyzkhuireqztbhrtna.supabase.co/functions/v1/notify-line-push", {
       method: "POST",
       headers: {
@@ -126,10 +138,14 @@ async function pushLineToCustomer(userId, text) {
       body: JSON.stringify({ customerLineId: userId, messageText: text })
     });
     const j = await r.json().catch(() => ({}));
-    return !!j.success;
+    if (!j.success) {
+      console.error("[推播客人] 失敗:", j.error);
+      return { ok: false, reason: j.error || "unknown" };
+    }
+    return { ok: true };
   } catch (e) {
     console.error("推播失敗", e);
-    return false;
+    return { ok: false, reason: String(e?.message || e) };
   }
 }
 
@@ -1700,7 +1716,10 @@ function PendingBookings({
     const _deadlineMins = Math.max(1, Math.round(_deadlineMs / 60000));
     const _deadlineLabel = _deadlineMins >= 60 ? `${Math.floor(_deadlineMins / 60)} 小時${_deadlineMins % 60 ? ' ' + (_deadlineMins % 60) + ' 分' : ''}` : `${_deadlineMins} 分鐘`;
     const _confirmMsg = `📅 預約時段確認\n師傅：${_mname}\n時間：${_pd} ${_pt}\n\n請於 ${_deadlineLabel}內點下方連結完成確認，逾時時段將自動釋出：\n${LIFF_CONFIRM_BASE}${group[0].id}`;
-    if (lineUid) pushLineToCustomer(lineUid, _confirmMsg);
+    if (lineUid) {
+      const pushResult = await pushLineToCustomer(lineUid, _confirmMsg);
+      if (!pushResult.ok) alert(`⚠️ 資料已確認，但客人的 LINE 通知沒有送出（原因：${pushResult.reason}）。請自行用電話或 LINE 告知客人時段跟確認連結，或重新整理頁面後再試一次。`);
+    }
     const idsInGroup = new Set(group.map(x => x.id));
     setItems(p => p.filter(x => !idsInGroup.has(x.id)));
     setConfirmDialog(null);
@@ -1739,7 +1758,8 @@ function PendingBookings({
           const mname = MASTER_IDS[first.master_id] || '師傅';
           const timeLabel = first.date ? `${first.date} ${first.start_time ? first.start_time.slice(0, 5) : ''}` : '';
           const msg = `很抱歉，您申請的預約${timeLabel ? `（${timeLabel}）` : ''}目前無法受理\n師傅：${mname}\n\n如有需要請重新預約，或致電 02-8285-4865 了解詳情。`;
-          pushLineToCustomer(lineUid, msg);
+          const pushResult = await pushLineToCustomer(lineUid, msg);
+          if (!pushResult.ok) alert(`⚠️ 拒絕預約已處理，但客人的 LINE 通知沒有送出（原因：${pushResult.reason}）。請自行用電話或 LINE 告知客人這筆申請無法受理。`);
         }
       } catch (e) {}
     }
@@ -1763,7 +1783,8 @@ function PendingBookings({
         if (lineUid) {
           const timeLabel = item.date ? `${item.date} ${item.start_time ? item.start_time.slice(0, 5) : ''}` : '';
           const msg = `✅ 取消申請已核准\n${timeLabel ? `日期：${timeLabel}\n` : ''}姓名：${item.customer_name || ''}\n\n這個時段已經釋出，如需重新預約歡迎再透過 LINE 預約。`;
-          pushLineToCustomer(lineUid, msg);
+          const pushResult = await pushLineToCustomer(lineUid, msg);
+          if (!pushResult.ok) alert(`⚠️ 同意取消已處理，但客人的 LINE 通知沒有送出（原因：${pushResult.reason}）。時段已經釋出，但客人可能不知道，請自行用電話或 LINE 告知。`);
         }
       } catch (e) {}
     }
@@ -1787,7 +1808,8 @@ function PendingBookings({
         if (lineUid) {
           const timeLabel = item.date ? `${item.date} ${item.start_time ? item.start_time.slice(0, 5) : ''}` : '';
           const msg = `❗ 取消申請未核准\n${timeLabel ? `日期：${timeLabel}\n` : ''}姓名：${item.customer_name || ''}\n\n這筆預約目前維持「已確認」狀態，如有疑問請透過 LINE 聯繫我們。`;
-          pushLineToCustomer(lineUid, msg);
+          const pushResult = await pushLineToCustomer(lineUid, msg);
+          if (!pushResult.ok) alert(`⚠️ 已處理，但客人的 LINE 通知沒有送出（原因：${pushResult.reason}）。這筆預約維持已確認狀態，請自行用電話或 LINE 告知客人。`);
         }
       } catch (e) {}
     }
@@ -1810,7 +1832,8 @@ function PendingBookings({
         if (lineUid) {
           const timeLabel = item.date ? `${item.date} ${item.start_time ? item.start_time.slice(0, 5) : ''}` : '';
           const msg = `❗ 改期申請未核准\n${timeLabel ? `原本時段：${timeLabel}\n` : ''}姓名：${item.customer_name || ''}\n\n這筆預約維持原本的時段，如有疑問請透過 LINE 聯繫我們。`;
-          pushLineToCustomer(lineUid, msg);
+          const pushResult = await pushLineToCustomer(lineUid, msg);
+          if (!pushResult.ok) alert(`⚠️ 已處理，但客人的 LINE 通知沒有送出（原因：${pushResult.reason}）。改期申請未核准，請自行用電話或 LINE 告知客人。`);
         }
       } catch (e) {}
     }
@@ -4142,7 +4165,8 @@ function MainApp({
             const lineUid = freshBinding?.line_user_id || null;
             if (lineUid) {
               const cancelMsg = `❌ 您的預約已被取消\n日期：${snap.date || ""} ${snap.start_time ? snap.start_time.slice(0, 5) : ""}\n姓名：${snap.customer_name || ""}\n\n如有疑問請致電 02-8285-4865，或透過 LINE 重新預約。`;
-              pushLineToCustomer(lineUid, cancelMsg);
+              const pushResult = await pushLineToCustomer(lineUid, cancelMsg);
+              if (!pushResult.ok) alert(`⚠️ 刪除已處理，但客人的 LINE 通知沒有送出（原因：${pushResult.reason}）。請自行用電話或 LINE 告知客人這筆預約已被取消。`);
             }
           } catch (e) {}
         }
@@ -8966,7 +8990,8 @@ function OverviewMonth({
             const lineUid = freshBinding?.line_user_id || null;
             if (lineUid) {
               const cancelMsg = `❌ 您的預約已被取消\n日期：${snap.date || ""} ${snap.start_time ? snap.start_time.slice(0, 5) : ""}\n姓名：${snap.customer_name || ""}\n\n如有疑問請致電 02-8285-4865，或透過 LINE 重新預約。`;
-              pushLineToCustomer(lineUid, cancelMsg);
+              const pushResult = await pushLineToCustomer(lineUid, cancelMsg);
+              if (!pushResult.ok) alert(`⚠️ 刪除已處理，但客人的 LINE 通知沒有送出（原因：${pushResult.reason}）。請自行用電話或 LINE 告知客人這筆預約已被取消。`);
             }
           } catch (e) {}
         }
