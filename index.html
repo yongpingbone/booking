@@ -2909,7 +2909,13 @@ function AvailabilityModule({
     // which: 'this' 這個月剩餘天數 / 'next' 下個月整月
     const base = which === "next" ? new Date(ym.y, ym.m + 1, 1) : new Date();
     const y = base.getFullYear(), m = base.getMonth();
-    const first = which === "next" ? new Date(y, m, 1) : new Date();
+    // 修正：first以前「this」情境直接用 new Date()，帶著現在的時分秒；但 last 是
+    // new Date(y, m+1, 0) 落在月底那天的午夜00:00。迴圈每次+1天都保留原本的時分秒，
+    // 只要現在不是剛好00:00(幾乎必然)，跑到月底那天時 d 的時分秒會晚於 last 的00:00，
+    // d <= last 提前判定為false，最後一天就這樣被跳過(這就是「一鍵開放本月漏掉31號」
+    // 的根因)。這裡用 base.getDate() 重新建構一個午夜的日期，把時分秒歸零，
+    // 跟 last 統一基準才會正確比較到最後一天。
+    const first = which === "next" ? new Date(y, m, 1) : new Date(y, m, base.getDate());
     const last = new Date(y, m + 1, 0);
     const dates = [];
     for (let d = new Date(first); d <= last; d.setDate(d.getDate() + 1)) {
