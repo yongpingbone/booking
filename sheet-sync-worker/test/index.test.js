@@ -592,3 +592,14 @@ test('fetch(): POST /debug/sweep-notes 沒帶 dryRun 時預設是安全的(不�
   const body = await res.json();
   assert.ok(body.error);
 });
+
+test('fetch(): POST /debug/clean-garbage-bookings 也要驗證 X-Internal-Secret', async () => {
+  const env = makeEnv();
+  const request = new Request('https://worker.example/debug/clean-garbage-bookings', {
+    method: 'POST',
+    headers: { 'X-Internal-Secret': 'wrong' },
+    body: JSON.stringify({}),
+  });
+  const res = await worker.fetch(request, env, {});
+  assert.equal(res.status, 401);
+});

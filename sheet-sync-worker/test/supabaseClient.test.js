@@ -143,3 +143,33 @@ test('cancelBooking: 失敗時丟出清楚的錯誤', async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test('findGarbageBookings: 組出正確的查詢條件(customer_name in 已知公式錯誤清單、排除已取消的)', async () => {
+  const env = makeEnv();
+  let capturedUrl;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    capturedUrl = url.toString();
+    return { ok: true, json: async () => [] };
+  };
+  try {
+    const { findGarbageBookings } = await import('../src/supabaseClient.js');
+    await findGarbageBookings(env);
+    assert.ok(decodeURIComponent(capturedUrl).includes('#REF!'));
+    assert.ok(capturedUrl.includes('status=not.in'));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('findGarbageBookings: 失敗時丟出清楚的錯誤', async () => {
+  const env = makeEnv();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: false, status: 500, text: async () => '掛了' });
+  try {
+    const { findGarbageBookings } = await import('../src/supabaseClient.js');
+    await assert.rejects(() => findGarbageBookings(env), /查詢壞資料失敗/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

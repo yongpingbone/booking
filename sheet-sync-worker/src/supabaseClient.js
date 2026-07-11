@@ -181,3 +181,36 @@ async function cancelBooking(env, id) {
 }
 
 export { fetchBookingsInMonth, cancelBooking };
+
+// Google Sheets 常見的公式錯誤殘留字串——needsReview 沒有真的被檢查之前，
+// 這些可能被當成真實客戶姓名寫進資料庫。之前只抓過 #REF!，這裡一次列
+// 完整，避免只清一種、其他種類的殘留繼續卡著。
+const KNOWN_FORMULA_ERROR_STRINGS = ['#REF!', '#DIV/0!', '#N/A', '#VALUE!', '#NAME?', '#NULL!', '#NUM!', '#ERROR!'];
+
+/**
+ * 找出 customer_name 剛好等於已知公式錯誤字串的預約(不分大小寫)——用來
+ * 清理 needsReview 標記形同虛設那段期間，被誤當成真實姓名寫進去的壞資料。
+ * @param {object} env
+ * @returns {Promise<Array<object>>}
+ */
+async function findGarbageBookings(env) {
+  if (!env.SUPABASE_PROJECT_REF) throw new Error('缺少 env.SUPABASE_PROJECT_REF');
+  if (!env.SUPABASE_SERVICE_ROLE_KEY) throw new Error('缺少 env.SUPABASE_SERVICE_ROLE_KEY');
+
+  const url = new URL(`https://${env.SUPABASE_PROJECT_REF}.supabase.co/rest/v1/bookings`);
+  url.searchParams.set('select', 'id,master_id,date,start_time,customer_name,booking_source,status,created_at');
+  url.searchParams.set('customer_name', `in.(${KNOWN_FORMULA_ERROR_STRINGS.map((s) => `"${s}"`).join(',')})`);
+  url.searchParams.set('status', 'not.in.(cancelled)');
+  url.searchParams.set('limit', '1000');
+
+  const res = await fetch(url, {
+    headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Supabase 查詢壞資料失敗 (HTTP ${res.status}): ${text}`);
+  }
+  return res.json();
+}
+
+export { findGarbageBookings, KNOWN_FORMULA_ERROR_STRINGS };

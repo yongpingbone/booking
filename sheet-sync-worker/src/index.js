@@ -21,7 +21,7 @@ import { diffSnapshots } from './diff.js';
 import { fetchAndParseWeek, fetchAndParseWeekCached, SHEET_MASTERS, monthsSpannedByWeek } from './sheetParser.js';
 import { validateBookingRecord } from './validate.js';
 import { markCellStatus, resolveCellReference } from './sheetWriter.js';
-import { saveBooking } from './supabaseClient.js';
+import { saveBooking, findGarbageBookings, cancelBooking } from './supabaseClient.js';
 import { reconcileMonth } from './reconcile.js';
 import { weekKeysToSync, mondayOf, taipeiDateString } from './weekKeys.js';
 import { getAccessToken } from './googleAuth.js';
@@ -452,6 +452,28 @@ export default {
           }
         }
         return Response.json({ dryRun, scannedTabCount: monthSet.size * SHEET_MASTERS.length, foundCount: found.length, found }, { status: 200 });
+      } catch (err) {
+        return Response.json({ error: String(err?.stack ?? err?.message ?? err) }, { status: 500 });
+      }
+    }
+
+    if (url.pathname === '/debug/clean-garbage-bookings' && request.method === 'POST') {
+      const providedSecret = request.headers.get('X-Internal-Secret');
+      if (!env.INTERNAL_SYNC_SECRET || providedSecret !== env.INTERNAL_SYNC_SECRET) {
+        return new Response('Unauthorized', { status: 401 });
+      }
+      // 清理 needsReview 形同虛設那段期間，被誤當成真實姓名寫進資料庫的
+      // 壞資料(customer_name 剛好是 #REF! 之類的公式錯誤殘留)。標記取消
+      // (status=cancelled)，不是刪除，資料還在可以查回來。dryRun 預設
+      // true，只回報找到什麼。
+      const body = await request.json().catch(() => ({}));
+      const dryRun = body.dryRun !== false;
+      try {
+        const garbageBookings = await findGarbageBookings(env);
+        if (!dryRun) {
+          for (const b of garbageBookings) await cancelBooking(env, b.id);
+        }
+        return Response.json({ dryRun, foundCount: garbageBookings.length, bookings: garbageBookings }, { status: 200 });
       } catch (err) {
         return Response.json({ error: String(err?.stack ?? err?.message ?? err) }, { status: 500 });
       }
