@@ -86,10 +86,11 @@ jobs:
           # Country Code 收到 Organizational Unit 的答案，無限重複卡住)。
           # 各自獨立的 expect 呼叫，每叫一次就消費掉對應的 buffer，不會有
           # 這個問題。
-          expect {
-            "*create one now*" { send "Yes\r" }
-            timeout { send_error "\n>>> TIMEOUT at create-one-now <<<\n"; exit 1 }
-          }
+          # 注意：「Do you want to create one now? (Y/n)」不在這裡處理——
+          # 這題的格式跟第一階段那條「(預設值) 後面接空白」的 regex 剛好
+          # 也對得上(Y/n 也是括號)，實測發現它會在第一階段就被接走，如果
+          # 這裡也保留對應的 expect，反而會因為第一階段已經吃掉這段內容、
+          # 這裡永遠等不到而卡住。直接從「First and Last names」開始接。
           expect {
             "*First and Last names*" { send "Yongping\r" }
             timeout { send_error "\n>>> TIMEOUT at names <<<\n"; exit 1 }
