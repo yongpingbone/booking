@@ -56,17 +56,25 @@ jobs:
       - name: Init Bubblewrap
         run: |
           mkdir apk-build && cd apk-build
+          set -o pipefail
           expect -c '
           exp_internal 1
           set timeout 20
           spawn bubblewrap init --manifest https://yongpingbone.netlify.app/manifest.json --directory .
           # 前兩個是防呆用——理論上設定檔已經寫好，這兩題不會出現；萬一
           # 環境變數抓錯導致設定檔沒生效，這裡還有一層防線，不會直接卡死。
+          #
+          # 新版 Bubblewrap 在讀完 manifest 後，多了一整套「Web app details
+          # (1/5)~(5/5)」確認精靈(Domain 等欄位)，舊版沒有——這些問題全部
+          # 都已經從 manifest.json 內容帶出正確的預設值(顯示在括號裡)，用
+          # regex 抓「結尾是 (預設值) 」這個共同格式，統一送空白 Enter
+          # 接受預設值，不需要知道每一題確切的文字，比一個一個猜文字更穩固。
           expect {
             "*install the JDK*"     { send "n\r"; exp_continue }
             "*Path to your existing JDK*" { send "$env(JAVA_HOME)\r"; exp_continue }
             "*install the Android*" { send "n\r"; exp_continue }
             "*Path to the Android*" { send "$env(ANDROID_HOME)\r"; exp_continue }
+            -re {\([^\r\n)]*\)\s*$} { send "\r"; exp_continue }
             "*correct*" { send "y\r" }
           }
           expect "*create one now*" { send "Yes\r" }
@@ -79,7 +87,7 @@ jobs:
           expect "*Keystore password*" { send "pass1234\r" }
           expect "*Key password*" { send "pass1234\r" }
           expect eof
-          ' | tee init-log.txt
+          '  2>&1 | tee init-log.txt
         env:
           BUBBLEWRAP_SKIP_UPDATE_CHECK: true
 
