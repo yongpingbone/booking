@@ -58,7 +58,20 @@ async function runSyncForWeekWithRecords(env, weekKey, currentRecords, deps = {}
       unchanged: diffResult.unchanged.length,
     };
 
-    const toProcess = [...diffResult.added, ...diffResult.changed.map((c) => c.current)];
+    // diffSnapshots 只比對 contentHash(Sheet 上會顯示的內容)，不知道「我的
+    // 驗證/對照邏輯本身有沒有改過」。實測發現過：許老師/麒 那個師傅名字對照
+    // 的 bug 修好後，Sheet 上的格子內容根本沒變(還是同一個字)，這些記錄在
+    // diff 裡永遠是 unchanged，永遠不會被重新處理——代表就算程式邏輯的 bug
+    // 修好了，先前失敗、留在 Sheet 上的錯誤備註也永遠不會被清掉、資料庫也
+    // 永遠補不進去。這裡額外把「上次是 invalid、這次雖然 unchanged 但還是
+    // 要重試」的記錄找出來，跟 added/changed 一起處理。
+    const previouslyInvalidKeys = new Set(
+      (previous?.records ?? []).filter((r) => r.lastStatus === 'invalid').map((r) => r.identityKey)
+    );
+    const retryUnchangedInvalid = diffResult.unchanged.filter((r) => previouslyInvalidKeys.has(r.identityKey));
+
+    const toProcess = [...diffResult.added, ...diffResult.changed.map((c) => c.current), ...retryUnchangedInvalid];
+    log.diffSummary.retriedInvalid = retryUnchangedInvalid.length;
     log.results = []; // 直接掛在 log 上、逐筆 push，不要等迴圈整個跑完才賦值——
     // 這樣就算中途某一筆意外丟出未預期的例外，前面已經處理過的筆數還是看得到，
     // 不會因為最後一筆爆炸就把整輪的進度都吞掉(這裡有真的發生過，setCellNote
@@ -100,7 +113,20 @@ async function runSyncForWeekWithRecords(env, weekKey, currentRecords, deps = {}
       }
     }
 
-    await saveSnapshot(env.SHEET_SYNC_BUCKET, weekKey, current);
+    // 存快照前，把這次的處理結果(或者沒被重新處理時、沿用上次的結果)記到
+    // 每筆記錄的 lastStatus 上，讓下一輪知道哪些記錄即使 unchanged 也要重試。
+    const statusByKey = new Map();
+    for (const result of log.results) {
+      if (!result.identityKey || statusByKey.has(result.identityKey)) continue;
+      statusByKey.set(result.identityKey, result.status === 'synced' ? 'synced' : 'invalid');
+    }
+    const previousStatusByKey = new Map((previous?.records ?? []).map((r) => [r.identityKey, r.lastStatus]));
+    const currentWithStatus = current.map((r) => ({
+      ...r,
+      lastStatus: statusByKey.get(r.identityKey) ?? previousStatusByKey.get(r.identityKey) ?? 'synced',
+    }));
+
+    await saveSnapshot(env.SHEET_SYNC_BUCKET, weekKey, currentWithStatus);
 
     log.ok = true;
   } catch (err) {
