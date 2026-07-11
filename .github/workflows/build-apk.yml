@@ -5,6 +5,9 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -48,14 +51,15 @@ jobs:
           expect "*Keystore password*" { send "pass1234\r" }
           expect "*Key password*" { send "pass1234\r" }
           expect eof
-          '
+          ' | tee init-log.txt
         env:
           BUBBLEWRAP_SKIP_UPDATE_CHECK: true
 
       - name: Build APK
         run: |
           cd apk-build
-          bubblewrap build --skipPwaValidation --keyPassword pass1234 --keystorePassword pass1234
+          set -o pipefail
+          bubblewrap build --skipPwaValidation --keyPassword pass1234 --keystorePassword pass1234 2>&1 | tee build-log.txt
         env:
           BUBBLEWRAP_SKIP_UPDATE_CHECK: true
 
@@ -65,3 +69,20 @@ jobs:
           name: yongping-app
           path: apk-build/app-release-signed.apk
           retention-days: 30
+
+      - name: 把 build log 存回 repo 供除錯用(不管成功失敗都存)
+        if: always()
+        run: |
+          mkdir -p sheet-sync-worker/.debug
+          {
+            echo "=== init-log.txt ==="
+            cat apk-build/init-log.txt 2>/dev/null || echo "(不存在)"
+            echo ""
+            echo "=== build-log.txt ==="
+            cat apk-build/build-log.txt 2>/dev/null || echo "(不存在)"
+          } > sheet-sync-worker/.debug/apk-build-log.txt
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add sheet-sync-worker/.debug/apk-build-log.txt
+          git diff --cached --quiet || git commit -m "chore: 更新 APK build log(自動)"
+          git push || true
