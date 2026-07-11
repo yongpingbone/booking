@@ -1240,6 +1240,7 @@ function LoginScreen({
       const idToken = liff.getIDToken();
       if (!idToken) {
         setLineBusy(false);
+        setError("無法取得 LINE 身份資訊，請改用帳號密碼登入");
         return;
       }
       const res = await fetch("https://ikzyzkhuireqztbhrtna.supabase.co/functions/v1/line-master-login", {
@@ -1254,23 +1255,30 @@ function LoginScreen({
         setLineBusy(false);
         return;
       }
+      // 修正：verifyOtp要用的參數是token_hash(不是token)，type要用"email"——
+      // "magiclink"這個type已經被Supabase官方標註為deprecated棄用，用舊的參數
+      // 名稱/type會導致這裡整段靜默失敗，卡在「LINE那邊顯示登入成功，但系統
+      // 沒真的登入進去」，之前完全沒有錯誤訊息顯示，才會看起來像卡住
       const { data: otpData, error: otpErr } = await sb.auth.verifyOtp({
         email: j.email,
-        token: j.hashedToken,
-        type: "magiclink"
+        token_hash: j.hashedToken,
+        type: "email"
       });
       if (otpErr || !otpData?.session) {
         setLineBusy(false);
+        setError("LINE 登入憑證驗證失敗：" + (otpErr?.message || "請重新整理頁面再試一次"));
         return;
       }
       const { data: masterData, error: dbErr } = await sb.from("masters").select("*").eq("username", j.email.replace("@yongping.com", "")).eq("is_active", true).single();
       if (dbErr || !masterData) {
         setLineBusy(false);
+        setError("登入成功但讀取師傅資料失敗，請重新整理頁面再試一次");
         return;
       }
       onLogin(masterData);
     } catch (e) {
       setLineBusy(false);
+      setError("LINE 登入發生例外錯誤：" + String(e?.message || e));
     }
   };
 
