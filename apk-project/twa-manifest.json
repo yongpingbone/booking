@@ -36,7 +36,11 @@
   "minSdkVersion": 21,
   "orientation": "default",
   "fingerprints": [],
-  "additionalTrustedOrigins": [],
+  "additionalTrustedOrigins": [
+    "https://access.line.me",
+    "https://liff.line.me",
+    "https://api.line.me"
+  ],
   "retainedBundles": [],
   "protocolHandlers": [],
   "fileHandlers": [],
