@@ -9,8 +9,10 @@
 //   6. 驗證過的寫進 bookings(supabaseClient —— 已完成，欄位對應待 schema 確認)
 //   7. 驗證失敗的寫回 Sheet 提示師傅(sheetWriter —— 用儲存格備註，不改
 //      內容/顏色，天生不影響 contentHash，不需要額外的防迴圈標記機制)
-//   8. 不管有沒有變化，這次讀到的完整狀態存成新快照
-//   9. 整輪執行結果寫一份 log
+//   8. Sheet 上原本有、這次消失(格子被清空)的記錄 → 對應的資料庫預約
+//      標記取消(Hanna 明確要求：填了名字=已確認、名字被刪掉=取消)
+//   9. 不管有沒有變化，這次讀到的完整狀態存成新快照
+//   10. 整輪執行結果寫一份 log
 //
 // sheetParser / validate / sheetWriter 都已經是真的實作了。sheetParser 讀
 // Sheet、sheetWriter 寫備註這兩段需要真的打 sheets.googleapis.com，我的
@@ -21,7 +23,7 @@ import { diffSnapshots } from './diff.js';
 import { fetchAndParseWeek, fetchAndParseWeekCached, SHEET_MASTERS, monthsSpannedByWeek } from './sheetParser.js';
 import { validateBookingRecord } from './validate.js';
 import { markCellStatus, resolveCellReference } from './sheetWriter.js';
-import { saveBooking, findGarbageBookings, cancelBooking, setBookingStatus, upsertCustomerVisit } from './supabaseClient.js';
+import { saveBooking, findGarbageBookings, cancelBooking, setBookingStatus, upsertCustomerVisit, fetchActiveMasters, findBookingAtSlot } from './supabaseClient.js';
 import { reconcileMonth } from './reconcile.js';
 import { weekKeysToSync, mondayOf, taipeiDateString } from './weekKeys.js';
 import { getAccessToken } from './googleAuth.js';
@@ -43,6 +45,9 @@ async function runSyncForWeekWithRecords(env, weekKey, currentRecords, deps = {}
     markCellStatus: doMarkCellStatus = markCellStatus,
     saveBooking: doSaveBooking = saveBooking,
     upsertCustomerVisit: doUpsertCustomerVisit = upsertCustomerVisit,
+    fetchActiveMasters: doFetchActiveMasters = fetchActiveMasters,
+    findBookingAtSlot: doFindBookingAtSlot = findBookingAtSlot,
+    cancelBooking: doCancelBooking = cancelBooking,
     forceNoteRecheck = false, // 一次性強制重新檢查所有 synced 記錄的備註狀態，
     // 用來處理 noteCleared 這個追蹤欄位上線之前就已經卡住的舊資料(這批舊
     // 快照裡根本沒有 noteCleared 這個欄位，正常的追蹤邏輯偵測不到)。
@@ -150,6 +155,37 @@ async function runSyncForWeekWithRecords(env, weekKey, currentRecords, deps = {}
         log.results.push({ identityKey: record.identityKey, status: 'note_cleared_on_retry' });
       } catch (err) {
         log.results.push({ identityKey: record.identityKey, status: 'clear_cell_status_failed', error: String(err?.message ?? err) });
+      }
+    }
+
+    // Sheet 上原本有預約、現在格子空了 → 對應的資料庫預約要標記取消。
+    // Hanna 明確要求的規則：填了名字=已確認，名字被刪掉=取消，師傅在 Sheet
+    // 上刪格子這個動作本身就是他們取消預約的方式，同步要正確反映這件事。
+    // diffResult.removed 這個資訊本來就有算出來，只是一直沒有真的拿去用。
+    for (const record of diffResult.removed) {
+      try {
+        const masters = await doFetchActiveMasters(env);
+        const masterByName = Object.fromEntries(masters.map((m) => [m.name, m.id]));
+        const masterId = masterByName[record.masterName];
+        if (!masterId) {
+          log.results.push({ identityKey: record.identityKey, status: 'cancel_skipped_master_not_found' });
+          continue;
+        }
+        const existing = await doFindBookingAtSlot(env, { masterId, date: record.date, startTime: record.startTime });
+        if (!existing) {
+          // 資料庫裡本來就沒有有效預約(可能早就被取消過、或者這筆本來就
+          // 沒成功寫進去過)，沒有東西可以取消，不算錯誤。
+          log.results.push({ identityKey: record.identityKey, status: 'cancel_skipped_nothing_to_cancel' });
+          continue;
+        }
+        await doCancelBooking(env, existing.id);
+        log.results.push({ identityKey: record.identityKey, status: 'cancelled_removed_from_sheet' });
+      } catch (err) {
+        // 取消失敗目前沒有像 lastStatus/noteCleared 那樣的下一輪自動重試
+        // 機制(這筆記錄已經不在 current 裡了，不會再進到下次的快照)，先
+        // 確保至少會被清楚記錄下來，之後如果這個狀況常發生，需要另外設計
+        // 追蹤方式。
+        log.results.push({ identityKey: record.identityKey, status: 'cancel_failed', error: String(err?.message ?? err) });
       }
     }
 

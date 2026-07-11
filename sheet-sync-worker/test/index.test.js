@@ -625,3 +625,118 @@ test('fetch(): POST /debug/restore-bookings 缺 ids 或 status 要回 400', asyn
   const res = await worker.fetch(request, env, {});
   assert.equal(res.status, 400);
 });
+
+test('Sheet 上原本有的預約、這次消失了(格子被清空)：對應的資料庫預約要標記取消', async () => {
+  const env = makeEnv();
+  const cancelCalls = [];
+  const record = { identityKey: 'x', contentHash: 'h1', masterName: '麒', date: '2026-07-06', startTime: '09:00' };
+  const deps = {
+    validateBookingRecord: async () => ({ valid: true, row: {}, existingId: null }),
+    saveBooking: async () => {},
+    markCellStatus: async () => {},
+    fetchActiveMasters: async () => [{ id: 'master-uuid', name: '麒' }],
+    findBookingAtSlot: async () => ({ id: 'booking-abc', customer_name: '王小明' }),
+    cancelBooking: async (env_, id) => {
+      cancelCalls.push(id);
+    },
+  };
+
+  // 第一輪：這筆存在
+  await runSyncForWeekWithRecords(env, '2026-07-06', [record], deps);
+  // 第二輪：這筆從 Sheet 上消失了(格子空了)
+  const log2 = await runSyncForWeekWithRecords(env, '2026-07-06', [], deps);
+
+  assert.equal(log2.diffSummary.removed, 1);
+  assert.equal(cancelCalls.length, 1);
+  assert.equal(cancelCalls[0], 'booking-abc');
+  assert.equal(log2.results.find((r) => r.identityKey === 'x').status, 'cancelled_removed_from_sheet');
+});
+
+test('消失的記錄在資料庫裡本來就沒有有效預約(已經取消過/從沒成功寫入)：跳過，不算錯誤', async () => {
+  const env = makeEnv();
+  const record = { identityKey: 'x', contentHash: 'h1', masterName: '麒', date: '2026-07-06', startTime: '09:00' };
+  let cancelCalled = false;
+  const deps = {
+    validateBookingRecord: async () => ({ valid: true, row: {}, existingId: null }),
+    saveBooking: async () => {},
+    markCellStatus: async () => {},
+    fetchActiveMasters: async () => [{ id: 'master-uuid', name: '麒' }],
+    findBookingAtSlot: async () => null, // 資料庫查不到有效預約
+    cancelBooking: async () => {
+      cancelCalled = true;
+    },
+  };
+
+  await runSyncForWeekWithRecords(env, '2026-07-06', [record], deps);
+  const log2 = await runSyncForWeekWithRecords(env, '2026-07-06', [], deps);
+
+  assert.equal(cancelCalled, false);
+  assert.equal(log2.results.find((r) => r.identityKey === 'x').status, 'cancel_skipped_nothing_to_cancel');
+});
+
+test('消失的記錄的師傅名字對不到任何在職師傅：跳過，不會讓整輪同步中斷', async () => {
+  const env = makeEnv();
+  const record = { identityKey: 'x', contentHash: 'h1', masterName: '不存在的師傅', date: '2026-07-06', startTime: '09:00' };
+  const deps = {
+    validateBookingRecord: async () => ({ valid: false, errors: ['找不到師傅'] }),
+    saveBooking: async () => {},
+    markCellStatus: async () => {},
+    fetchActiveMasters: async () => [{ id: 'master-uuid', name: '麒' }],
+    findBookingAtSlot: async () => null,
+    cancelBooking: async () => {},
+  };
+
+  // 第一輪：這筆會驗證失敗(找不到師傅)，不會被寫入，但快照裡還是會記錄這筆
+  // 出現過——用另一種方式模擬「曾經存在過」：直接給它 valid 讓它先寫進去，
+  // 之後才測試移除時師傅對不到的情境。
+  const validDeps = { ...deps, validateBookingRecord: async () => ({ valid: true, row: {}, existingId: null }) };
+  await runSyncForWeekWithRecords(env, '2026-07-06', [record], validDeps);
+
+  const log2 = await runSyncForWeekWithRecords(env, '2026-07-06', [], deps);
+  assert.equal(log2.results.find((r) => r.identityKey === 'x').status, 'cancel_skipped_master_not_found');
+});
+
+test('取消失敗不會讓整輪同步中斷，會清楚記錄失敗原因', async () => {
+  const env = makeEnv();
+  const record = { identityKey: 'x', contentHash: 'h1', masterName: '麒', date: '2026-07-06', startTime: '09:00' };
+  const deps = {
+    validateBookingRecord: async () => ({ valid: true, row: {}, existingId: null }),
+    saveBooking: async () => {},
+    markCellStatus: async () => {},
+    fetchActiveMasters: async () => [{ id: 'master-uuid', name: '麒' }],
+    findBookingAtSlot: async () => ({ id: 'booking-abc' }),
+    cancelBooking: async () => {
+      throw new Error('Supabase 暫時掛了');
+    },
+  };
+
+  await runSyncForWeekWithRecords(env, '2026-07-06', [record], deps);
+  const log2 = await runSyncForWeekWithRecords(env, '2026-07-06', [], deps);
+
+  assert.equal(log2.ok, true, '取消失敗不該讓整輪同步標記失敗');
+  const result = log2.results.find((r) => r.identityKey === 'x');
+  assert.equal(result.status, 'cancel_failed');
+  assert.ok(result.error.includes('暫時掛了'));
+});
+
+test('沒有消失的記錄不受這個邏輯影響(不會誤取消還存在的預約)', async () => {
+  const env = makeEnv();
+  const record = { identityKey: 'x', contentHash: 'h1', masterName: '麒', date: '2026-07-06', startTime: '09:00' };
+  let cancelCalled = false;
+  const deps = {
+    validateBookingRecord: async () => ({ valid: true, row: {}, existingId: null }),
+    saveBooking: async () => {},
+    markCellStatus: async () => {},
+    fetchActiveMasters: async () => [{ id: 'master-uuid', name: '麒' }],
+    findBookingAtSlot: async () => ({ id: 'booking-abc' }),
+    cancelBooking: async () => {
+      cancelCalled = true;
+    },
+  };
+
+  await runSyncForWeekWithRecords(env, '2026-07-06', [record], deps);
+  // 第二輪內容一樣(不是消失，是 unchanged)
+  await runSyncForWeekWithRecords(env, '2026-07-06', [record], deps);
+
+  assert.equal(cancelCalled, false);
+});
