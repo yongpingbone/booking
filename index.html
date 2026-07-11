@@ -15,7 +15,7 @@
 <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js" defer></script>
 <style>
 :root{
   --vv-top:0px; --vv-left:0px;
@@ -1255,12 +1255,9 @@ function LoginScreen({
         setLineBusy(false);
         return;
       }
-      // 修正：verifyOtp要用的參數是token_hash(不是token)，type要用"email"——
-      // "magiclink"這個type已經被Supabase官方標註為deprecated棄用，用舊的參數
-      // 名稱/type會導致這裡整段靜默失敗，卡在「LINE那邊顯示登入成功，但系統
-      // 沒真的登入進去」，之前完全沒有錯誤訊息顯示，才會看起來像卡住
+      // 修正2：Supabase實際回傳的錯誤訊息明確講「Only the token_hash and type
+      // should be provided」——用token_hash時不能同時帶email，會被拒絕。
       const { data: otpData, error: otpErr } = await sb.auth.verifyOtp({
-        email: j.email,
         token_hash: j.hashedToken,
         type: "email"
       });
@@ -6174,7 +6171,7 @@ function MainApp({
         },
         onClick: () => {
           if (dragMode) {
-            // 休假模式：點日期 = 整天加選/取消
+            // 休假模式：點日期 = 整天加選/取消(toggle)
             const cellsInCol = [];
             TIMES.forEach(t => {
               const k = `${fmtDate(year, month, d)}__${t}`;
@@ -6185,13 +6182,19 @@ function MainApp({
                 b: bk(d, t)
               });
             });
-            const hasEmpty = cellsInCol.some(c => !c.b);
+            // 修正：原本只判斷「這欄有沒有空格」，完全沒管這些空格是不是已經
+            // 被選進dragCells了，導致永遠只會執行「全選」、沒有「取消」的分支。
+            // 改成：先看可選取的空格是不是已經全部選好了，是的話這次點擊改成
+            // 取消選取，不是的話才全選——這樣點兩下就能達到「選取→取消選取」
+            // 的效果，不用再靠「清除選取」整批清空。
+            const selectableCells = cellsInCol.filter(c => !c.b);
+            const allSelected = selectableCells.length > 0 && selectableCells.every(c => dragCells.has(c.k));
             const allVacation = cellsInCol.every(c => c.b && c.b.color_tag === "vacation");
-            if (hasEmpty) {
+            if (selectableCells.length > 0) {
               setDragCells(prev => {
                 const next = new Set(prev);
-                cellsInCol.forEach(c => {
-                  if (!c.b) next.add(c.k);
+                selectableCells.forEach(c => {
+                  if (allSelected) next.delete(c.k); else next.add(c.k);
                 });
                 return next;
               });
@@ -6228,8 +6231,7 @@ function MainApp({
       className: "cv-row"
     }, /*#__PURE__*/React.createElement("td", {
       onClick: dragMode ? () => {
-        // 休假模式下點時間欄 = 切換整列（整週同時段）的休假狀態
-        // 規則：如果該列有任何空格 → 全選；如果都是已休假 → 全部加入待移除
+        // 休假模式下點時間欄 = 切換整列（整週同時段）的休假狀態(toggle)
         const cellsInRow = [];
         wk.forEach(d => {
           if (d) {
@@ -6242,14 +6244,18 @@ function MainApp({
             });
           }
         });
-        const hasEmpty = cellsInRow.some(c => !c.b);
+        // 修正：跟日期欄位標題同一個bug——原本只判斷「這列有沒有空格」，
+        // 沒管這些空格是不是已經被選進dragCells了，導致永遠只能全選、
+        // 無法取消選取。改成先看可選取的空格是不是已經全選，是的話這次
+        // 點擊改成取消選取。
+        const selectableCells = cellsInRow.filter(c => !c.b);
+        const allSelected = selectableCells.length > 0 && selectableCells.every(c => dragCells.has(c.k));
         const allVacation = cellsInRow.every(c => c.b && c.b.color_tag === "vacation");
-        if (hasEmpty) {
-          // 全選為休假
+        if (selectableCells.length > 0) {
           setDragCells(prev => {
             const next = new Set(prev);
-            cellsInRow.forEach(c => {
-              if (!c.b) next.add(c.k);
+            selectableCells.forEach(c => {
+              if (allSelected) next.delete(c.k); else next.add(c.k);
             });
             return next;
           });
