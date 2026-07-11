@@ -18,14 +18,14 @@
 
 import { getLatestSnapshot, saveSnapshot, appendLog } from './snapshotStore.js';
 import { diffSnapshots } from './diff.js';
-import { fetchAndParseWeek, fetchAndParseWeekCached } from './sheetParser.js';
+import { fetchAndParseWeek, fetchAndParseWeekCached, SHEET_MASTERS, monthsSpannedByWeek } from './sheetParser.js';
 import { validateBookingRecord } from './validate.js';
 import { markCellStatus, resolveCellReference } from './sheetWriter.js';
 import { saveBooking } from './supabaseClient.js';
 import { reconcileMonth } from './reconcile.js';
 import { weekKeysToSync, mondayOf, taipeiDateString } from './weekKeys.js';
 import { getAccessToken } from './googleAuth.js';
-import { getCellNote, listSheetTabs, setCellNote } from './sheetsApi.js';
+import { getCellNote, listSheetTabs, setCellNote, scanTabForNotes } from './sheetsApi.js';
 
 /**
  * 實際的診斷/寫入邏輯，接受已經抓好的記錄陣列，不自己去打 Sheets API。
@@ -389,6 +389,58 @@ export default {
           },
           { status: 200 }
         );
+      } catch (err) {
+        return Response.json({ error: String(err?.stack ?? err?.message ?? err) }, { status: 500 });
+      }
+    }
+
+    if (url.pathname === '/debug/sweep-notes' && request.method === 'POST') {
+      const providedSecret = request.headers.get('X-Internal-Secret');
+      if (!env.INTERNAL_SYNC_SECRET || providedSecret !== env.INTERNAL_SYNC_SECRET) {
+        return new Response('Unauthorized', { status: 401 });
+      }
+      // 一次性全面清理：掃過目前三個月範圍內、每位師傅每個月份分頁的整個
+      // 範圍，找出所有掛著非空備註的格子(不管有沒有對應到我系統目前追蹤
+      // 中的記錄——這是跟平常同步機制完全獨立的路徑，用來清掉舊追蹤機制
+      // 上線前就已經散落各處、追蹤機制根本不知道要去查的殘留)。
+      // dryRun 預設 true，只回報找到什麼，不會真的清；bodyfalse 才會真的清除。
+      const body = await request.json().catch(() => ({}));
+      const dryRun = body.dryRun !== false;
+      try {
+        const accessToken = await getAccessToken(env);
+        const weekKeys = weekKeysToSync(new Date());
+        const monthSet = new Map(); // key "year-month" -> {year, month}
+        for (const weekKey of weekKeys) {
+          for (const m of monthsSpannedByWeek(weekKey)) monthSet.set(`${m.year}-${m.month}`, m);
+        }
+
+        const found = [];
+        for (const { year, month } of monthSet.values()) {
+          for (const master of SHEET_MASTERS) {
+            const sheetTitle = `${month}月-${master.name}`;
+            let notesInTab;
+            try {
+              notesInTab = await scanTabForNotes(env, { sheetTitle, range: 'A1:H260', accessToken });
+            } catch (err) {
+              found.push({ sheetTitle, error: String(err?.message ?? err) });
+              continue;
+            }
+            for (const n of notesInTab) {
+              const entry = { sheetTitle, rowIndex: n.rowIndex, colIndex: n.colIndex, note: n.note };
+              if (!dryRun) {
+                try {
+                  await setCellNote(env, { sheetTitle, rowIndex: n.rowIndex, colIndex: n.colIndex, note: null, accessToken });
+                  entry.cleared = true;
+                } catch (err) {
+                  entry.cleared = false;
+                  entry.clearError = String(err?.message ?? err);
+                }
+              }
+              found.push(entry);
+            }
+          }
+        }
+        return Response.json({ dryRun, scannedTabCount: monthSet.size * SHEET_MASTERS.length, foundCount: found.length, found }, { status: 200 });
       } catch (err) {
         return Response.json({ error: String(err?.stack ?? err?.message ?? err) }, { status: 500 });
       }

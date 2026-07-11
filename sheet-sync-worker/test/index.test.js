@@ -566,3 +566,29 @@ test('fetch(): GET /debug/inspect-cell 缺參數要回 400', async () => {
   const res = await worker.fetch(request, env, {});
   assert.equal(res.status, 400);
 });
+
+test('fetch(): POST /debug/sweep-notes 也要驗證 X-Internal-Secret', async () => {
+  const env = makeEnv();
+  const request = new Request('https://worker.example/debug/sweep-notes', {
+    method: 'POST',
+    headers: { 'X-Internal-Secret': 'wrong' },
+    body: JSON.stringify({}),
+  });
+  const res = await worker.fetch(request, env, {});
+  assert.equal(res.status, 401);
+});
+
+test('fetch(): POST /debug/sweep-notes 沒帶 dryRun 時預設是安全的(不會誤觸發真的清除)——這裡驗證的是"沒帶真的憑證時會優雅回500"，不是誤判成清除成功', async () => {
+  const env = makeEnv();
+  const request = new Request('https://worker.example/debug/sweep-notes', {
+    method: 'POST',
+    headers: { 'X-Internal-Secret': 'test-secret' },
+    body: JSON.stringify({}),
+  });
+  const res = await worker.fetch(request, env, {});
+  // 沒有真實 Google 憑證，會在 getAccessToken 那步就失敗，回 500 + 錯誤訊息，
+  // 不會意外執行成功、也不會把 dryRun 誤判成 false。
+  assert.equal(res.status, 500);
+  const body = await res.json();
+  assert.ok(body.error);
+});

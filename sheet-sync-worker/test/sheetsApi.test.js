@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchGridRows, normalizeCell, colorObjectToHex, getSheetIdByTitle, setCellNote, getCellNote, listSheetTabs, _resetSheetIdCacheForTests } from '../src/sheetsApi.js';
+import { fetchGridRows, normalizeCell, colorObjectToHex, getSheetIdByTitle, setCellNote, getCellNote, listSheetTabs, scanTabForNotes, _resetSheetIdCacheForTests } from '../src/sheetsApi.js';
 
 test('colorObjectToHex: 黃色 {r:1,g:1,b:0} 要轉成 #FFFF00(對應實際 Sheet 裡確認過的 FFFFFF00 新客標記，扣掉 alpha)', () => {
   assert.equal(colorObjectToHex({ red: 1, green: 1, blue: 0 }), '#FFFF00');
@@ -280,4 +280,38 @@ test('listSheetTabs: 回傳所有分頁的 title/sheetId 清單', async () => {
     { title: '7月-麒', sheetId: 1 },
     { title: '7月-治', sheetId: 2 },
   ]);
+});
+
+test('scanTabForNotes: 找出範圍內所有掛著非空備註的格子，忽略沒有備註的格子', async () => {
+  const fakeFetch = async () => ({
+    ok: true,
+    json: async () => ({
+      sheets: [
+        {
+          data: [
+            {
+              rowData: [
+                { values: [{}, { note: '舊備註A' }, {}] },
+                { values: [{}, {}, { note: '舊備註B' }] },
+                { values: [{}, {}, {}] },
+              ],
+            },
+          ],
+        },
+      ],
+    }),
+  });
+  const found = await scanTabForNotes({ GOOGLE_SHEET_ID: 'id' }, { sheetTitle: 'x', range: 'A1:C3', accessToken: 't' }, { fetch: fakeFetch });
+  assert.equal(found.length, 2);
+  assert.deepEqual(found[0], { rowIndex: 0, colIndex: 1, note: '舊備註A' });
+  assert.deepEqual(found[1], { rowIndex: 1, colIndex: 2, note: '舊備註B' });
+});
+
+test('scanTabForNotes: 完全沒有備註時回傳空陣列', async () => {
+  const fakeFetch = async () => ({
+    ok: true,
+    json: async () => ({ sheets: [{ data: [{ rowData: [{ values: [{}, {}] }] }] }] }),
+  });
+  const found = await scanTabForNotes({ GOOGLE_SHEET_ID: 'id' }, { sheetTitle: 'x', range: 'A1:B1', accessToken: 't' }, { fetch: fakeFetch });
+  assert.deepEqual(found, []);
 });

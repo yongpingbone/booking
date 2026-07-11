@@ -222,4 +222,42 @@ function _resetSheetIdCacheForTests() {
   sheetIdCache = null;
 }
 
-export { fetchGridRows, normalizeCell, colorObjectToHex, setCellNote, getSheetIdByTitle, getCellNote, listSheetTabs, _resetSheetIdCacheForTests };
+/**
+ * 掃過某個分頁某個範圍，把所有「掛著非空備註」的儲存格找出來，不管這格
+ * 有沒有對應到我系統目前追蹤中的記錄——用來一次性清掉舊追蹤機制上線前
+ * 就已經散落各處、完全沒有機制知道要去清的殘留備註。故意不動
+ * fetchGridRows/normalizeCell(那條路是主要同步流程在用，不想冒風險動它)，
+ * 這支是完全獨立、單純為了這次清理用的。
+ * @param {object} env 需要 env.GOOGLE_SHEET_ID
+ * @param {{sheetTitle: string, range: string, accessToken: string}} params
+ * @param {object} [deps]
+ * @returns {Promise<Array<{rowIndex: number, colIndex: number, note: string}>>} rowIndex/colIndex 都是 0-indexed(相對於 range 起點)
+ */
+async function scanTabForNotes(env, { sheetTitle, range, accessToken }, deps = {}) {
+  const doFetch = deps.fetch ?? fetch;
+  if (!env.GOOGLE_SHEET_ID) throw new Error('缺少 env.GOOGLE_SHEET_ID');
+
+  const a1Range = `'${sheetTitle.replace(/'/g, "''")}'!${range}`;
+  const url = new URL(`https://sheets.googleapis.com/v4/spreadsheets/${env.GOOGLE_SHEET_ID}`);
+  url.searchParams.set('includeGridData', 'true');
+  url.searchParams.set('ranges', a1Range);
+  url.searchParams.set('fields', 'sheets(data.rowData.values(note))');
+
+  const res = await doFetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Sheets API 掃描備註失敗「${sheetTitle}」(HTTP ${res.status}): ${text}`);
+  }
+  const data = await res.json();
+  const rowData = data.sheets?.[0]?.data?.[0]?.rowData ?? [];
+
+  const found = [];
+  rowData.forEach((row, rowIndex) => {
+    (row.values ?? []).forEach((cell, colIndex) => {
+      if (cell?.note) found.push({ rowIndex, colIndex, note: cell.note });
+    });
+  });
+  return found;
+}
+
+export { fetchGridRows, normalizeCell, colorObjectToHex, setCellNote, getSheetIdByTitle, getCellNote, listSheetTabs, scanTabForNotes, _resetSheetIdCacheForTests };
