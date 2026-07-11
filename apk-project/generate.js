@@ -35,7 +35,7 @@ async function main() {
   // 有沒有被手動改過，跟需不需要重新產生專案)
   const manifestContents = fs.readFileSync(path.join(targetDirectory, 'twa-manifest.json'));
   const crypto = require('crypto');
-  const sum = crypto.createHash('sha256').update(manifestContents).digest('hex');
+  const sum = crypto.createHash('sha1').update(manifestContents).digest('hex');
   fs.writeFileSync(path.join(targetDirectory, 'manifest-checksum.txt'), sum);
   console.log('manifest-checksum.txt 產生完成');
 
