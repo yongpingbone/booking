@@ -65,27 +65,62 @@ jobs:
           # 環境變數抓錯導致設定檔沒生效，這裡還有一層防線，不會直接卡死。
           #
           # 新版 Bubblewrap 在讀完 manifest 後，多了一整套「Web app details
-          # (1/5)~(5/5)」確認精靈(Domain 等欄位)，舊版沒有——這些問題全部
-          # 都已經從 manifest.json 內容帶出正確的預設值(顯示在括號裡)，用
-          # regex 抓「結尾是 (預設值) 」這個共同格式，統一送空白 Enter
-          # 接受預設值，不需要知道每一題確切的文字，比一個一個猜文字更穩固。
+          # (1/5)~(5/5)」確認精靈(Domain、URL path 等欄位)，舊版沒有——這些
+          # 問題全部都已經從 manifest.json 內容帶出正確預設值(顯示在括號
+          # 裡)，用 regex 抓「括號包起來、後面接空白」這個共同格式統一送
+          # Enter 接受預設值，不用一題一題猜文字。
+          # 注意：regex 故意不用 $ 錨定「結尾」——實測發現終端機的游標控制
+          # 碼常常接在括號後面，用 $ 錨定會因為這些看不見的控制碼而誤判
+          # 沒對上，導致某一題(例如 Domain 之後的 URL path)沒被接住。
+          # timeout 分支：沒有的話，逾時發生時 expect 預設還是回傳成功
+          # (exit code 0)，就算加了 pipefail 這一步照樣顯示成功，把真正
+          # 卡住的問題往後藏到 Build APK 才間接爆出來——明確在逾時時印出
+          # 目前完整緩衝內容、強制回傳失敗，這樣才抓得到真正卡在哪一句。
           expect {
             "*install the JDK*"     { send "n\r"; exp_continue }
             "*Path to your existing JDK*" { send "$env(JAVA_HOME)\r"; exp_continue }
             "*install the Android*" { send "n\r"; exp_continue }
             "*Path to the Android*" { send "$env(ANDROID_HOME)\r"; exp_continue }
-            -re {\([^\r\n)]*\)\s*$} { send "\r"; exp_continue }
+            -re {\([^\r\n)]*\)[ \t]} { send "\r"; exp_continue }
             "*correct*" { send "y\r" }
+            timeout { send_error "\n>>> INIT_TIMEOUT，目前緩衝內容如上，卡在這裡 <<<\n"; exit 1 }
           }
-          expect "*create one now*" { send "Yes\r" }
-          expect "*First and Last names*" { send "Yongping\r" }
-          expect "*Organizational Unit*" { send "Health\r" }
-          expect "*Organization*" { send "Health\r" }
-          expect "*Locality*" { send "Taipei\r" }
-          expect "*Province*" { send "TW\r" }
-          expect "*Country Code*" { send "TW\r" }
-          expect "*Keystore password*" { send "pass1234\r" }
-          expect "*Key password*" { send "pass1234\r" }
+          expect {
+            "*create one now*" { send "Yes\r" }
+            timeout { send_error "\n>>> TIMEOUT at create-one-now <<<\n"; exit 1 }
+          }
+          expect {
+            "*First and Last names*" { send "Yongping\r" }
+            timeout { send_error "\n>>> TIMEOUT at names <<<\n"; exit 1 }
+          }
+          expect {
+            "*Organizational Unit*" { send "Health\r" }
+            timeout { send_error "\n>>> TIMEOUT at org unit <<<\n"; exit 1 }
+          }
+          expect {
+            "*Organization*" { send "Health\r" }
+            timeout { send_error "\n>>> TIMEOUT at org <<<\n"; exit 1 }
+          }
+          expect {
+            "*Locality*" { send "Taipei\r" }
+            timeout { send_error "\n>>> TIMEOUT at locality <<<\n"; exit 1 }
+          }
+          expect {
+            "*Province*" { send "TW\r" }
+            timeout { send_error "\n>>> TIMEOUT at province <<<\n"; exit 1 }
+          }
+          expect {
+            "*Country Code*" { send "TW\r" }
+            timeout { send_error "\n>>> TIMEOUT at country code <<<\n"; exit 1 }
+          }
+          expect {
+            "*Keystore password*" { send "pass1234\r" }
+            timeout { send_error "\n>>> TIMEOUT at keystore password <<<\n"; exit 1 }
+          }
+          expect {
+            "*Key password*" { send "pass1234\r" }
+            timeout { send_error "\n>>> TIMEOUT at key password <<<\n"; exit 1 }
+          }
           expect eof
           '  2>&1 | tee init-log.txt
         env:
