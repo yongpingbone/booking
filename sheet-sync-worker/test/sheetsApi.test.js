@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchGridRows, normalizeCell, colorObjectToHex, getSheetIdByTitle, setCellNote, _resetSheetIdCacheForTests } from '../src/sheetsApi.js';
+import { fetchGridRows, normalizeCell, colorObjectToHex, getSheetIdByTitle, setCellNote, getCellNote, listSheetTabs, _resetSheetIdCacheForTests } from '../src/sheetsApi.js';
 
 test('colorObjectToHex: 黃色 {r:1,g:1,b:0} 要轉成 #FFFF00(對應實際 Sheet 裡確認過的 FFFFFF00 新客標記，扣掉 alpha)', () => {
   assert.equal(colorObjectToHex({ red: 1, green: 1, blue: 0 }), '#FFFF00');
@@ -224,4 +224,60 @@ test('setCellNote: 組出正確的 batchUpdate request body，只更新 note 欄
   assert.equal(req.range.startColumnIndex, 2);
   assert.equal(req.fields, 'note');
   assert.equal(req.rows[0].values[0].note, '⚠️ 測試');
+});
+
+test('getCellNote: 讀正確的 A1 座標，回傳 note/實際分頁 id/標題', async () => {
+  let capturedUrl;
+  const fakeFetch = async (url) => {
+    capturedUrl = url.toString();
+    return {
+      ok: true,
+      json: async () => ({
+        sheets: [
+          {
+            properties: { sheetId: 42, title: '7月-麒' },
+            data: [{ rowData: [{ values: [{ note: '⚠️ 同步失敗：找不到師傅「許老師」', formattedValue: 'Kelie' }] }] }],
+          },
+        ],
+      }),
+    };
+  };
+  const result = await getCellNote(
+    { GOOGLE_SHEET_ID: 'id' },
+    { sheetTitle: '7月-麒', rowIndex: 48, colIndex: 5, accessToken: 't' },
+    { fetch: fakeFetch }
+  );
+  assert.ok(capturedUrl.includes('F49'), 'row 48(0-indexed)+col 5(0-indexed=F) 應該轉成 A1 座標 F49');
+  assert.equal(result.note, '⚠️ 同步失敗：找不到師傅「許老師」');
+  assert.equal(result.actualSheetId, 42);
+  assert.equal(result.actualSheetTitle, '7月-麒');
+  assert.equal(result.formattedValue, 'Kelie');
+});
+
+test('getCellNote: 沒有備註時回傳 null，不是丟錯', async () => {
+  const fakeFetch = async () => ({
+    ok: true,
+    json: async () => ({
+      sheets: [{ properties: { sheetId: 1, title: 'x' }, data: [{ rowData: [{ values: [{}] }] }] }],
+    }),
+  });
+  const result = await getCellNote({ GOOGLE_SHEET_ID: 'id' }, { sheetTitle: 'x', rowIndex: 0, colIndex: 0, accessToken: 't' }, { fetch: fakeFetch });
+  assert.equal(result.note, null);
+});
+
+test('listSheetTabs: 回傳所有分頁的 title/sheetId 清單', async () => {
+  const fakeFetch = async () => ({
+    ok: true,
+    json: async () => ({
+      sheets: [
+        { properties: { sheetId: 1, title: '7月-麒' } },
+        { properties: { sheetId: 2, title: '7月-治' } },
+      ],
+    }),
+  });
+  const tabs = await listSheetTabs({ GOOGLE_SHEET_ID: 'id' }, { accessToken: 't' }, { fetch: fakeFetch });
+  assert.deepEqual(tabs, [
+    { title: '7月-麒', sheetId: 1 },
+    { title: '7月-治', sheetId: 2 },
+  ]);
 });

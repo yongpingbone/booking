@@ -20,10 +20,12 @@ import { getLatestSnapshot, saveSnapshot, appendLog } from './snapshotStore.js';
 import { diffSnapshots } from './diff.js';
 import { fetchAndParseWeek, fetchAndParseWeekCached } from './sheetParser.js';
 import { validateBookingRecord } from './validate.js';
-import { markCellStatus } from './sheetWriter.js';
+import { markCellStatus, resolveCellReference } from './sheetWriter.js';
 import { saveBooking } from './supabaseClient.js';
 import { reconcileMonth } from './reconcile.js';
 import { weekKeysToSync, mondayOf, taipeiDateString } from './weekKeys.js';
+import { getAccessToken } from './googleAuth.js';
+import { getCellNote, listSheetTabs, setCellNote } from './sheetsApi.js';
 
 /**
  * 實際的診斷/寫入邏輯，接受已經抓好的記錄陣列，不自己去打 Sheets API。
@@ -344,6 +346,52 @@ export default {
         }
       }
       return Response.json({ scannedWeekKeys: weekKeys, invalidCount: invalidRecords.length, invalidRecords }, { status: 200 });
+    }
+
+    if (url.pathname === '/debug/inspect-cell' && request.method === 'GET') {
+      const providedSecret = request.headers.get('X-Internal-Secret');
+      if (!env.INTERNAL_SYNC_SECRET || providedSecret !== env.INTERNAL_SYNC_SECRET) {
+        return new Response('Unauthorized', { status: 401 });
+      }
+      // 診斷用：直接讀某一格在 Google 那邊實際存的備註內容，不靠猜的。
+      // ?date=2026-07-09&startTime=14:00&sheetMasterLabel=麒&clear=true
+      // clear=true 時，讀完現況後會再嘗試清空備註、然後馬上再讀一次確認
+      // 有沒有真的清掉——整個過程完全透明，不隱藏任何一步的結果。
+      const date = url.searchParams.get('date');
+      const startTime = url.searchParams.get('startTime');
+      const sheetMasterLabel = url.searchParams.get('sheetMasterLabel');
+      const shouldClear = url.searchParams.get('clear') === 'true';
+      if (!date || !startTime || !sheetMasterLabel) {
+        return Response.json({ error: '需要 date、startTime、sheetMasterLabel 三個查詢參數' }, { status: 400 });
+      }
+      try {
+        const cellRef = resolveCellReference({ date, startTime, sheetMasterLabel });
+        const accessToken = await getAccessToken(env);
+        const allTabs = await listSheetTabs(env, { accessToken });
+        const matchingTabs = allTabs.filter((t) => t.title === cellRef.sheetTitle);
+
+        const before = await getCellNote(env, { ...cellRef, accessToken });
+
+        let afterClear = null;
+        if (shouldClear) {
+          await setCellNote(env, { ...cellRef, note: null, accessToken });
+          afterClear = await getCellNote(env, { ...cellRef, accessToken });
+        }
+
+        return Response.json(
+          {
+            computedCellReference: cellRef,
+            allTabsCount: allTabs.length,
+            matchingTabsForThisTitle: matchingTabs, // 如果這個陣列長度 > 1，代表有重複分頁名稱，會抓錯 sheetId
+            noteBeforeClear: before,
+            clearAttempted: shouldClear,
+            noteAfterClear: afterClear,
+          },
+          { status: 200 }
+        );
+      } catch (err) {
+        return Response.json({ error: String(err?.stack ?? err?.message ?? err) }, { status: 500 });
+      }
     }
 
     if (request.method !== 'POST' || (url.pathname !== '/sync' && url.pathname !== '/reconcile-month')) {

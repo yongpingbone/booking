@@ -118,6 +118,65 @@ async function setCellNote(env, { sheetTitle, rowIndex, colIndex, note, accessTo
   }
 }
 
+/**
+ * 直接讀某一格「目前實際」的備註內容，跟 fetchGridRows 不一樣(那支故意只抓
+ * value/顏色，沒有要 note 欄位)。診斷用：親眼確認 Google 那邊到底存了什麼，
+ * 不要再靠猜的。
+ * @param {object} env 需要 env.GOOGLE_SHEET_ID
+ * @param {{sheetTitle: string, rowIndex: number, colIndex: number, accessToken: string}} params
+ * @param {object} [deps]
+ * @returns {Promise<string|null>}
+ */
+async function getCellNote(env, { sheetTitle, rowIndex, colIndex, accessToken }, deps = {}) {
+  const doFetch = deps.fetch ?? fetch;
+  if (!env.GOOGLE_SHEET_ID) throw new Error('缺少 env.GOOGLE_SHEET_ID');
+
+  const colLetter = String.fromCharCode(65 + colIndex);
+  const rowNumber = rowIndex + 1;
+  const a1Range = `'${sheetTitle.replace(/'/g, "''")}'!${colLetter}${rowNumber}`;
+
+  const url = new URL(`https://sheets.googleapis.com/v4/spreadsheets/${env.GOOGLE_SHEET_ID}`);
+  url.searchParams.set('includeGridData', 'true');
+  url.searchParams.set('ranges', a1Range);
+  url.searchParams.set('fields', 'sheets(properties(sheetId,title),data.rowData.values(note,userEnteredValue,formattedValue))');
+
+  const res = await doFetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Sheets API 讀取備註失敗 (HTTP ${res.status}): ${text}`);
+  }
+  const data = await res.json();
+  const sheet = data.sheets?.[0];
+  const cell = sheet?.data?.[0]?.rowData?.[0]?.values?.[0];
+  return {
+    actualSheetId: sheet?.properties?.sheetId ?? null,
+    actualSheetTitle: sheet?.properties?.title ?? null,
+    note: cell?.note ?? null,
+    formattedValue: cell?.formattedValue ?? null,
+  };
+}
+
+/**
+ * 列出整份試算表所有分頁的 (title, sheetId)，診斷用：確認有沒有重複或
+ * 對不起來的分頁名稱，導致 getSheetIdByTitle 抓錯 sheetId。
+ * @param {object} env
+ * @param {{accessToken: string}} params
+ * @param {object} [deps]
+ * @returns {Promise<Array<{title: string, sheetId: number}>>}
+ */
+async function listSheetTabs(env, { accessToken }, deps = {}) {
+  const doFetch = deps.fetch ?? fetch;
+  const url = new URL(`https://sheets.googleapis.com/v4/spreadsheets/${env.GOOGLE_SHEET_ID}`);
+  url.searchParams.set('fields', 'sheets.properties(sheetId,title)');
+  const res = await doFetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Sheets API 查詢分頁清單失敗 (HTTP ${res.status}): ${text}`);
+  }
+  const data = await res.json();
+  return (data.sheets ?? []).map((s) => ({ title: s.properties?.title, sheetId: s.properties?.sheetId }));
+}
+
 // 分頁名稱 -> sheetId 的對照表快取在記憶體裡。setCellNote() 驗證失敗時可能
 // 短時間內被呼叫很多次(例如一次同步有很多筆驗證失敗)，每次都重新查一次
 // 分頁清單會很快打爆 Sheets API 的「每分鐘讀取次數」限制(實測撞過 429)。
@@ -163,4 +222,4 @@ function _resetSheetIdCacheForTests() {
   sheetIdCache = null;
 }
 
-export { fetchGridRows, normalizeCell, colorObjectToHex, setCellNote, getSheetIdByTitle, _resetSheetIdCacheForTests };
+export { fetchGridRows, normalizeCell, colorObjectToHex, setCellNote, getSheetIdByTitle, getCellNote, listSheetTabs, _resetSheetIdCacheForTests };
