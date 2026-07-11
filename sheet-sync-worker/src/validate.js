@@ -44,6 +44,16 @@ async function validateBookingRecord(record, env, deps = {}) {
 
   const errors = [];
 
+  // sheetParser.js 會把明顯有問題的內容(#REF!、落單的延續符號、不在已確認
+  // 清單裡但長得像延續符號的東西)標記 needsReview，但這個標記之前只是
+  // 掛在物件上、從來沒有真的被檢查過——等於形同虛設，這些明顯是壞資料的
+  // 內容照樣被當成合法姓名寫進資料庫、顯示在師傅端 App 上(#REF! 這種公式
+  // 錯誤殘留被當成真實客戶姓名，是真的發生過的事故)。這裡讓它真的擋下來，
+  // 不寫入，比照一般驗證失敗的處理方式(寫備註提示，等 Sheet 那邊修正)。
+  if (record.needsReview) {
+    errors.push(...(record.reviewReasons?.length ? record.reviewReasons : ['內容需要人工複查，原因不明']));
+  }
+
   if (!record.date) errors.push('日期不能空白');
   else if (!DATE_RE.test(record.date)) errors.push('日期格式錯誤（要 YYYY-MM-DD）');
 

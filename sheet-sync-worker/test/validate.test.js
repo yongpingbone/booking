@@ -136,3 +136,24 @@ test('existingId：同 slot 有既有預約且姓名相符時，帶出那筆的 
   assert.equal(result.valid, true);
   assert.equal(result.existingId, 'existing-abc');
 });
+
+test('needsReview:true 的記錄要被擋下來，不能寫進資料庫(之前這個標記從沒被真的檢查過，#REF! 這種壞資料因此流進去過)', async () => {
+  const result = await validateBookingRecord(
+    baseRecord({ customerName: '#REF!', needsReview: true, reviewReasons: ['內容是壞掉的公式參照(#REF!)，可能是原本參照的列/儲存格被刪除，需要人工確認'] }),
+    {},
+    deps()
+  );
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.includes('#REF!')));
+});
+
+test('needsReview:true 但沒有帶 reviewReasons 時，還是要擋下來、給一個通用錯誤訊息，不是靜默放行', async () => {
+  const result = await validateBookingRecord(baseRecord({ needsReview: true }), {}, deps());
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.length > 0);
+});
+
+test('needsReview:false(或沒設定)的正常記錄不受影響，照常通過驗證', async () => {
+  const result = await validateBookingRecord(baseRecord({ needsReview: false }), {}, deps());
+  assert.equal(result.valid, true);
+});
