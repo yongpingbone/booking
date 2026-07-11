@@ -389,3 +389,56 @@ test('重試後還是失敗(不同原因)：下一輪還是會繼續重試，不
 
   assert.equal(validateCalls, 3, '三輪都該重試，不是只重試一次');
 });
+
+test('fetch(): GET /debug/invalid-records 也要驗證 X-Internal-Secret', async () => {
+  const env = makeEnv();
+  const request = new Request('https://worker.example/debug/invalid-records', {
+    method: 'GET',
+    headers: { 'X-Internal-Secret': 'wrong' },
+  });
+  const res = await worker.fetch(request, env, {});
+  assert.equal(res.status, 401);
+});
+
+test('fetch(): GET /debug/invalid-records 掃過快照，正確列出 invalid 的記錄跟原因', async () => {
+  const env = makeEnv();
+
+  // 先讓一筆記錄真的失敗過、存進快照
+  const fakeRecords = [{ identityKey: '許老師|2026-07-06|09:00', masterName: '許老師', date: '2026-07-06', startTime: '09:00', customerName: '陳先生', contentHash: 'h1' }];
+  await runSyncForWeekWithRecords(env, '2026-07-06', fakeRecords, {
+    validateBookingRecord: async () => ({ valid: false, errors: ['找不到師傅「許老師」'] }),
+    markCellStatus: async () => {},
+    saveBooking: async () => {},
+  });
+
+  const request = new Request('https://worker.example/debug/invalid-records', {
+    method: 'GET',
+    headers: { 'X-Internal-Secret': 'test-secret' },
+  });
+  const res = await worker.fetch(request, env, {});
+  const body = await res.json();
+
+  assert.equal(res.status, 200);
+  const found = body.invalidRecords.find((r) => r.identityKey === '許老師|2026-07-06|09:00');
+  assert.ok(found, '應該要找到剛剛失敗的那筆');
+  assert.equal(found.lastError, '找不到師傅「許老師」');
+  assert.equal(found.customerName, '陳先生');
+});
+
+test('fetch(): GET /debug/invalid-records 對已經成功(synced)的記錄不會列出來', async () => {
+  const env = makeEnv();
+  const fakeRecords = [{ identityKey: 'x|2026-07-06|09:00', masterName: '麒', date: '2026-07-06', startTime: '09:00', customerName: '王小明', contentHash: 'h1' }];
+  await runSyncForWeekWithRecords(env, '2026-07-06', fakeRecords, {
+    validateBookingRecord: async () => ({ valid: true, row: {}, existingId: null }),
+    markCellStatus: async () => {},
+    saveBooking: async () => {},
+  });
+
+  const request = new Request('https://worker.example/debug/invalid-records', {
+    method: 'GET',
+    headers: { 'X-Internal-Secret': 'test-secret' },
+  });
+  const res = await worker.fetch(request, env, {});
+  const body = await res.json();
+  assert.equal(body.invalidRecords.find((r) => r.identityKey === 'x|2026-07-06|09:00'), undefined);
+});

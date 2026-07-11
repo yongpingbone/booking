@@ -114,17 +114,21 @@ async function runSyncForWeekWithRecords(env, weekKey, currentRecords, deps = {}
     }
 
     // 存快照前，把這次的處理結果(或者沒被重新處理時、沿用上次的結果)記到
-    // 每筆記錄的 lastStatus 上，讓下一輪知道哪些記錄即使 unchanged 也要重試。
+    // 每筆記錄的 lastStatus/lastError 上，讓下一輪知道哪些記錄即使 unchanged
+    // 也要重試，也讓 /debug/invalid-records 這類診斷端點能直接看到卡在哪裡，
+    // 不用再靠 Dashboard 畫面截圖確認。
     const statusByKey = new Map();
     for (const result of log.results) {
       if (!result.identityKey || statusByKey.has(result.identityKey)) continue;
-      statusByKey.set(result.identityKey, result.status === 'synced' ? 'synced' : 'invalid');
+      const status = result.status === 'synced' ? 'synced' : 'invalid';
+      const error = result.status === 'synced' ? null : (result.errors ? result.errors.join('; ') : result.error ?? null);
+      statusByKey.set(result.identityKey, { status, error });
     }
-    const previousStatusByKey = new Map((previous?.records ?? []).map((r) => [r.identityKey, r.lastStatus]));
-    const currentWithStatus = current.map((r) => ({
-      ...r,
-      lastStatus: statusByKey.get(r.identityKey) ?? previousStatusByKey.get(r.identityKey) ?? 'synced',
-    }));
+    const previousStatusByKey = new Map((previous?.records ?? []).map((r) => [r.identityKey, { status: r.lastStatus, error: r.lastError }]));
+    const currentWithStatus = current.map((r) => {
+      const resolved = statusByKey.get(r.identityKey) ?? previousStatusByKey.get(r.identityKey) ?? { status: 'synced', error: null };
+      return { ...r, lastStatus: resolved.status ?? 'synced', lastError: resolved.error ?? null };
+    });
 
     await saveSnapshot(env.SHEET_SYNC_BUCKET, weekKey, currentWithStatus);
 
@@ -252,15 +256,49 @@ export default {
 
   /**
    * 手動觸發：
-   *   POST /sync -- body 可選 { "weekKey": "2026-07-06" }，不給就用當週。
+   *   POST /sync -- body 可選 { "weekKey": "2026-07-06" } 或
+   *     { "scope": "current" }(目前三個月範圍全部重跑)或
+   *     { "weekKeys": [...] }(指定多個 weekKey)，都不給就用當週。
    *   POST /reconcile-month -- 一次性月份校正，body { "year": 2026, "month": 7,
    *     "dryRun": true } —— dryRun 預設 true，只回報會取消哪些，不會真的動手；
    *     要看過 dry run 結果、確定沒問題後，才帶 "dryRun": false 真的執行。
+   *   GET /debug/invalid-records -- 診斷用，列出目前三個月範圍內所有還卡在
+   *     invalid 狀態的記錄跟上次失敗原因，不用再靠 Dashboard 畫面截圖確認。
    * 認證方式比照 notify-master-line 的 dual-auth 模式：這裡先用 shared secret，
    * 之後如果要開放師傅端 app 直接呼叫，可以再加 LINE idToken 驗證。
    */
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    if (url.pathname === '/debug/invalid-records' && request.method === 'GET') {
+      const providedSecret = request.headers.get('X-Internal-Secret');
+      if (!env.INTERNAL_SYNC_SECRET || providedSecret !== env.INTERNAL_SYNC_SECRET) {
+        return new Response('Unauthorized', { status: 401 });
+      }
+      // 診斷用：掃目前三個月範圍內每個 weekKey 的快照，把 lastStatus 還是
+      // 'invalid' 的記錄整理出來(含上次失敗的原因)。不用再靠 Dashboard
+      // 畫面截圖確認卡在哪裡，直接看 R2 存的實際狀態。
+      const weekKeys = weekKeysToSync(new Date());
+      const invalidRecords = [];
+      for (const weekKey of weekKeys) {
+        const snapshot = await getLatestSnapshot(env.SHEET_SYNC_BUCKET, weekKey).catch(() => null);
+        for (const r of snapshot?.records ?? []) {
+          if (r.lastStatus === 'invalid') {
+            invalidRecords.push({
+              weekKey,
+              identityKey: r.identityKey,
+              masterName: r.masterName,
+              date: r.date,
+              startTime: r.startTime,
+              customerName: r.customerName,
+              lastError: r.lastError,
+            });
+          }
+        }
+      }
+      return Response.json({ scannedWeekKeys: weekKeys, invalidCount: invalidRecords.length, invalidRecords }, { status: 200 });
+    }
+
     if (request.method !== 'POST' || (url.pathname !== '/sync' && url.pathname !== '/reconcile-month')) {
       return new Response('Not found', { status: 404 });
     }

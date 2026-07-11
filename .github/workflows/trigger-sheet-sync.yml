@@ -12,6 +12,7 @@ on:
           - sync
           - sync-full-scope
           - reconcile-month
+          - debug-invalid-records
       weekKey:
         description: '[sync 用] 週一日期(YYYY-MM-DD)，留空 = 當週'
         required: false
@@ -44,6 +45,8 @@ jobs:
             exit 1
           fi
 
+          METHOD="POST"
+
           if [ "${{ inputs.endpoint }}" = "sync" ]; then
             URL="https://yongping-sheet-sync.yihanhsu123.workers.dev/sync"
             if [ -n "${{ inputs.weekKey }}" ]; then
@@ -56,21 +59,33 @@ jobs:
             # 不用在這裡列出來。跟排程用的是同一套範圍邏輯。
             URL="https://yongping-sheet-sync.yihanhsu123.workers.dev/sync"
             BODY='{"scope": "current"}'
+          elif [ "${{ inputs.endpoint }}" = "debug-invalid-records" ]; then
+            # 診斷用，列出目前還卡在失敗狀態的記錄跟原因，不用改資料。
+            URL="https://yongping-sheet-sync.yihanhsu123.workers.dev/debug/invalid-records"
+            METHOD="GET"
+            BODY=""
           else
             URL="https://yongping-sheet-sync.yihanhsu123.workers.dev/reconcile-month"
             BODY='{"year": ${{ inputs.year }}, "month": ${{ inputs.month }}, "dryRun": ${{ inputs.dryRun }}}'
           fi
 
-          echo "POST $URL"
-          echo "body: $BODY"
+          echo "$METHOD $URL"
+          [ -n "$BODY" ] && echo "body: $BODY"
           echo "---"
 
-          curl -sS -X POST "$URL" \
-            -H "X-Internal-Secret: $INTERNAL_SYNC_SECRET" \
-            -H "Content-Type: application/json" \
-            -d "$BODY" \
-            -w "\nHTTP status: %{http_code}\n" \
-            -o response.json
+          if [ "$METHOD" = "GET" ]; then
+            curl -sS -X GET "$URL" \
+              -H "X-Internal-Secret: $INTERNAL_SYNC_SECRET" \
+              -w "\nHTTP status: %{http_code}\n" \
+              -o response.json
+          else
+            curl -sS -X POST "$URL" \
+              -H "X-Internal-Secret: $INTERNAL_SYNC_SECRET" \
+              -H "Content-Type: application/json" \
+              -d "$BODY" \
+              -w "\nHTTP status: %{http_code}\n" \
+              -o response.json
+          fi
 
           echo "---"
           cat response.json | jq . || cat response.json
