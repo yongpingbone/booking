@@ -5,6 +5,8 @@
 |  '--' '  ''  | `-' | `-' |  \   --|   .'.   |  |  \ '-'  | '-' '
 `------' `----' `---' `---'`--'`----'--'   '--`--'   `--`--|  |-'
                                                            `--'    
-Please, enter passwords for the keystore ./android.keystore and alias android.
+Using passwords set in the BUBBLEWRAP_KEYSTORE_PASSWORD and BUBBLEWRAP_KEY_PASSWORD environmental variables.
 
-? Password for the Key Store: [30D[30C
+Building the Android App...
+	- Generated Android APK at ./app-release-signed.apk
+	- Generated Android App Bundle at ./app-release-bundle.aab
