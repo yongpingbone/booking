@@ -1,0 +1,19 @@
+name: 診斷 manifest/icon URL
+on:
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 檢查各種可能的網址
+        run: |
+          echo "=== Netlify manifest ==="
+          curl -sS -o /dev/null -w "%{http_code}\n" https://yongpingbone.netlify.app/manifest.json
+          echo "=== Netlify icon ==="
+          curl -sS -o /dev/null -w "%{http_code}\n" https://yongpingbone.netlify.app/booking/icon-512.png
+          echo "=== Netlify icon(不帶 /booking/) ==="
+          curl -sS -o /dev/null -w "%{http_code}\n" https://yongpingbone.netlify.app/icon-512.png
+          echo "=== GitHub Pages manifest ==="
+          curl -sS -o /dev/null -w "%{http_code}\n" https://yongpingbone.github.io/booking/manifest.json
+          echo "=== GitHub Pages icon ==="
+          curl -sS -o /dev/null -w "%{http_code}\n" https://yongpingbone.github.io/booking/icon-512.png
