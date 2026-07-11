@@ -442,3 +442,81 @@ test('fetch(): GET /debug/invalid-records 對已經成功(synced)的記錄不會
   const body = await res.json();
   assert.equal(body.invalidRecords.find((r) => r.identityKey === 'x|2026-07-06|09:00'), undefined);
 });
+
+test('資料寫入成功、但清備註失敗：下一輪(內容 unchanged)要單獨重試清備註，不用重新驗證/寫入一次(輕量重試)', async () => {
+  const env = makeEnv();
+  const fakeRecords = [{ identityKey: 'x', contentHash: 'same-hash' }];
+
+  let validateCalls = 0;
+  let saveCalls = 0;
+  let markCallCount = 0;
+  const deps = {
+    validateBookingRecord: async () => {
+      validateCalls++;
+      return { valid: true, row: {}, existingId: null };
+    },
+    saveBooking: async () => {
+      saveCalls++;
+    },
+    markCellStatus: async () => {
+      markCallCount++;
+      if (markCallCount === 1) throw new Error('Sheets API 暫時掛了');
+      // 第二次(下一輪的重試)成功
+    },
+  };
+
+  const log1 = await runSyncForWeekWithRecords(env, '2026-07-06', fakeRecords, deps);
+  assert.equal(log1.results.find((r) => r.identityKey === 'x').status, 'synced');
+  assert.ok(log1.results.some((r) => r.status === 'clear_cell_status_failed'));
+
+  const log2 = await runSyncForWeekWithRecords(env, '2026-07-06', fakeRecords, deps);
+
+  assert.equal(validateCalls, 1, '第二輪不該重新驗證，資料本身沒問題');
+  assert.equal(saveCalls, 1, '第二輪不該重新寫入 Supabase');
+  assert.equal(log2.diffSummary.noteRetried, 1);
+  assert.ok(log2.results.some((r) => r.identityKey === 'x' && r.status === 'note_cleared_on_retry'));
+});
+
+test('資料寫入成功、清備註也成功：下一輪(unchanged)完全不用做任何事(效率優化維持)', async () => {
+  const env = makeEnv();
+  const fakeRecords = [{ identityKey: 'x', contentHash: 'same-hash' }];
+  let validateCalls = 0;
+  let markCalls = 0;
+  const deps = {
+    validateBookingRecord: async () => {
+      validateCalls++;
+      return { valid: true, row: {}, existingId: null };
+    },
+    saveBooking: async () => {},
+    markCellStatus: async () => {
+      markCalls++;
+    },
+  };
+
+  await runSyncForWeekWithRecords(env, '2026-07-06', fakeRecords, deps);
+  const log2 = await runSyncForWeekWithRecords(env, '2026-07-06', fakeRecords, deps);
+
+  assert.equal(validateCalls, 1);
+  assert.equal(markCalls, 1, '兩輪都成功，第二輪完全不該再呼叫 markCellStatus');
+  assert.equal(log2.diffSummary.noteRetried, 0);
+});
+
+test('清備註持續失敗：每一輪都會繼續重試，不會放棄', async () => {
+  const env = makeEnv();
+  const fakeRecords = [{ identityKey: 'x', contentHash: 'same-hash' }];
+  let markCalls = 0;
+  const deps = {
+    validateBookingRecord: async () => ({ valid: true, row: {}, existingId: null }),
+    saveBooking: async () => {},
+    markCellStatus: async () => {
+      markCalls++;
+      throw new Error('一直壞掉');
+    },
+  };
+
+  await runSyncForWeekWithRecords(env, '2026-07-06', fakeRecords, deps);
+  await runSyncForWeekWithRecords(env, '2026-07-06', fakeRecords, deps);
+  await runSyncForWeekWithRecords(env, '2026-07-06', fakeRecords, deps);
+
+  assert.equal(markCalls, 3, '三輪都該嘗試清備註，即使一直失敗');
+});

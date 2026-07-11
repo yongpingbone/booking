@@ -108,26 +108,69 @@ async function runSyncForWeekWithRecords(env, weekKey, currentRecords, deps = {}
         await doMarkCellStatus(env, record, { type: 'synced' });
       } catch (err) {
         // 清備註失敗不影響這筆資料本身已經成功寫進資料庫這件事，只是
-        // Sheet 上可能還留著舊備註沒清掉，下一輪還會再試一次。
+        // Sheet 上可能還留著舊備註沒清掉——記下來，下面的 noteCleared 追蹤
+        // 會確保下一輪單獨重試清備註這個動作(不用整筆重新驗證寫入一次)。
+        log.results.push({ identityKey: record.identityKey, status: 'clear_cell_status_failed', error: String(err?.message ?? err) });
+      }
+    }
+
+    // 資料本身是對的(synced)，但清備註那個步驟可能失敗過——這是跟資料驗證
+    // 失敗完全獨立的另一種「卡住」，兩者互不相干(實測發生過：資料庫寫入
+    // 成功、debug 端點也確認沒有 invalid 記錄，但 Sheet 上舊備註還在，就是
+    // 卡在這裡)。找出這批、單獨重試清備註，不用整筆重新驗證寫入。
+    const previousNoteFailedKeys = new Set(
+      (previous?.records ?? []).filter((r) => r.lastStatus === 'synced' && r.noteCleared === false).map((r) => r.identityKey)
+    );
+    const toProcessKeys = new Set(toProcess.map((r) => r.identityKey));
+    const noteRetryOnly = diffResult.unchanged.filter(
+      (r) => previousNoteFailedKeys.has(r.identityKey) && !toProcessKeys.has(r.identityKey)
+    );
+    log.diffSummary.noteRetried = noteRetryOnly.length;
+
+    for (const record of noteRetryOnly) {
+      try {
+        await doMarkCellStatus(env, record, { type: 'synced' });
+        log.results.push({ identityKey: record.identityKey, status: 'note_cleared_on_retry' });
+      } catch (err) {
         log.results.push({ identityKey: record.identityKey, status: 'clear_cell_status_failed', error: String(err?.message ?? err) });
       }
     }
 
     // 存快照前，把這次的處理結果(或者沒被重新處理時、沿用上次的結果)記到
-    // 每筆記錄的 lastStatus/lastError 上，讓下一輪知道哪些記錄即使 unchanged
-    // 也要重試，也讓 /debug/invalid-records 這類診斷端點能直接看到卡在哪裡，
-    // 不用再靠 Dashboard 畫面截圖確認。
-    const statusByKey = new Map();
+    // 每筆記錄的 lastStatus/lastError/noteCleared 上，讓下一輪知道哪些記錄
+    // 即使 unchanged 也要重試(驗證失敗的整筆重試、只有清備註失敗的單獨重試)，
+    // 也讓 /debug/invalid-records 這類診斷端點能直接看到卡在哪裡。
+    const resultsByKey = new Map();
     for (const result of log.results) {
-      if (!result.identityKey || statusByKey.has(result.identityKey)) continue;
-      const status = result.status === 'synced' ? 'synced' : 'invalid';
-      const error = result.status === 'synced' ? null : (result.errors ? result.errors.join('; ') : result.error ?? null);
-      statusByKey.set(result.identityKey, { status, error });
+      if (!result.identityKey) continue;
+      if (!resultsByKey.has(result.identityKey)) resultsByKey.set(result.identityKey, []);
+      resultsByKey.get(result.identityKey).push(result);
     }
-    const previousStatusByKey = new Map((previous?.records ?? []).map((r) => [r.identityKey, { status: r.lastStatus, error: r.lastError }]));
+    const statusByKey = new Map();
+    for (const [key, results] of resultsByKey) {
+      const invalidResult = results.find((r) => r.status === 'invalid' || r.status === 'validation_error');
+      if (invalidResult) {
+        const error = invalidResult.errors ? invalidResult.errors.join('; ') : invalidResult.error ?? null;
+        statusByKey.set(key, { status: 'invalid', error, noteCleared: null });
+        continue;
+      }
+      const hasSynced = results.some((r) => r.status === 'synced' || r.status === 'note_cleared_on_retry');
+      if (hasSynced) {
+        const hasClearFailed = results.some((r) => r.status === 'clear_cell_status_failed');
+        statusByKey.set(key, { status: 'synced', error: null, noteCleared: !hasClearFailed });
+      }
+    }
+    const previousStatusByKey = new Map(
+      (previous?.records ?? []).map((r) => [r.identityKey, { status: r.lastStatus, error: r.lastError, noteCleared: r.noteCleared }])
+    );
     const currentWithStatus = current.map((r) => {
-      const resolved = statusByKey.get(r.identityKey) ?? previousStatusByKey.get(r.identityKey) ?? { status: 'synced', error: null };
-      return { ...r, lastStatus: resolved.status ?? 'synced', lastError: resolved.error ?? null };
+      const resolved = statusByKey.get(r.identityKey) ?? previousStatusByKey.get(r.identityKey) ?? { status: 'synced', error: null, noteCleared: true };
+      return {
+        ...r,
+        lastStatus: resolved.status ?? 'synced',
+        lastError: resolved.error ?? null,
+        noteCleared: resolved.noteCleared ?? true,
+      };
     });
 
     await saveSnapshot(env.SHEET_SYNC_BUCKET, weekKey, currentWithStatus);
