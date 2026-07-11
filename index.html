@@ -1257,9 +1257,14 @@ function LoginScreen({
       }
       // 修正2：Supabase實際回傳的錯誤訊息明確講「Only the token_hash and type
       // should be provided」——用token_hash時不能同時帶email，會被拒絕。
+      // 修正3(真正的根因)：用pg_net實際呼叫generateLink+verify端點測試過，
+      // 確認generateLink({type:"magiclink"})產生的action_link，其驗證端點
+      // 用的是type=magiclink，不是"email"——網路上大部分範例教的"email"是
+      // 給其他OTP場景用的，跟這裡的token不匹配。已用真實請求驗證：
+      // type改成magiclink後，access_token/refresh_token都正確產生成功。
       const { data: otpData, error: otpErr } = await sb.auth.verifyOtp({
         token_hash: j.hashedToken,
-        type: "email"
+        type: "magiclink"
       });
       if (otpErr || !otpData?.session) {
         setLineBusy(false);
