@@ -21,7 +21,7 @@ import { diffSnapshots } from './diff.js';
 import { fetchAndParseWeek, fetchAndParseWeekCached, SHEET_MASTERS, monthsSpannedByWeek } from './sheetParser.js';
 import { validateBookingRecord } from './validate.js';
 import { markCellStatus, resolveCellReference } from './sheetWriter.js';
-import { saveBooking, findGarbageBookings, cancelBooking } from './supabaseClient.js';
+import { saveBooking, findGarbageBookings, cancelBooking, setBookingStatus } from './supabaseClient.js';
 import { reconcileMonth } from './reconcile.js';
 import { weekKeysToSync, mondayOf, taipeiDateString } from './weekKeys.js';
 import { getAccessToken } from './googleAuth.js';
@@ -474,6 +474,36 @@ export default {
           for (const b of garbageBookings) await cancelBooking(env, b.id);
         }
         return Response.json({ dryRun, foundCount: garbageBookings.length, bookings: garbageBookings }, { status: 200 });
+      } catch (err) {
+        return Response.json({ error: String(err?.stack ?? err?.message ?? err) }, { status: 500 });
+      }
+    }
+
+    if (url.pathname === '/debug/restore-bookings' && request.method === 'POST') {
+      const providedSecret = request.headers.get('X-Internal-Secret');
+      if (!env.INTERNAL_SYNC_SECRET || providedSecret !== env.INTERNAL_SYNC_SECRET) {
+        return new Response('Unauthorized', { status: 401 });
+      }
+      // 復原用：body { "ids": [...], "status": "confirmed" }，把指定的預約
+      // id 都設回指定的狀態。這支存在是因為 clean-garbage-bookings 執行
+      // 後，Hanna 澄清那批 #REF! 資料其實是她自己 Google 綁定設定錯誤造成
+      // 的，要保留自己排查，不是真的垃圾資料，需要復原剛剛的取消動作。
+      const body = await request.json().catch(() => ({}));
+      const { ids, status } = body;
+      if (!Array.isArray(ids) || ids.length === 0 || !status) {
+        return Response.json({ error: '需要 ids(非空陣列) 跟 status' }, { status: 400 });
+      }
+      try {
+        const results = [];
+        for (const id of ids) {
+          try {
+            await setBookingStatus(env, id, status);
+            results.push({ id, ok: true });
+          } catch (err) {
+            results.push({ id, ok: false, error: String(err?.message ?? err) });
+          }
+        }
+        return Response.json({ restoredCount: results.filter((r) => r.ok).length, failedCount: results.filter((r) => !r.ok).length, results }, { status: 200 });
       } catch (err) {
         return Response.json({ error: String(err?.stack ?? err?.message ?? err) }, { status: 500 });
       }

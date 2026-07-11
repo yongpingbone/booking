@@ -173,3 +173,23 @@ test('findGarbageBookings: 失敗時丟出清楚的錯誤', async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test('setBookingStatus: PATCH 到正確的 id，body 是指定的 status', async () => {
+  const env = makeEnv();
+  let capturedUrl, capturedOptions;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    capturedUrl = url.toString();
+    capturedOptions = options;
+    return { ok: true };
+  };
+  try {
+    const { setBookingStatus } = await import('../src/supabaseClient.js');
+    await setBookingStatus(env, 'booking-abc', 'confirmed');
+    assert.ok(capturedUrl.includes('id=eq.booking-abc'));
+    assert.equal(capturedOptions.method, 'PATCH');
+    assert.deepEqual(JSON.parse(capturedOptions.body), { status: 'confirmed' });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

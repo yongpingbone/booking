@@ -603,3 +603,25 @@ test('fetch(): POST /debug/clean-garbage-bookings 也要驗證 X-Internal-Secret
   const res = await worker.fetch(request, env, {});
   assert.equal(res.status, 401);
 });
+
+test('fetch(): POST /debug/restore-bookings 也要驗證 X-Internal-Secret', async () => {
+  const env = makeEnv();
+  const request = new Request('https://worker.example/debug/restore-bookings', {
+    method: 'POST',
+    headers: { 'X-Internal-Secret': 'wrong' },
+    body: JSON.stringify({ ids: ['x'], status: 'confirmed' }),
+  });
+  const res = await worker.fetch(request, env, {});
+  assert.equal(res.status, 401);
+});
+
+test('fetch(): POST /debug/restore-bookings 缺 ids 或 status 要回 400', async () => {
+  const env = makeEnv();
+  const request = new Request('https://worker.example/debug/restore-bookings', {
+    method: 'POST',
+    headers: { 'X-Internal-Secret': 'test-secret' },
+    body: JSON.stringify({}),
+  });
+  const res = await worker.fetch(request, env, {});
+  assert.equal(res.status, 400);
+});

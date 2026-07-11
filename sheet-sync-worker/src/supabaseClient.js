@@ -157,6 +157,39 @@ async function fetchBookingsInMonth(env, { year, month }) {
  * @param {string} id
  * @returns {Promise<void>}
  */
+/**
+ * 把一筆預約設成指定的狀態——比 cancelBooking 更泛用，用來復原
+ * (例如把誤取消的預約改回 'confirmed')，不是只能取消。
+ * @param {object} env
+ * @param {string} id
+ * @param {string} status
+ * @returns {Promise<void>}
+ */
+async function setBookingStatus(env, id, status) {
+  if (!env.SUPABASE_PROJECT_REF) throw new Error('缺少 env.SUPABASE_PROJECT_REF');
+  if (!env.SUPABASE_SERVICE_ROLE_KEY) throw new Error('缺少 env.SUPABASE_SERVICE_ROLE_KEY');
+
+  const url = new URL(`https://${env.SUPABASE_PROJECT_REF}.supabase.co/rest/v1/bookings`);
+  url.searchParams.set('id', `eq.${id}`);
+
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Supabase 設定狀態失敗 (HTTP ${res.status}): ${text}`);
+  }
+}
+
+export { setBookingStatus };
+
 async function cancelBooking(env, id) {
   if (!env.SUPABASE_PROJECT_REF) throw new Error('缺少 env.SUPABASE_PROJECT_REF');
   if (!env.SUPABASE_SERVICE_ROLE_KEY) throw new Error('缺少 env.SUPABASE_SERVICE_ROLE_KEY');
