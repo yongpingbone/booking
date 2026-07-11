@@ -2,7 +2,9 @@
 // ANALYTICS MODULE
 // ═══════════════════════════════════════════
 // ═══════════════════════════════════════════
-// 📊 提前統計（週報／月報，可選 AI 分析）— 只有 admin 看得到
+// 📊 提前統計（週報／月報，可選 AI 分析）
+// admin(role='admin'或'editor'，目前是麒/Hanna)：看全部師傅的數據，維持原本行為
+// 一般師傅(泓文/哲瑋/治)：只看/只推播自己的數據，AI分析也只針對自己
 // ═══════════════════════════════════════════
 function QuickReportPanel({ isAdmin, currentMaster }) {
   const [busy, setBusy] = React.useState(null); // 'week' | 'week-ai' | 'month' | 'month-ai' | null
@@ -10,15 +12,18 @@ function QuickReportPanel({ isAdmin, currentMaster }) {
   const [showResult, setShowResult] = React.useState(false);
   const runningRef = React.useRef(false); // ref同步生效，比state更早鎖住，防止手速快/畫面重繪延遲時重複觸發
 
-  if (!isAdmin) return null;
-
   const run = async (kind, withAI) => {
     if (runningRef.current) return; // 已經有一個在跑了，直接擋掉，不管state有沒有跟上
     runningRef.current = true;
     setBusy(withAI ? `${kind}-ai` : kind);
     try {
-      const rpcName = kind === "week" ? "send_weekly_settlement_report" : "send_monthly_settlement_report";
-      const { data: reportText, error } = await sb.rpc(rpcName);
+      let reportText, error;
+      if (isAdmin) {
+        const rpcName = kind === "week" ? "send_weekly_settlement_report" : "send_monthly_settlement_report";
+        ({ data: reportText, error } = await sb.rpc(rpcName));
+      } else {
+        ({ data: reportText, error } = await sb.rpc("send_my_settlement_report", { p_master_id: currentMaster.id, p_period: kind }));
+      }
       if (error) { alert("報表產生失敗：" + error.message); return; }
 
       let aiText = null;
@@ -29,10 +34,12 @@ function QuickReportPanel({ isAdmin, currentMaster }) {
             ? (() => { const d = new Date(today); d.setDate(d.getDate() - d.getDay()); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })()
             : `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
           const endDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+          const reqBody = { startDate, endDate };
+          if (!isAdmin) reqBody.masterId = currentMaster.id;
           const resp = await fetch("https://ikzyzkhuireqztbhrtna.supabase.co/functions/v1/generate-monthly-analysis", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ startDate, endDate })
+            body: JSON.stringify(reqBody)
           });
           const result = await resp.json();
           if (result.success) aiText = result.message;
@@ -55,7 +62,8 @@ function QuickReportPanel({ isAdmin, currentMaster }) {
 
   return /*#__PURE__*/React.createElement("div", { style: { padding: "12px 12px 0", borderBottom: "1px solid var(--border)", marginBottom: 12 } },
     /*#__PURE__*/React.createElement("div", { style: { fontWeight: 900, fontSize: 14, marginBottom: 8 } }, "📊 提前統計"),
-    /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: "var(--text-dim)", marginBottom: 10 } }, "不用等自動排程，現在就送出數字報表（會推播給管理員），要不要一起跑AI分析直接選對應按鈕。"),
+    /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: "var(--text-dim)", marginBottom: 10 } },
+      isAdmin ? "不用等自動排程，現在就送出數字報表（會推播給管理員），要不要一起跑AI分析直接選對應按鈕。" : "只會統計並推播給你自己的數據，不含其他師傅，要不要一起跑AI分析直接選對應按鈕。"),
     busy && busy.endsWith("-ai") && /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: "#f5a623", marginBottom: 10, fontWeight: 700 } }, "⏳ AI分析需要15-20秒左右，畫面沒動不代表卡住，請耐心等待、不要重複點擊或重新整理"),
     /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: "var(--text-dim)", marginBottom: 4, fontWeight: 700 } }, "本週"),
     /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 10 } },
@@ -86,7 +94,7 @@ function QuickReportPanel({ isAdmin, currentMaster }) {
       style: { background: "var(--bg-header)", borderRadius: "20px 20px 0 0", padding: "20px 18px 32px", width: "100%", maxWidth: 480, maxHeight: "80vh", overflowY: "auto" },
       onClick: e => e.stopPropagation()
     },
-      /*#__PURE__*/React.createElement("div", { style: { fontWeight: 900, fontSize: 15, marginBottom: 10 } }, "✓ 已推播給管理員"),
+      /*#__PURE__*/React.createElement("div", { style: { fontWeight: 900, fontSize: 15, marginBottom: 10 } }, isAdmin ? "✓ 已推播給管理員" : "✓ 已推播給你"),
       /*#__PURE__*/React.createElement("pre", { style: { whiteSpace: "pre-wrap", fontFamily: "inherit", fontSize: 13, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, padding: 12, marginBottom: lastMsg.ai ? 10 : 16 } }, lastMsg.report),
       lastMsg.ai && /*#__PURE__*/React.createElement("pre", { style: { whiteSpace: "pre-wrap", fontFamily: "inherit", fontSize: 13, background: "rgba(162,155,254,0.1)", border: "1px solid #a29bfe", borderRadius: 10, padding: 12, marginBottom: 16 } }, lastMsg.ai),
       /*#__PURE__*/React.createElement("button", {
