@@ -61,70 +61,39 @@ jobs:
           exp_internal 1
           set timeout 60
           spawn bubblewrap init --manifest https://yongpingbone.github.io/booking/manifest.json --directory .
-
-          # 第一階段(迴圈)：處理順序不固定、可能出現 0~N 次的題目——
-          # JDK/SDK 安裝詢問(理論上設定檔已經跳過，這裡是防呆)、Web app
-          # details 精靈的各欄位(用 regex 統一接受預設值)、方向鍵選單。
-          # 遇到 "*correct*"(精靈跑完、要求確認整體內容)就跳出迴圈，
-          # 進入第二階段。
+          # 全部題目統一用一個迴圈處理，不分階段——之前拆成兩階段(不固定
+          # 順序的用迴圈、keystore 欄位依序各自處理)，結果「Do you want to
+          # create one now?」剛好也符合第一階段的預設值 regex 被誤接走，
+          # 但接走之後沒有跳出迴圈(不是 correct)，導致卡在下一題(First
+          # and Last names，這題屬於「第二階段」的範圍，但流程還卡在
+          # 「第一階段」裡出不來)。
+          #
+          # 改回合併成一個迴圈，同時修正之前合併版本會出現的另一個問題：
+          # 用「*Organization*」這種寬鬆比對，會連「Organizational Unit」
+          # 或後面其他題目的殘留文字都一起命中，導致答案送錯欄位、無限
+          # 重複卡住。這次每個欄位比對都要求緊接著冒號(field:)，精確
+          # 對應到當下真正在問的那一題，不會被其他題目的文字誤觸發。
           expect {
             "*install the JDK*"     { send "n\r"; exp_continue }
             "*Path to your existing JDK*" { send "$env(JAVA_HOME)\r"; exp_continue }
             "*install the Android*" { send "n\r"; exp_continue }
             "*Path to the Android*" { send "$env(ANDROID_HOME)\r"; exp_continue }
+            "*create one now?*" { send "Yes\r"; exp_continue }
+            "*First and Last names*:*" { send "Yongping\r"; exp_continue }
+            "*Organizational Unit*:*" { send "Health\r"; exp_continue }
+            "*Organization:*" { send "Health\r"; exp_continue }
+            "*Locality*:*" { send "Taipei\r"; exp_continue }
+            "*Province*:*" { send "TW\r"; exp_continue }
+            "*Country*:*" { send "TW\r"; exp_continue }
+            "*Keystore password*:*" { send "pass1234\r"; exp_continue }
+            "*Key password*:*" { send "pass1234\r"; exp_continue }
             "*Use arrow keys*" { send "\r"; exp_continue }
             -re {\([^\r\n)]*\)[ \t]} { send "\r"; exp_continue }
-            "*correct*" { send "y\r" }
-            timeout { send_error "\n>>> INIT_TIMEOUT(第一階段)，目前緩衝內容如上 <<<\n"; exit 1 }
+            "*correct*" { send "y\r"; exp_continue }
+            eof { }
+            timeout { send_error "\n>>> INIT_TIMEOUT，遇到沒處理過的新題目，目前緩衝內容如上 <<<\n"; exit 1 }
           }
-
-          # 第二階段(依序、各自獨立)：keystore 相關欄位嚴格照順序、只會
-          # 出現一次——不能用迴圈處理，因為這幾題的提示文字互相是子字串
-          # 關係(例如 "Organization" 是 "Organizational Unit" 的子字串)，
-          # 用同一個累積中的 buffer 跑迴圈時，舊的已回答內容還留在 buffer
-          # 裡，會被後面的題目誤重複比對到，導致答案送錯欄位(實測發生過：
-          # Country Code 收到 Organizational Unit 的答案，無限重複卡住)。
-          # 各自獨立的 expect 呼叫，每叫一次就消費掉對應的 buffer，不會有
-          # 這個問題。
-          # 注意：「Do you want to create one now? (Y/n)」不在這裡處理——
-          # 這題的格式跟第一階段那條「(預設值) 後面接空白」的 regex 剛好
-          # 也對得上(Y/n 也是括號)，實測發現它會在第一階段就被接走，如果
-          # 這裡也保留對應的 expect，反而會因為第一階段已經吃掉這段內容、
-          # 這裡永遠等不到而卡住。直接從「First and Last names」開始接。
-          expect {
-            "*First and Last names*" { send "Yongping\r" }
-            timeout { send_error "\n>>> TIMEOUT at names <<<\n"; exit 1 }
-          }
-          expect {
-            "*Organizational Unit*" { send "Health\r" }
-            timeout { send_error "\n>>> TIMEOUT at org unit <<<\n"; exit 1 }
-          }
-          expect {
-            "*Organization*" { send "Health\r" }
-            timeout { send_error "\n>>> TIMEOUT at org <<<\n"; exit 1 }
-          }
-          expect {
-            "*Locality*" { send "Taipei\r" }
-            timeout { send_error "\n>>> TIMEOUT at locality <<<\n"; exit 1 }
-          }
-          expect {
-            "*Province*" { send "TW\r" }
-            timeout { send_error "\n>>> TIMEOUT at province <<<\n"; exit 1 }
-          }
-          expect {
-            "*Country Code*" { send "TW\r" }
-            timeout { send_error "\n>>> TIMEOUT at country code <<<\n"; exit 1 }
-          }
-          expect {
-            "*Keystore password*" { send "pass1234\r" }
-            timeout { send_error "\n>>> TIMEOUT at keystore password <<<\n"; exit 1 }
-          }
-          expect {
-            "*Key password*" { send "pass1234\r" }
-            timeout { send_error "\n>>> TIMEOUT at key password <<<\n"; exit 1 }
-          }
-          expect eof
-          ' 2>&1 | tee init-log.txt
+          ' | tee init-log.txt
         env:
           BUBBLEWRAP_SKIP_UPDATE_CHECK: true
 
