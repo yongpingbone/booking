@@ -193,3 +193,59 @@ test('setBookingStatus: PATCH 到正確的 id，body 是指定的 status', async
     globalThis.fetch = originalFetch;
   }
 });
+
+test('upsertCustomerVisit: 正確呼叫 rpc/upsert_customer_visit，帶對參數名稱', async () => {
+  const env = makeEnv();
+  let capturedUrl, capturedOptions;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    capturedUrl = url.toString();
+    capturedOptions = options;
+    return { ok: true };
+  };
+  try {
+    const { upsertCustomerVisit } = await import('../src/supabaseClient.js');
+    await upsertCustomerVisit(env, { phone: '0912345678', name: '王小明', visitDate: '2026-07-11' });
+    assert.ok(capturedUrl.endsWith('/rpc/upsert_customer_visit'));
+    assert.equal(capturedOptions.method, 'POST');
+    assert.deepEqual(JSON.parse(capturedOptions.body), {
+      p_phone: '0912345678',
+      p_name: '王小明',
+      p_visit_date: '2026-07-11',
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('upsertCustomerVisit: 沒有電話就直接跳過，不發請求', async () => {
+  const env = makeEnv();
+  let called = false;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    called = true;
+    return { ok: true };
+  };
+  try {
+    const { upsertCustomerVisit } = await import('../src/supabaseClient.js');
+    await upsertCustomerVisit(env, { phone: null, name: '王小明', visitDate: '2026-07-11' });
+    assert.equal(called, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('upsertCustomerVisit: 失敗時丟出清楚的錯誤', async () => {
+  const env = makeEnv();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: false, status: 500, text: async () => '掛了' });
+  try {
+    const { upsertCustomerVisit } = await import('../src/supabaseClient.js');
+    await assert.rejects(
+      () => upsertCustomerVisit(env, { phone: '0912345678', name: '王小明', visitDate: '2026-07-11' }),
+      /upsert_customer_visit 失敗/
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

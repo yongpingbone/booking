@@ -114,6 +114,41 @@ async function findBookingAtSlot(env, { masterId, date, startTime }) {
 
 export { saveBooking, fetchActiveMasters, findBookingAtSlot };
 
+/**
+ * 呼叫既有的 upsert_customer_visit 資料庫函式，更新 customers 表的
+ * 首次到訪日/最後到訪日/總次數——師傅端 app(booking-index.html)新增預約時
+ * 本來就會呼叫這支，這裡補齊 Sheet 同步這條路徑，避免透過 Sheet 進來的
+ * 預約永遠不會被算進客人的到訪統計(這是查證過的既有缺口，不是猜的)。
+ *
+ * 用 .catch 包住呼叫端、不讓這裡的失敗擋住主要的預約同步流程——
+ * customers 表只是輔助統計，不應該因為它寫入失敗就讓整筆預約同步失敗。
+ * @param {object} env
+ * @param {{phone: string, name: string, visitDate: string}} params visitDate 格式 "YYYY-MM-DD"
+ * @returns {Promise<void>}
+ */
+async function upsertCustomerVisit(env, { phone, name, visitDate }) {
+  if (!phone) return;
+  if (!env.SUPABASE_PROJECT_REF) throw new Error('缺少 env.SUPABASE_PROJECT_REF');
+  if (!env.SUPABASE_SERVICE_ROLE_KEY) throw new Error('缺少 env.SUPABASE_SERVICE_ROLE_KEY');
+
+  const url = `https://${env.SUPABASE_PROJECT_REF}.supabase.co/rest/v1/rpc/upsert_customer_visit`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+    },
+    body: JSON.stringify({ p_phone: phone, p_name: name, p_visit_date: visitDate }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Supabase upsert_customer_visit 失敗 (HTTP ${res.status}): ${text}`);
+  }
+}
+
+export { upsertCustomerVisit };
+
 // ===== 以下兩支只有 reconcile.js 的一次性月份校正功能會用到 =====
 
 /**

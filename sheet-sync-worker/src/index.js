@@ -21,7 +21,7 @@ import { diffSnapshots } from './diff.js';
 import { fetchAndParseWeek, fetchAndParseWeekCached, SHEET_MASTERS, monthsSpannedByWeek } from './sheetParser.js';
 import { validateBookingRecord } from './validate.js';
 import { markCellStatus, resolveCellReference } from './sheetWriter.js';
-import { saveBooking, findGarbageBookings, cancelBooking, setBookingStatus } from './supabaseClient.js';
+import { saveBooking, findGarbageBookings, cancelBooking, setBookingStatus, upsertCustomerVisit } from './supabaseClient.js';
 import { reconcileMonth } from './reconcile.js';
 import { weekKeysToSync, mondayOf, taipeiDateString } from './weekKeys.js';
 import { getAccessToken } from './googleAuth.js';
@@ -42,6 +42,7 @@ async function runSyncForWeekWithRecords(env, weekKey, currentRecords, deps = {}
     validateBookingRecord: doValidateBookingRecord = validateBookingRecord,
     markCellStatus: doMarkCellStatus = markCellStatus,
     saveBooking: doSaveBooking = saveBooking,
+    upsertCustomerVisit: doUpsertCustomerVisit = upsertCustomerVisit,
     forceNoteRecheck = false, // 一次性強制重新檢查所有 synced 記錄的備註狀態，
     // 用來處理 noteCleared 這個追蹤欄位上線之前就已經卡住的舊資料(這批舊
     // 快照裡根本沒有 noteCleared 這個欄位，正常的追蹤邏輯偵測不到)。
@@ -107,6 +108,17 @@ async function runSyncForWeekWithRecords(env, weekKey, currentRecords, deps = {}
 
       await doSaveBooking(env, validation.row, validation.existingId);
       log.results.push({ identityKey: record.identityKey, status: 'synced' });
+      try {
+        // 更新 customers 表的到訪統計——這裡失敗不影響預約本身已經同步成功，
+        // 只是記錄一下，不中斷整輪同步(比照下面 markCellStatus 失敗的處理方式)。
+        await doUpsertCustomerVisit(env, {
+          phone: validation.row.customer_phone,
+          name: validation.row.customer_name,
+          visitDate: validation.row.date,
+        });
+      } catch (err) {
+        log.results.push({ identityKey: record.identityKey, status: 'upsert_customer_visit_failed', error: String(err?.message ?? err) });
+      }
       try {
         // 清掉這格可能留著的舊備註(例如上一輪驗證失敗留下的錯誤訊息)，
         // 不然問題明明已經解決了，Sheet 上還會一直顯示過期的錯誤提示。
