@@ -16,6 +16,8 @@ on:
           - debug-inspect-cell
           - sweep-notes-dryrun
           - sweep-notes-execute
+          - clean-garbage-dryrun
+          - clean-garbage-execute
       weekKey:
         description: '[sync 用] 週一日期(YYYY-MM-DD)，留空 = 當週'
         required: false
@@ -93,6 +95,13 @@ jobs:
           elif [ "${{ inputs.endpoint }}" = "sweep-notes-execute" ]; then
             # 跟上面一樣的範圍，但真的執行清除。
             URL="https://yongping-sheet-sync.yihanhsu123.workers.dev/debug/sweep-notes"
+            BODY='{"dryRun": false}'
+          elif [ "${{ inputs.endpoint }}" = "clean-garbage-dryrun" ]; then
+            # 找出 customer_name 是已知公式錯誤殘留(#REF! 等)的預約，只回報。
+            URL="https://yongping-sheet-sync.yihanhsu123.workers.dev/debug/clean-garbage-bookings"
+            BODY='{"dryRun": true}'
+          elif [ "${{ inputs.endpoint }}" = "clean-garbage-execute" ]; then
+            URL="https://yongping-sheet-sync.yihanhsu123.workers.dev/debug/clean-garbage-bookings"
             BODY='{"dryRun": false}' 
           else
             URL="https://yongping-sheet-sync.yihanhsu123.workers.dev/reconcile-month"
