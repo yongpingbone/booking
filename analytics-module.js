@@ -8,15 +8,18 @@ function QuickReportPanel({ isAdmin, currentMaster }) {
   const [busy, setBusy] = React.useState(null); // 'week' | 'week-ai' | 'month' | 'month-ai' | null
   const [lastMsg, setLastMsg] = React.useState(null);
   const [showResult, setShowResult] = React.useState(false);
+  const runningRef = React.useRef(false); // ref同步生效，比state更早鎖住，防止手速快/畫面重繪延遲時重複觸發
 
   if (!isAdmin) return null;
 
   const run = async (kind, withAI) => {
+    if (runningRef.current) return; // 已經有一個在跑了，直接擋掉，不管state有沒有跟上
+    runningRef.current = true;
     setBusy(withAI ? `${kind}-ai` : kind);
     try {
       const rpcName = kind === "week" ? "send_weekly_settlement_report" : "send_monthly_settlement_report";
       const { data: reportText, error } = await sb.rpc(rpcName);
-      if (error) { alert("報表產生失敗：" + error.message); setBusy(null); return; }
+      if (error) { alert("報表產生失敗：" + error.message); return; }
 
       let aiText = null;
       if (withAI) {
@@ -40,6 +43,7 @@ function QuickReportPanel({ isAdmin, currentMaster }) {
       setShowResult(true);
     } finally {
       setBusy(null);
+      runningRef.current = false;
     }
   };
 
@@ -52,6 +56,7 @@ function QuickReportPanel({ isAdmin, currentMaster }) {
   return /*#__PURE__*/React.createElement("div", { style: { padding: "12px 12px 0", borderBottom: "1px solid var(--border)", marginBottom: 12 } },
     /*#__PURE__*/React.createElement("div", { style: { fontWeight: 900, fontSize: 14, marginBottom: 8 } }, "📊 提前統計"),
     /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: "var(--text-dim)", marginBottom: 10 } }, "不用等自動排程，現在就送出數字報表（會推播給管理員），要不要一起跑AI分析直接選對應按鈕。"),
+    busy && busy.endsWith("-ai") && /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: "#f5a623", marginBottom: 10, fontWeight: 700 } }, "⏳ AI分析需要15-20秒左右，畫面沒動不代表卡住，請耐心等待、不要重複點擊或重新整理"),
     /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: "var(--text-dim)", marginBottom: 4, fontWeight: 700 } }, "本週"),
     /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 10 } },
       /*#__PURE__*/React.createElement("button", {
