@@ -20,6 +20,7 @@ on:
           - clean-garbage-execute
           - cleanup-r2
           - custom-post
+          - custom-get
       weekKey:
         description: '[sync 用] 週一日期(YYYY-MM-DD)，留空 = 當週'
         required: false
