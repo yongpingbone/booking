@@ -15106,7 +15106,7 @@ function SettingsModule({
       flexWrap: "wrap",
       justifyContent: "flex-end"
     }
-  }, [["CRM", m.can_view_crm, "#00b894", "can_view_crm"], ["刪除", m.can_delete, "#f5a623", "can_delete"], ["看他人", m.can_view_others, "#74b9ff", "can_view_others"], ["全數據", m.can_view_all_stats, "#a29bfe", "can_view_all_stats"], ["線上", m.allow_online_booking, "#2ed9c3", "allow_online_booking"]].map(([label, active, color, field]) => /*#__PURE__*/React.createElement("button", {
+  }, [["全數據觀看", m.can_view_all_stats, "#a29bfe", "can_view_all_stats"]].map(([label, active, color, field]) => /*#__PURE__*/React.createElement("button", {
     key: label,
     onClick: () => togglePerm(m, field),
     style: {
@@ -15129,7 +15129,7 @@ function SettingsModule({
       fontSize: 10,
       cursor: "pointer"
     }
-  }, "編輯"), /*#__PURE__*/React.createElement("button", {
+  }, "編輯個人資料"), ((loginMaster || {}).username === "hanna" || (loginMaster || {}).username === "qi") && /*#__PURE__*/React.createElement("button", {
     onClick: () => toggleActive(m),
     style: {
       padding: "3px 8px",
