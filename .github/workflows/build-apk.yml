@@ -3,6 +3,9 @@ name: Build PWA APK
 on:
   push:
     branches: [ main ]
+    paths:
+      - 'apk-project/**'
+      - '.github/workflows/build-apk.yml'
   workflow_dispatch:
 
 permissions:
@@ -19,9 +22,6 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Install Bubblewrap
-        run: npm install -g @bubblewrap/cli
-
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
@@ -31,75 +31,23 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Expect (Auto-responder)
-        run: sudo apt-get install -y expect
+      - name: Install Bubblewrap
+        run: npm install -g @bubblewrap/cli
 
-      - name: 預先寫好 Bubblewrap 設定檔，跳過新版多出來的 JDK/Android SDK 安裝詢問
-        # 追查發現：新版 Bubblewrap CLI 第一次執行時會多問「要不要自動安裝
-        # JDK」「要不要自動安裝 Android SDK」這兩題(舊版沒有)，原本的 expect
-        # 腳本沒有處理這兩題的邏輯，會卡住等一個不會出現的比對結果。
-        # 與其繼續用容易再故障的方式去猜新提示文字，直接讀 Bubblewrap 原始碼
-        # (~/.bubblewrap/config.json，欄位是 jdkPath/androidSdkPath)確認：
-        # 只要這個設定檔已經有值，就完全不會問這兩題，直接跳到 init 指令
-        # 自己的提示(這部分維持用原本的 expect 處理)。
-        # ANDROID_HOME 有些版本的 setup-android action 不會自動設定，備援
-        # 用 ANDROID_SDK_ROOT，兩個都印出來方便萬一還是不對時直接看真實值。
+      - name: 產生 Android 專案 + 簽章金鑰(完全不透過互動精靈)
+        # twa-manifest.json 是預先產生好、存在 apk-project/ 底下的檔案，
+        # 不是這裡才產生的——用 @bubblewrap/core 的底層 API 直接呼叫，
+        # 完全繞過 Bubblewrap CLI 的互動式精靈(那個精靈在自動化環境下
+        # 有很多難以完全掌握的重繪/時機問題，反覆試過七八輪都還有新的
+        # 邊界情況，改成這個方式一次到位)。
         run: |
-          echo "JAVA_HOME=$JAVA_HOME"
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          SDK_PATH="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
-          mkdir -p ~/.bubblewrap
-          echo "{\"jdkPath\": \"$JAVA_HOME\", \"androidSdkPath\": \"$SDK_PATH\"}" > ~/.bubblewrap/config.json
-          cat ~/.bubblewrap/config.json
-
-      - name: Init Bubblewrap
-        run: |
-          mkdir apk-build && cd apk-build
-          set -o pipefail
-          expect -c '
-          exp_internal 1
-          set timeout 60
-          spawn bubblewrap init --manifest https://yongpingbone.github.io/booking/manifest.json --directory .
-          # 全部題目統一用一個迴圈處理，不分階段——之前拆成兩階段(不固定
-          # 順序的用迴圈、keystore 欄位依序各自處理)，結果「Do you want to
-          # create one now?」剛好也符合第一階段的預設值 regex 被誤接走，
-          # 但接走之後沒有跳出迴圈(不是 correct)，導致卡在下一題(First
-          # and Last names，這題屬於「第二階段」的範圍，但流程還卡在
-          # 「第一階段」裡出不來)。
-          #
-          # 改回合併成一個迴圈，同時修正之前合併版本會出現的另一個問題：
-          # 用「*Organization*」這種寬鬆比對，會連「Organizational Unit」
-          # 或後面其他題目的殘留文字都一起命中，導致答案送錯欄位、無限
-          # 重複卡住。這次每個欄位比對都要求緊接著冒號(field:)，精確
-          # 對應到當下真正在問的那一題，不會被其他題目的文字誤觸發。
-          expect {
-            "*install the JDK*"     { send "n\r"; exp_continue }
-            "*Path to your existing JDK*" { send "$env(JAVA_HOME)\r"; exp_continue }
-            "*install the Android*" { send "n\r"; exp_continue }
-            "*Path to the Android*" { send "$env(ANDROID_HOME)\r"; exp_continue }
-            "*create one now?*" { send "Yes\r"; exp_continue }
-            "*First and Last names*:*" { send "Yongping\r"; exp_continue }
-            "*Organizational Unit*:*" { send "Health\r"; exp_continue }
-            "*Organization:*" { send "Health\r"; exp_continue }
-            "*Locality*:*" { send "Taipei\r"; exp_continue }
-            "*Province*:*" { send "TW\r"; exp_continue }
-            "*Country*:*" { send "TW\r"; exp_continue }
-            "*Keystore password*:*" { send "pass1234\r"; exp_continue }
-            "*Key password*:*" { send "pass1234\r"; exp_continue }
-            "*Use arrow keys*" { send "\r"; exp_continue }
-            -re {\([^\r\n)]*\)[ \t]} { send "\r"; exp_continue }
-            "*correct*" { send "y\r"; exp_continue }
-            eof { }
-            timeout { send_error "\n>>> INIT_TIMEOUT，遇到沒處理過的新題目，目前緩衝內容如上 <<<\n"; exit 1 }
-          }
-          ' | tee init-log.txt
-        env:
-          BUBBLEWRAP_SKIP_UPDATE_CHECK: true
+          cd apk-project
+          npm install --no-save @bubblewrap/core
+          node generate.js
 
       - name: Build APK
         run: |
-          cd apk-build
+          cd apk-project
           set -o pipefail
           bubblewrap build --skipPwaValidation --keyPassword pass1234 --keystorePassword pass1234 2>&1 | tee build-log.txt
         env:
@@ -109,7 +57,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: yongping-app
-          path: apk-build/app-release-signed.apk
+          path: apk-project/app-release-signed.apk
           retention-days: 30
 
       - name: 把 build log 存回 repo 供除錯用(不管成功失敗都存)
@@ -117,11 +65,8 @@ jobs:
         run: |
           mkdir -p sheet-sync-worker/.debug
           {
-            echo "=== init-log.txt ==="
-            cat apk-build/init-log.txt 2>/dev/null || echo "(不存在)"
-            echo ""
             echo "=== build-log.txt ==="
-            cat apk-build/build-log.txt 2>/dev/null || echo "(不存在)"
+            cat apk-project/build-log.txt 2>/dev/null || echo "(不存在)"
           } > sheet-sync-worker/.debug/apk-build-log.txt
           git config user.name "github-actions"
           git config user.email "actions@github.com"
