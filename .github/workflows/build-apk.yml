@@ -82,6 +82,7 @@ jobs:
             "*install the Android*" { send "n\r"; exp_continue }
             "*Path to the Android*" { send "$env(ANDROID_HOME)\r"; exp_continue }
             -re {\([^\r\n)]*\)[ \t]} { send "\r"; exp_continue }
+            "*Use arrow keys*" { send "\r"; exp_continue }
             "*correct*" { send "y\r" }
             timeout { send_error "\n>>> INIT_TIMEOUT，目前緩衝內容如上，卡在這裡 <<<\n"; exit 1 }
           }
