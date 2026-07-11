@@ -59,71 +59,35 @@ jobs:
           set -o pipefail
           expect -c '
           exp_internal 1
-          set timeout 20
+          set timeout 60
           spawn bubblewrap init --manifest https://yongpingbone.github.io/booking/manifest.json --directory .
-          # 前兩個是防呆用——理論上設定檔已經寫好，這兩題不會出現；萬一
-          # 環境變數抓錯導致設定檔沒生效，這裡還有一層防線，不會直接卡死。
-          #
-          # 新版 Bubblewrap 在讀完 manifest 後，多了一整套「Web app details
-          # (1/5)~(5/5)」確認精靈(Domain、URL path 等欄位)，舊版沒有——這些
-          # 問題全部都已經從 manifest.json 內容帶出正確預設值(顯示在括號
-          # 裡)，用 regex 抓「括號包起來、後面接空白」這個共同格式統一送
-          # Enter 接受預設值，不用一題一題猜文字。
-          # 注意：regex 故意不用 $ 錨定「結尾」——實測發現終端機的游標控制
-          # 碼常常接在括號後面，用 $ 錨定會因為這些看不見的控制碼而誤判
-          # 沒對上，導致某一題(例如 Domain 之後的 URL path)沒被接住。
-          # timeout 分支：沒有的話，逾時發生時 expect 預設還是回傳成功
-          # (exit code 0)，就算加了 pipefail 這一步照樣顯示成功，把真正
-          # 卡住的問題往後藏到 Build APK 才間接爆出來——明確在逾時時印出
-          # 目前完整緩衝內容、強制回傳失敗，這樣才抓得到真正卡在哪一句。
+          # 統一用一個迴圈處理所有已知的題目類型，不管出現順序——之前拆成
+          # 好幾個各自獨立的 expect 區塊，實測發現會卡在某些題目對不上的
+          # 情況(不確定確切原因，懷疑跟 TCL 的 buffer/match 時機有關)，
+          # 改成這樣不管題目用什麼順序、出現幾次都能接住，更穩固。
+          # 每答完一題用 exp_continue 回到迴圈開頭繼續等下一題，直到程式
+          # 自然執行完(eof)或真的遇到完全沒見過的新題目(timeout)。
           expect {
             "*install the JDK*"     { send "n\r"; exp_continue }
             "*Path to your existing JDK*" { send "$env(JAVA_HOME)\r"; exp_continue }
             "*install the Android*" { send "n\r"; exp_continue }
             "*Path to the Android*" { send "$env(ANDROID_HOME)\r"; exp_continue }
-            -re {\([^\r\n)]*\)[ \t]} { send "\r"; exp_continue }
+            "*create one now*" { send "Yes\r"; exp_continue }
+            "*First and Last names*" { send "Yongping\r"; exp_continue }
+            "*Organizational Unit*" { send "Health\r"; exp_continue }
+            "*Organization*" { send "Health\r"; exp_continue }
+            "*Locality*" { send "Taipei\r"; exp_continue }
+            "*Province*" { send "TW\r"; exp_continue }
+            "*Country Code*" { send "TW\r"; exp_continue }
+            "*Keystore password*" { send "pass1234\r"; exp_continue }
+            "*Key password*" { send "pass1234\r"; exp_continue }
             "*Use arrow keys*" { send "\r"; exp_continue }
-            "*correct*" { send "y\r" }
-            timeout { send_error "\n>>> INIT_TIMEOUT，目前緩衝內容如上，卡在這裡 <<<\n"; exit 1 }
+            -re {\([^\r\n)]*\)[ \t]} { send "\r"; exp_continue }
+            "*correct*" { send "y\r"; exp_continue }
+            eof { }
+            timeout { send_error "\n>>> INIT_TIMEOUT，遇到沒處理過的新題目，目前緩衝內容如上 <<<\n"; exit 1 }
           }
-          expect {
-            "*create one now*" { send "Yes\r" }
-            timeout { send_error "\n>>> TIMEOUT at create-one-now <<<\n"; exit 1 }
-          }
-          expect {
-            "*First and Last names*" { send "Yongping\r" }
-            timeout { send_error "\n>>> TIMEOUT at names <<<\n"; exit 1 }
-          }
-          expect {
-            "*Organizational Unit*" { send "Health\r" }
-            timeout { send_error "\n>>> TIMEOUT at org unit <<<\n"; exit 1 }
-          }
-          expect {
-            "*Organization*" { send "Health\r" }
-            timeout { send_error "\n>>> TIMEOUT at org <<<\n"; exit 1 }
-          }
-          expect {
-            "*Locality*" { send "Taipei\r" }
-            timeout { send_error "\n>>> TIMEOUT at locality <<<\n"; exit 1 }
-          }
-          expect {
-            "*Province*" { send "TW\r" }
-            timeout { send_error "\n>>> TIMEOUT at province <<<\n"; exit 1 }
-          }
-          expect {
-            "*Country Code*" { send "TW\r" }
-            timeout { send_error "\n>>> TIMEOUT at country code <<<\n"; exit 1 }
-          }
-          expect {
-            "*Keystore password*" { send "pass1234\r" }
-            timeout { send_error "\n>>> TIMEOUT at keystore password <<<\n"; exit 1 }
-          }
-          expect {
-            "*Key password*" { send "pass1234\r" }
-            timeout { send_error "\n>>> TIMEOUT at key password <<<\n"; exit 1 }
-          }
-          expect eof
-          '  2>&1 | tee init-log.txt
+          ' | tee init-log.txt
         env:
           BUBBLEWRAP_SKIP_UPDATE_CHECK: true
 
