@@ -3875,6 +3875,7 @@ function MainApp({
   const presenceOthers = usePresence(authMaster, activity);
   const [showSearch, setShowSearch] = useState(false);
   const [showDisplaySettings, setShowDisplaySettings] = useState(false);
+  const [showSalaryPanel, setShowSalaryPanel] = useState(false); // 薪資結算面板(只有admin/editor看得到)
   const [searchQ, setSearchQ] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -5622,7 +5623,24 @@ function MainApp({
       flexShrink: 0,
       padding: 0
     }
-  }, theme === "dark" ? "☀️" : "🌙"), tab === "schedule" && /*#__PURE__*/React.createElement("button", {
+  }, theme === "dark" ? "☀️" : "🌙"), isAdmin && /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowSalaryPanel(true),
+    title: "薪資結算(只有老闆/管理員看得到)",
+    style: {
+      background: "var(--nav-bg)",
+      border: "1px solid var(--border2)",
+      borderRadius: 5,
+      width: 28,
+      height: 28,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      cursor: "pointer",
+      fontSize: 13,
+      flexShrink: 0,
+      padding: 0
+    }
+  }, "💰"), tab === "schedule" && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowDisplaySettings(v => !v),
     title: "顯示設定（字體、欄寬、列高）",
     style: {
@@ -6848,7 +6866,11 @@ function MainApp({
     isAdmin: isAdmin,
     canSeeAll: isAdmin || (loginMaster || master)?.username === 'qi' || (loginMaster || master)?.name === '許老師',
     msg: msg
-  })), cellHistory && /*#__PURE__*/React.createElement("div", {
+  })), showSalaryPanel && /*#__PURE__*/React.createElement(LazySalaryModule, {
+    onClose: () => setShowSalaryPanel(false),
+    masters: masters,
+    currentMaster: loginMaster || master
+  }), cellHistory && /*#__PURE__*/React.createElement("div", {
     "data-modal-backdrop": "true",
     style: {
       position: "fixed",
@@ -15322,6 +15344,46 @@ function LazyAnalyticsModule(props) {
     }, "載入中…");
   }
   return /*#__PURE__*/React.createElement(window.AnalyticsModule, props);
+}
+
+// 薪資結算面板——跟AnalyticsModule同一套動態載入模式，見salary-module.js。
+// 只有showSalaryPanel為true才會render到這個元件，也就是只有isAdmin按了
+// 💰按鈕才會第一次去抓salary-module.js，平常不會多載入這個檔案。
+function LazySalaryModule(props) {
+  const [ready, setReady] = useState(!!window.SalaryModule);
+  useEffect(() => {
+    if (window.SalaryModule) {
+      setReady(true);
+      return;
+    }
+    const existing = document.getElementById("salary-module-script");
+    if (existing) {
+      existing.addEventListener("load", () => setReady(true));
+      return;
+    }
+    const script = document.createElement("script");
+    script.id = "salary-module-script";
+    script.src = "./salary-module.js";
+    script.onload = () => setReady(true);
+    script.onerror = () => console.error("salary-module.js 載入失敗，請檢查網路連線後重新整理");
+    document.body.appendChild(script);
+  }, []);
+  if (!ready) {
+    return /*#__PURE__*/React.createElement("div", {
+      "data-modal-backdrop": "true",
+      style: {
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.8)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 200,
+        color: "var(--text-dim)"
+      }
+    }, "載入中…");
+  }
+  return /*#__PURE__*/React.createElement(window.SalaryModule, props);
 }
 
 // ═══════════════════════════════════════════
