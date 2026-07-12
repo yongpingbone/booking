@@ -3648,6 +3648,8 @@ function MainApp({
   const [ovColW, setOvColW] = useLS("yp_ov_cw", "75");
   const [ovRowH, setOvRowH] = useLS("yp_ov_rh", "24");
   const [showSun, setShowSun] = useLS("yp_showsun", "0");
+  const [pushSupported] = useState(() => typeof navigator !== "undefined" && "serviceWorker" in navigator && "PushManager" in window);
+  const [pushSubscribed, setPushSubscribed] = useState(false);
   const cw = parseInt(colW) || 85;
   const rh = parseInt(rowH) || 26;
   const FS = {
@@ -4237,6 +4239,53 @@ function MainApp({
     });
     setTimeout(() => setToast(null), 2500);
   };
+  // App推播通知(2026-07-13)：檢查這台裝置目前是否已經訂閱過(跟伺服器端
+  // 有沒有這筆訂閱無關，單純看瀏覽器自己記錄的subscription物件存不存在)
+  useEffect(() => {
+    if (!pushSupported) return;
+    navigator.serviceWorker.ready
+      .then(reg => reg.pushManager.getSubscription())
+      .then(sub => setPushSubscribed(!!sub))
+      .catch(() => {});
+  }, [pushSupported]);
+
+  function urlBase64ToUint8Array(base64String) {
+    const padding = "=".repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    const rawData = atob(base64);
+    return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+  }
+
+  const subscribeToPush = async () => {
+    if (!pushSupported) { msg("這個瀏覽器不支援推播通知", true); return; }
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") { msg("沒有允許通知權限，無法開啟推播", true); return; }
+      const { data: vapidKey, error: vapidErr } = await sb.rpc("get_vapid_public_key");
+      if (vapidErr || !vapidKey) { msg("取得推播金鑰失敗", true); return; }
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidKey)
+        });
+      }
+      const subJson = sub.toJSON();
+      const { error } = await sb.from("push_subscriptions").upsert({
+        master_id: authMaster.id,
+        endpoint: subJson.endpoint,
+        p256dh: subJson.keys.p256dh,
+        auth: subJson.keys.auth
+      }, { onConflict: "endpoint" });
+      if (error) { msg("儲存訂閱失敗：" + error.message, true); return; }
+      setPushSubscribed(true);
+      msg("已開啟推播通知，跟 LINE 通知同步收到");
+    } catch (e) {
+      msg("開啟推播失敗：" + String(e?.message || e), true);
+    }
+  };
+
   const bk = (d, t) => d ? bookings[`${fmtDate(year, month, d)}__${t}`] : null;
   const getFirstValidWeekIdx = (y, m) => {
     const wks = showSun === "1" ? getWeeksSun(y, m) : getWeeksMon(y, m, false);
@@ -5639,7 +5688,24 @@ function MainApp({
   }), /*#__PURE__*/React.createElement(PresenceBar, {
     others: presenceOthers,
     onTapPerson: p => msg(`${p.name}：${p.activity?.summary || "在線上"}`, false)
-  }), /*#__PURE__*/React.createElement("button", {
+  }), pushSupported && !pushSubscribed && /*#__PURE__*/React.createElement("button", {
+    onClick: subscribeToPush,
+    title: "開啟推播通知(跟LINE通知同步收到，需要允許通知權限)",
+    style: {
+      background: "var(--nav-bg)",
+      border: "1px solid var(--border2)",
+      borderRadius: 5,
+      width: 28,
+      height: 28,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      cursor: "pointer",
+      fontSize: 13,
+      flexShrink: 0,
+      padding: 0
+    }
+  }, "🔔"), /*#__PURE__*/React.createElement("button", {
     onClick: () => setTheme(t => t === "dark" ? "light" : "dark"),
     title: "切換深淺色",
     style: {
