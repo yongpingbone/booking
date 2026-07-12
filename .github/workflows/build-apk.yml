@@ -73,16 +73,38 @@ jobs:
           BUBBLEWRAP_KEYSTORE_PASSWORD: pass1234
           BUBBLEWRAP_KEY_PASSWORD: pass1234
 
+      # bubblewrap build 這個指令本來就會同時產生apk跟aab(build.ts原始碼裡
+      # 兩個輸出檔名都寫死了)，這步只是確認兩個檔案真的都在，不是額外建置。
+      - name: 確認 build 同時產出 APK 跟 AAB
+        run: |
+          cd apk-project
+          echo "=== apk-project 目錄內容 ==="
+          ls -la *.apk *.aab 2>&1 || true
+          test -f app-release-signed.apk || { echo "::error::找不到 app-release-signed.apk"; exit 1; }
+          test -f app-release-bundle.aab || { echo "::error::找不到 app-release-bundle.aab"; exit 1; }
+          echo "兩個檔案都確認存在"
+
       - name: 發布成 GitHub Release(永久保存，網址固定不會過期)
         # 用固定的 tag(latest-apk)，每次都覆蓋同一個 Release，網址永遠
         # 一樣，不會像 Artifact 一樣最多只能留到 400 天就消失。
+        # 2026-07-13新增：.aab也一起發布——這個檔案bubblewrap build本來
+        # 就會產生(跟apk同一次build指令的輸出)，之前只是沒有把它存下來，
+        # 不是要另外多跑一次建置。.aab是要上傳Google Play Console用的，
+        # .apk維持給直接側載安裝用，兩個檔案用途不同、都留著。
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          cd apk-project
+          NOTES="自動打包產生，隨時可能更新。
+
+          app-release-signed.apk：直接側載安裝用(僅支援 Android)
+          app-release-bundle.aab：要上傳到 Google Play Console 才用這個，不是給手機直接安裝的
+
+          打包時間：$(date -u '+%Y-%m-%d %H:%M UTC')"
           gh release delete latest-apk --yes --cleanup-tag || true
-          gh release create latest-apk apk-project/app-release-signed.apk \
+          gh release create latest-apk app-release-signed.apk app-release-bundle.aab \
             --title "永平整復保健 App(自動打包)" \
-            --notes "自動打包產生，隨時可能更新。下載 app-release-signed.apk 安裝(僅支援 Android)。打包時間：$(date -u '+%Y-%m-%d %H:%M UTC')"
+            --notes "$NOTES"
 
       - name: 把 build log 存回 repo 供除錯用(不管成功失敗都存)
         if: always()
