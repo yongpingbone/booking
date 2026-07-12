@@ -4258,6 +4258,16 @@ function MainApp({
 
   const subscribeToPush = async () => {
     if (!pushSupported) { msg("這個瀏覽器不支援推播通知", true); return; }
+    // iOS Safari(16.4+)推播只支援「已加入主畫面、從主畫面圖示打開」的
+    // 狀態(standalone)，一般Safari分頁裡PushManager這個API雖然存在，
+    // 但實際訂閱不會真的有效果——沒特別擋這關的話，iPhone使用者點了
+    // 會看起來像成功、實際上永遠收不到通知，比直接告訴他們原因更糟。
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isStandalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+    if (isIOS && !isStandalone) {
+      msg("iPhone/iPad 要先用 Safari 分享→加入主畫面，從主畫面的圖示打開 App 才能開通知", true);
+      return;
+    }
     try {
       const perm = await Notification.requestPermission();
       if (perm !== "granted") { msg("沒有允許通知權限，無法開啟推播", true); return; }
