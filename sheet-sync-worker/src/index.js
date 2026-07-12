@@ -396,6 +396,28 @@ export default {
       return Response.json({ scannedWeekKeys: weekKeys, invalidCount: invalidRecords.length, invalidRecords }, { status: 200 });
     }
 
+    if (url.pathname === '/debug/dump-raw' && request.method === 'GET') {
+      const providedSecret = request.headers.get('X-Internal-Secret');
+      if (!env.INTERNAL_SYNC_SECRET || providedSecret !== env.INTERNAL_SYNC_SECRET) {
+        return new Response('Unauthorized', { status: 401 });
+      }
+      // 診斷用：原始傾印某個範圍每一格的值(不聚合、不分類)，用來精確搞懂
+      // 合併分頁這種比較複雜的欄位結構，不要用猜的。
+      const sheetTitle = url.searchParams.get('sheetTitle');
+      const range = url.searchParams.get('range') || 'A1:K10';
+      if (!sheetTitle) {
+        return Response.json({ error: '需要 sheetTitle' }, { status: 400 });
+      }
+      try {
+        const accessToken = await getAccessToken(env);
+        const { rows } = await fetchGridRows(env, { sheetTitle, range, accessToken });
+        const dump = rows.map((row, rowIndex) => row.map((cell, colIndex) => ({ rowIndex, colIndex, value: cell.value, colorHex: cell.colorHex })));
+        return Response.json({ sheetTitle, range, dump }, { status: 200 });
+      } catch (err) {
+        return Response.json({ error: String(err?.stack ?? err?.message ?? err) }, { status: 500 });
+      }
+    }
+
     if (url.pathname === '/debug/scan-colors' && request.method === 'GET') {
       const providedSecret = request.headers.get('X-Internal-Secret');
       if (!env.INTERNAL_SYNC_SECRET || providedSecret !== env.INTERNAL_SYNC_SECRET) {
