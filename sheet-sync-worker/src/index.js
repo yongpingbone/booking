@@ -740,17 +740,32 @@ export default {
       // 自動匯入，這次還是要真的執行(暫停只影響排程自動觸發)。
       // masterName —— App「立即匯入」按鈕如果是針對單一師傅，只帶這位
       // 師傅的名字，這次只處理他，不動其他師傅。
+      // background:true —— 立刻回傳「已開始」，實際同步在背景繼續跑(用
+      // ctx.waitUntil)，不等全部跑完才回應。給呼叫端本身有執行時間限制
+      // 的情境用(例如 Supabase Edge Function 直接等待可能會逾時)。
       const weekKeys = body.scope === 'current' ? weekKeysToSync(new Date()) : body.weekKeys;
+      const syncOptions = {
+        forceNoteRecheck: body.forceNoteRecheck === true,
+        bypassSyncPause: body.bypassSyncPause === true,
+        onlyMasterName: body.masterName ?? null,
+      };
+
+      if (body.background === true) {
+        ctx.waitUntil(
+          (async () => {
+            const monthCache = new Map();
+            for (const weekKey of weekKeys) {
+              await safelyFetchAndSyncWeek(env, weekKey, monthCache, syncOptions);
+            }
+          })()
+        );
+        return Response.json({ started: true, weekKeys }, { status: 202 });
+      }
+
       const monthCache = new Map();
       const logs = [];
       for (const weekKey of weekKeys) {
-        logs.push(
-          await safelyFetchAndSyncWeek(env, weekKey, monthCache, {
-            forceNoteRecheck: body.forceNoteRecheck === true,
-            bypassSyncPause: body.bypassSyncPause === true,
-            onlyMasterName: body.masterName ?? null,
-          })
-        );
+        logs.push(await safelyFetchAndSyncWeek(env, weekKey, monthCache, syncOptions));
       }
       const allOk = logs.every((l) => l.ok);
       return Response.json({ weekKeys, logs }, { status: allOk ? 200 : 500 });
