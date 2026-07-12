@@ -10,6 +10,8 @@ import {
   deleteStaleSnapshots,
   latestKey,
   historyKey,
+  acquireSyncLock,
+  releaseSyncLock,
 } from '../src/snapshotStore.js';
 
 test('還沒同步過的 week → getLatestSnapshot 回傳 null，不是丟錯', async () => {
@@ -119,4 +121,45 @@ test('deleteStaleSnapshots: 全部都在範圍內時，什麼都不刪', async (
   await saveSnapshot(bucket, '2026-07-06', [{ a: 1 }]);
   const { deletedCount } = await deleteStaleSnapshots(bucket, ['2026-07-06']);
   assert.equal(deletedCount, 0);
+});
+
+test('acquireSyncLock: 沒有鎖時，第一次取得成功', async () => {
+  const bucket = new MockR2Bucket();
+  const result = await acquireSyncLock(bucket, 'run-1');
+  assert.equal(result.acquired, true);
+});
+
+test('acquireSyncLock: 已經有人持有鎖(而且不算舊)，第二次取得會失敗', async () => {
+  const bucket = new MockR2Bucket();
+  await acquireSyncLock(bucket, 'run-1');
+  const result = await acquireSyncLock(bucket, 'run-2');
+  assert.equal(result.acquired, false);
+  assert.equal(result.existingLock.runId, 'run-1');
+});
+
+test('releaseSyncLock: 釋放後，下一次取得會成功', async () => {
+  const bucket = new MockR2Bucket();
+  await acquireSyncLock(bucket, 'run-1');
+  await releaseSyncLock(bucket);
+  const result = await acquireSyncLock(bucket, 'run-2');
+  assert.equal(result.acquired, true);
+});
+
+test('acquireSyncLock: 鎖太舊(超過30分鐘，模擬上一輪卡死沒釋放)，允許接手', async () => {
+  const bucket = new MockR2Bucket();
+  // 手動塞一個很舊的鎖進去，模擬「上一輪 31 分鐘前取得、從沒釋放」
+  const staleTimestamp = new Date(Date.now() - 31 * 60 * 1000).toISOString();
+  await bucket.put('sync-lock.json', JSON.stringify({ acquiredAt: staleTimestamp, runId: 'stuck-run' }));
+
+  const result = await acquireSyncLock(bucket, 'new-run');
+  assert.equal(result.acquired, true, '鎖太舊該被當作失效，允許新的一輪接手');
+});
+
+test('acquireSyncLock: 鎖還不算舊(29分鐘)，還是要擋下來', async () => {
+  const bucket = new MockR2Bucket();
+  const recentTimestamp = new Date(Date.now() - 29 * 60 * 1000).toISOString();
+  await bucket.put('sync-lock.json', JSON.stringify({ acquiredAt: recentTimestamp, runId: 'still-running' }));
+
+  const result = await acquireSyncLock(bucket, 'new-run');
+  assert.equal(result.acquired, false, '29分鐘還在合理範圍內，不該被當作卡死');
 });
