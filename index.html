@@ -1217,6 +1217,12 @@ function MonthlyOpenReminder({ authMaster, msg }) {
 // 目前是占位值，還沒有真正的LIFF App，liff.init會失敗，但因為整段都包在
 // try-catch裡且失敗時不影響原本帳密登入，先部署也不會壞掉任何東西。
 const MASTER_LOGIN_LIFF_ID = "2010635540-wPS7CrP2";
+// LINE的idToken從liff.login()發出後約1小時就會過期，但LIFF SDK不會自動更新
+// 它快取在瀏覽器storage裡的idToken——即使liff.isLoggedIn()一直回傳true(這個
+// 只檢查access token，不檢查idToken的exp)。這個旗標用來限制loginViaLine()
+// 偵測到過期時最多自動執行一次「logout+login重新導向」復原，避免萬一新
+// token還是失敗(例如帳號真的被停權)時卡進無限跳轉迴圈。
+const LINE_RECOVERY_FLAG = "yp_line_login_recovering";
 function isRunningInTWA() {
   try {
     return typeof document !== "undefined" && document.referrer && document.referrer.startsWith("android-app://");
@@ -1275,6 +1281,25 @@ function LoginScreen({
           setLineBusy(false);
           return;
         }
+        // 根因：liff.getIDToken()回傳的是快取的舊idToken，過期後SDK不會
+        // 自動換新。此時就算呼叫liff.login()，因為isLoggedIn()仍是true，
+        // SDK會判斷「已登入」而不觸發真正的重新導向(之前已實測過這個現象，
+        // 見上面拿掉isRunningInTWA判斷那段的說明)——所以單純重試沒有用，
+        // 必須先liff.logout()清掉舊session，liff.login()才會真的跳轉去
+        // 換一組全新的idToken。整個過程最多自動做一次(見LINE_RECOVERY_FLAG)，
+        // 使用者通常只會感覺到頁面短暫重新整理一下，不需要自己按任何按鈕。
+        const isExpired = j.error === "token_expired" || /expired/i.test(j.debugBody || "");
+        if (isExpired && !sessionStorage.getItem(LINE_RECOVERY_FLAG)) {
+          try {
+            sessionStorage.setItem(LINE_RECOVERY_FLAG, "1");
+            liff.logout();
+            liff.login({ redirectUri: window.location.href });
+            return; // liff.login()會導航離開頁面，不用再setLineBusy(false)
+          } catch (e) {
+            console.error("[LINE自動復原] logout+login重新導向失敗:", e);
+            // 復原本身就失敗(例如liff環境本來就不支援)，照常往下走顯示錯誤
+          }
+        }
         setLineBusy(false);
         setError("LINE 登入失敗：" + (j.error || "未知錯誤") + (j.debugBody ? `\n詳細：${j.debugBody}` : ""));
         return;
@@ -1301,6 +1326,7 @@ function LoginScreen({
         setError("登入成功但讀取師傅資料失敗，請重新整理頁面再試一次");
         return;
       }
+      sessionStorage.removeItem(LINE_RECOVERY_FLAG); // 成功了，重置旗標讓下次過期還能再自動復原一次
       onLogin(masterData);
     } catch (e) {
       setLineBusy(false);
