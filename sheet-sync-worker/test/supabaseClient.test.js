@@ -249,3 +249,27 @@ test('upsertCustomerVisit: 失敗時丟出清楚的錯誤', async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test('fetchSyncEnabledMasterNames: 只回傳 sync_enabled=true 的師傅名字集合', async () => {
+  const env = makeEnv();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => [
+      { name: '泓文', sync_enabled: true },
+      { name: '哲瑋', sync_enabled: false },
+      { name: '麒', sync_enabled: true },
+      { name: '治', sync_enabled: true },
+    ],
+  });
+  try {
+    const { fetchSyncEnabledMasterNames } = await import('../src/supabaseClient.js');
+    const names = await fetchSyncEnabledMasterNames(env);
+    assert.ok(names.has('泓文'));
+    assert.ok(!names.has('哲瑋'));
+    assert.ok(names.has('麒'));
+    assert.ok(names.has('治'));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

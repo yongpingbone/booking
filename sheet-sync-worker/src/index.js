@@ -23,7 +23,7 @@ import { diffSnapshots } from './diff.js';
 import { fetchAndParseWeek, fetchAndParseWeekCached, SHEET_MASTERS, monthsSpannedByWeek } from './sheetParser.js';
 import { validateBookingRecord } from './validate.js';
 import { markCellStatus, resolveCellReference } from './sheetWriter.js';
-import { saveBooking, findGarbageBookings, cancelBooking, setBookingStatus, upsertCustomerVisit, fetchActiveMasters, findBookingAtSlot } from './supabaseClient.js';
+import { saveBooking, findGarbageBookings, cancelBooking, setBookingStatus, upsertCustomerVisit, fetchActiveMasters, findBookingAtSlot, fetchSyncEnabledMasterNames } from './supabaseClient.js';
 import { reconcileMonth } from './reconcile.js';
 import { weekKeysToSync, mondayOf, taipeiDateString } from './weekKeys.js';
 import { getAccessToken } from './googleAuth.js';
@@ -48,6 +48,12 @@ async function runSyncForWeekWithRecords(env, weekKey, currentRecords, deps = {}
     fetchActiveMasters: doFetchActiveMasters = fetchActiveMasters,
     findBookingAtSlot: doFindBookingAtSlot = findBookingAtSlot,
     cancelBooking: doCancelBooking = cancelBooking,
+    fetchSyncEnabledMasterNames: doFetchSyncEnabledMasterNames = fetchSyncEnabledMasterNames,
+    bypassSyncPause = false, // App 上「立即匯入」按鈕用：使用者主動明確按下去要
+    // 匯入，這種情況要真的執行，不該被暫停自動匯入的設定擋住(暫停只影響
+    // 排程自動觸發，不影響使用者自己主動要求的一次性匯入)。
+    onlyMasterName = null, // App 上「立即匯入」按鈕如果是針對單一師傅，這一輪
+    // 只處理這位師傅，其他師傅的記錄凍結不動。
     forceNoteRecheck = false, // 一次性強制重新檢查所有 synced 記錄的備註狀態，
     // 用來處理 noteCleared 這個追蹤欄位上線之前就已經卡住的舊資料(這批舊
     // 快照裡根本沒有 noteCleared 這個欄位，正常的追蹤邏輯偵測不到)。
@@ -59,7 +65,37 @@ async function runSyncForWeekWithRecords(env, weekKey, currentRecords, deps = {}
 
   try {
     const previous = await getLatestSnapshot(env.SHEET_SYNC_BUCKET, weekKey);
-    const current = currentRecords;
+
+    // 決定這一輪「真的要處理」的師傅是誰，其他人的記錄要凍結成快照裡原本
+    // 的樣子，不要用剛抓到的新鮮內容——原因：(1) 暫停自動匯入的師傅，如果
+    // 不凍結，暫停當下會被「消失=取消」那條規則誤取消所有既有預約，暫停
+    // 期間新冒出的資料也不該被當新記錄寫入；(2) App「立即匯入」按鈕如果
+    // 指定只匯入某一位師傅(onlyMasterName)，其他師傅這一輪也不該被動到，
+    // 即使他們原本是啟用中的。凍結的定義：不在「真的要處理」名單裡的師傅，
+    // 只認上次快照裡「本來就有」的那些，其他(消失或新出現)一律不理。
+    let current = currentRecords;
+    try {
+      let activeMasterNames;
+      if (onlyMasterName) {
+        activeMasterNames = new Set([onlyMasterName]);
+      } else if (bypassSyncPause) {
+        activeMasterNames = null; // null 代表全部師傅都算(不凍結任何人)
+      } else {
+        activeMasterNames = await doFetchSyncEnabledMasterNames(env);
+      }
+      if (activeMasterNames) {
+        current = currentRecords.filter((r) => activeMasterNames.has(r.masterName));
+        for (const r of previous?.records ?? []) {
+          if (!activeMasterNames.has(r.masterName)) current.push(r);
+        }
+      }
+    } catch (err) {
+      // 查詢暫停狀態本身失敗，安全起見直接當作「沒有人暫停」處理(用
+      // 完全沒凍結過的原始 currentRecords)，不要讓這個查詢失敗變成
+      // 擋住整輪同步——寧可这一輪照常處理，之後暫停狀態的查詢恢復正常
+      // 就會接手，不會有資料遺失的風險。
+      current = currentRecords;
+    }
 
     const diffResult = diffSnapshots(previous?.records ?? null, current);
     log.diffSummary = {
@@ -301,7 +337,8 @@ async function runSyncForWeek(env, weekKey, deps = {}) {
  * @param {boolean} [forceNoteRecheck]
  * @returns {Promise<object>}
  */
-async function safelyFetchAndSyncWeek(env, weekKey, monthCache, forceNoteRecheck = false) {
+async function safelyFetchAndSyncWeek(env, weekKey, monthCache, options = {}) {
+  const { forceNoteRecheck = false, bypassSyncPause = false, onlyMasterName = null } = options;
   let currentRecords;
   try {
     currentRecords = await fetchAndParseWeekCached(env, weekKey, monthCache);
@@ -322,7 +359,7 @@ async function safelyFetchAndSyncWeek(env, weekKey, monthCache, forceNoteRecheck
     });
     return log;
   }
-  return runSyncForWeekWithRecords(env, weekKey, currentRecords, { forceNoteRecheck });
+  return runSyncForWeekWithRecords(env, weekKey, currentRecords, { forceNoteRecheck, bypassSyncPause, onlyMasterName });
 }
 
 export default {
@@ -699,11 +736,21 @@ export default {
       // weekKeys 陣列 —— 呼叫端自己指定要跑哪幾個 weekKey(補跑特定範圍用)。
       // forceNoteRecheck:true —— 一次性強制重新檢查所有已同步記錄的備註
       // 狀態，用來處理 noteCleared 追蹤機制上線前就已經卡住的舊資料。
+      // bypassSyncPause:true —— App「立即匯入」按鈕用，就算師傅目前暫停
+      // 自動匯入，這次還是要真的執行(暫停只影響排程自動觸發)。
+      // masterName —— App「立即匯入」按鈕如果是針對單一師傅，只帶這位
+      // 師傅的名字，這次只處理他，不動其他師傅。
       const weekKeys = body.scope === 'current' ? weekKeysToSync(new Date()) : body.weekKeys;
       const monthCache = new Map();
       const logs = [];
       for (const weekKey of weekKeys) {
-        logs.push(await safelyFetchAndSyncWeek(env, weekKey, monthCache, body.forceNoteRecheck === true));
+        logs.push(
+          await safelyFetchAndSyncWeek(env, weekKey, monthCache, {
+            forceNoteRecheck: body.forceNoteRecheck === true,
+            bypassSyncPause: body.bypassSyncPause === true,
+            onlyMasterName: body.masterName ?? null,
+          })
+        );
       }
       const allOk = logs.every((l) => l.ok);
       return Response.json({ weekKeys, logs }, { status: allOk ? 200 : 500 });

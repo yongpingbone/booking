@@ -115,6 +115,35 @@ async function findBookingAtSlot(env, { masterId, date, startTime }) {
 export { saveBooking, fetchActiveMasters, findBookingAtSlot };
 
 /**
+ * 查目前哪些師傅有開啟自動匯入(sync_enabled=true)。獨立於
+ * fetchActiveMasters 之外，是因為那支被 validate.js 拿來對照師傅名字
+ * 合不合法，不能因為某位師傅暫停自動匯入就連帶讓他變成「找不到師傅」
+ * ——暫停匯入只影響「要不要主動去讀 Sheet」，不影響其他既有功能對這位
+ * 師傅的正常辨識。
+ * @param {object} env
+ * @returns {Promise<Set<string>>} 目前開啟自動匯入的師傅名字集合
+ */
+async function fetchSyncEnabledMasterNames(env) {
+  if (!env.SUPABASE_PROJECT_REF) throw new Error('缺少 env.SUPABASE_PROJECT_REF');
+  if (!env.SUPABASE_SERVICE_ROLE_KEY) throw new Error('缺少 env.SUPABASE_SERVICE_ROLE_KEY');
+
+  const url = new URL(`https://${env.SUPABASE_PROJECT_REF}.supabase.co/rest/v1/masters`);
+  url.searchParams.set('select', 'name,sync_enabled');
+
+  const res = await fetch(url, {
+    headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Supabase 查詢 sync_enabled 失敗 (HTTP ${res.status}): ${text}`);
+  }
+  const rows = await res.json();
+  return new Set(rows.filter((r) => r.sync_enabled).map((r) => r.name));
+}
+
+export { fetchSyncEnabledMasterNames };
+
+/**
  * 呼叫既有的 upsert_customer_visit 資料庫函式，更新 customers 表的
  * 首次到訪日/最後到訪日/總次數——師傅端 app(booking-index.html)新增預約時
  * 本來就會呼叫這支，這裡補齊 Sheet 同步這條路徑，避免透過 Sheet 進來的

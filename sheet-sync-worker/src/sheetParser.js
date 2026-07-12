@@ -50,6 +50,7 @@ import { serialToDateString, serialToTimeString } from './sheetsSerial.js';
 import { buildIdentityKey, hashContent } from './diff.js';
 import { getAccessToken as defaultGetAccessToken } from './googleAuth.js';
 import { fetchGridRows as defaultFetchGridRows } from './sheetsApi.js';
+import { fetchSyncEnabledMasterNames as defaultFetchSyncEnabledMasterNames } from './supabaseClient.js';
 
 const WEEKDAY_LABELS = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
 const REF_ERROR_TEXT = '#REF!';
