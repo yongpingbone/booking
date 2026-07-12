@@ -1416,7 +1416,23 @@ function LoginScreen({
   }, "檢查 LINE 登入狀態中..."), lineAvailable && !lineChecking && /*#__PURE__*/React.createElement("div", {
     style: { marginBottom: 20 }
   }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => liff.isLoggedIn() ? loginViaLine() : liff.login(),
+    onClick: () => {
+      // liff.login()是同步觸發導航的函式(不是回傳Promise的非同步函式)，
+      // 如果它內部狀態不對，可能會直接同步拋出例外，而不是靜默失敗——
+      // 用try-catch包住，確保任何錯誤都會被明確看到，不會變成「按鈕點了
+      // 完全沒反應」這種看不出原因的黑箱狀態。
+      console.log("[LINE登入按鈕] 點擊，isLoggedIn=", liff.isLoggedIn());
+      try {
+        if (liff.isLoggedIn()) {
+          loginViaLine();
+        } else {
+          liff.login({ redirectUri: window.location.href });
+        }
+      } catch (e) {
+        console.error("[LINE登入按鈕] liff.login()呼叫時發生例外:", e);
+        setError("LINE 登入啟動失敗：" + String(e?.message || e));
+      }
+    },
     disabled: lineBusy,
     style: {
       width: "100%",
