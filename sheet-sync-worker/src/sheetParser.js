@@ -98,9 +98,13 @@ const KNOWN_CONTINUATION_LIKE_SYMBOLS = ['\u201D', '\u201C', "''", '"', "'", '\u
 // 已經移除。四位師傅的 masterName 現在都直接等於 Sheet 分頁暱稱本身，不用
 // 再轉換；masterDbName 這個機制保留著、只是目前沒有任何 master 需要用到，
 // 如果之後真的有名字對不上的狀況，直接在對應的物件加回 masterDbName 就好。
+// sourceMode: 'merged' 的師傅要從「{月}月-合併」(泓文+哲瑋併排版)分頁讀取，
+// 不是自己的「{月}月-{名字}」個別分頁——查證過兩份分頁的顏色/內容其實
+// 不一致(Hanna 截圖確認合併分頁上有實際在用的黃底新客標記，但個別分頁
+// 完全沒有)，Hanna 明確要求泓文/哲瑋以合併分頁為準、麒/治維持個別分頁。
 const SHEET_MASTERS = [
-  { name: '泓文', continuationMarks: ["''"], anonymousReturningCustomerMarks: [] },
-  { name: '哲瑋', continuationMarks: ["''"], anonymousReturningCustomerMarks: [] }, // 已確認：跟泓文同一套
+  { name: '泓文', continuationMarks: ["''"], anonymousReturningCustomerMarks: [], sourceMode: 'merged' },
+  { name: '哲瑋', continuationMarks: ["''"], anonymousReturningCustomerMarks: [], sourceMode: 'merged' }, // 已確認：跟泓文同一套
   { name: '麒', continuationMarks: ['\u201D'], anonymousReturningCustomerMarks: [] },
   { name: '治', continuationMarks: [], anonymousReturningCustomerMarks: ['*'] },
 ];
@@ -139,23 +143,252 @@ function isKnownContinuationLikeSymbol(text) {
 }
 
 /**
+ * 處理某一個時段列、某組欄位對應到的日期，把符合規則的記錄推進 records
+ * 裡，並更新 ongoing 追蹤延續符號的狀態。個別分頁跟合併分頁共用這支，
+ * 差別只在「要處理哪幾欄、每欄對應到哪個日期」的算法不同——這樣兩種
+ * 分頁格式的業務規則(延續符號、顏色、#REF! 等)保證完全一致，不會有
+ * 改一邊忘記改另一邊的風險。
+ * @param {object} params
+ * @param {Array<Array<{value: any, colorHex: string|null}>>} params.rows
+ * @param {number} params.r 這個時段列的 row index
+ * @param {string} params.startTime
+ * @param {Record<number, string>} params.colDateMap colIdx -> "YYYY-MM-DD"
+ * @param {{name: string, continuationMarks: string[], anonymousReturningCustomerMarks?: string[], masterDbName?: string}} params.master
+ * @param {Record<number, object>} params.ongoing colIdx -> 目前正在累積延續格的 record(會被修改)
+ * @param {Array<object>} params.records 輸出用陣列(會被 push)
+ */
+function processTimeSlotRow({ rows, r, startTime, colDateMap, master, ongoing, records }) {
+  const masterDbName = master.masterDbName ?? master.name;
+
+  for (const colIdxStr of Object.keys(colDateMap)) {
+    const colIdx = Number(colIdxStr);
+    const date = colDateMap[colIdx];
+    const cellData = rows[r]?.[colIdx] ?? { value: null, colorHex: null };
+    const text = cellData.value == null ? '' : String(cellData.value).trim();
+    const colorTag = resolveColorTag(cellData.colorHex);
+
+    if (text === '') {
+      if (colorTag === 'none') {
+        delete ongoing[colIdx];
+        continue;
+      }
+      // 空白但底色有意義(休假/自訂)：Hanna 看過畫面後不喜歡合併成一格
+      // (跟同行者那次一樣的理由——合併會導致單一格在資料庫比對時對不到)，
+      // 每一格都各自獨立一筆，不delete ongoing[colIdx]。
+      const record = {
+        masterName: masterDbName,
+        sheetMasterLabel: master.name,
+        date,
+        startTime,
+        customerName: COLOR_DEFAULT_NAMES[colorTag] ?? colorTag,
+        colorTag,
+        isNewCustomer: false,
+        slotCount: 1,
+        needsReview: false,
+        reviewReasons: [],
+      };
+      records.push(record);
+      // 故意不設 ongoing[colIdx] = record——這種空白色塊格不會是延續符號的
+      // 「錨點」，萬一後面接了一個延續符號，要讓它落到「找不到可以延續的
+      // 東西」那個 needsReview 分支，而不是被誤接到休假/自訂區塊上。
+      delete ongoing[colIdx];
+      continue;
+    }
+
+    const isConfirmedContinuation = master.continuationMarks.includes(text);
+    if (isConfirmedContinuation && ongoing[colIdx]) {
+      // 不是「同一人療程比較長」——查證過 app 自己建立多位同行客人時，
+      // 是同師傅連續時段「每人各佔一格」，各自一筆 bookings 資料列，
+      // customerName 是「原名-同行」或「原名-同行1/2/3...」(超過2人才編號)。
+      // 延續符號代表的正是這個模式，所以這裡要各自產生獨立的一筆記錄，
+      // 不能合併成一筆(合併會導致這幾格在資料庫裡對應的既有預約，被
+      // reconcile-month 誤判成「Sheet 上找不到對應」而錯誤標記取消——
+      // 這是真的發生過的事故，不是假設)。
+      // customerName 最後的編號要看這組同行者總共幾位，這裡先記下來，
+      // 掃完整個 block 之後再統一回頭填(見下面迴圈外的 companions 後處理)。
+      const anchor = ongoing[colIdx];
+      const companionRecord = {
+        masterName: masterDbName,
+        sheetMasterLabel: master.name,
+        date,
+        startTime,
+        customerName: null, // 先留空，掃完這個 anchor 的所有同行者後才知道要編號幾號
+        colorTag: anchor.colorTag,
+        isNewCustomer: false,
+        slotCount: 1,
+        needsReview: false,
+        reviewReasons: [],
+      };
+      records.push(companionRecord);
+      anchor.companions = anchor.companions ?? [];
+      anchor.companions.push(companionRecord);
+      continue; // ongoing[colIdx] 保持指向 anchor 本人，讓下一位同行者能接著算
+    }
+
+    const isAnonymousReturningCustomer = (master.anonymousReturningCustomerMarks ?? []).includes(text);
+
+    const record = {
+      masterName: masterDbName,
+      sheetMasterLabel: master.name,
+      date,
+      startTime,
+      customerName: text, // 不翻譯成「舊客」之類的可讀標籤——實測發現資料庫裡
+      // 既有的 治 的「舊客不打名字」預約，customer_name 存的就是原始符號
+      // 本身(例如 "*")，不是翻譯過的文字。翻譯過會導致跟既有資料庫紀錄的
+      // customer_name 對不起來，被 validate.js 的排班衝突判斷誤判成
+      // 「這是不同一筆」，明明是同一筆卻被擋下來。保持原始文字，兩邊才會一致。
+      colorTag,
+      isNewCustomer: colorTag === 'new_customer',
+      slotCount: 1,
+      needsReview: false,
+      reviewReasons: [],
+    };
+
+    if (text === REF_ERROR_TEXT) {
+      record.needsReview = true;
+      record.reviewReasons.push('內容是壞掉的公式參照(#REF!)，可能是原本參照的列/儲存格被刪除，需要人工確認');
+    } else if (isConfirmedContinuation && !ongoing[colIdx]) {
+      // 延續符號出現，但前面沒有正在累積中的紀錄可以延續(例如區塊第一格就是延續符號)
+      record.needsReview = true;
+      record.reviewReasons.push(`內容是 ${master.name} 已確認的延續符號「${text}」，但前一格是空的，沒有東西可以延續，需要人工確認`);
+    } else if (!isConfirmedContinuation && !isAnonymousReturningCustomer && isKnownContinuationLikeSymbol(text)) {
+      record.needsReview = true;
+      record.reviewReasons.push(`內容「${text}」看起來像延續或特殊符號，但不在 ${master.name} 已確認的清單裡，先當一般內容處理，需要人工確認是否為新發現的符號用法`);
+    }
+
+    records.push(record);
+    ongoing[colIdx] = record;
+  }
+}
+
+/**
+ * 同行者命名後處理：比照 app 自己建立多位同行客人的規則(guestsNum>2 才編號，
+ * 從 1 開始)。要等整個 block 掃完才能知道每組同行者的總人數，所以是個
+ * 獨立的後處理步驟，個別分頁跟合併分頁的 parser 都要呼叫。
+ * @param {Array<object>} records
+ */
+function assignCompanionNames(records) {
+  for (const record of records) {
+    if (record.companions?.length) {
+      const totalGuests = record.companions.length + 1; // 本人 + 同行人數
+      record.companions.forEach((companion, idx) => {
+        const i = idx + 1; // 對齊 app 的 for (let i = 1; i < guestsNum; i++)
+        const suffix = totalGuests > 2 ? String(i) : '';
+        companion.customerName = `${record.customerName}-同行${suffix}`;
+      });
+      delete record.companions; // 內部暫存用，不需要留在最終結果裡
+    }
+  }
+}
+
+/**
+ * @param {Array<object>} records
+ * @returns {Promise<void>} 直接修改每筆 record，加上 identityKey/contentHash
+ */
+async function assignIdentityAndHash(records) {
+  for (const record of records) {
+    record.identityKey = buildIdentityKey({ masterName: record.masterName, date: record.date, startTime: record.startTime });
+    record.contentHash = await hashContent({
+      customerName: record.customerName,
+      colorTag: record.colorTag,
+      slotCount: record.slotCount,
+    });
+  }
+}
+
+/**
+ * 把「{N}月-合併」(泓文+哲瑋併排版)分頁解析成某一位師傅的 BookingRecord[]。
+ * 跟 parseGridIntoRecords 不同的地方只有「怎麼找到表頭/日期/這位師傅的
+ * 欄位」，實際每一格怎麼處理(延續符號、顏色、#REF! 等)完全共用
+ * processTimeSlotRow，業務規則保證一致。
+ *
+ * 分頁結構(已用 /debug/dump-raw 實際查證過，不是猜的)：
+ * - 第 0 列：週日～週六 7 個標籤(合併儲存格，只在每欄配對的第一欄有值)
+ * - 每個週區塊：「師傅」列(第 0 欄="師傅")上面那一列是日期列(週日欄位如果
+ *   跨到上個月會是空的，沒有日期值，這一整天要跳過)；「師傅」列本身在
+ *   每對欄位裡各自寫著師傅名字(例如「泓文」「哲瑋」)，用來動態判斷這位
+ *   master 對應到哪一欄，不假設固定順序；接著 30 列時段(8:00~22:30，
+ *   跟個別分頁一樣)；再來「每日人數」小計列。
+ * @param {Array<Array<{value: any, colorHex: string|null}>>} rows
+ * @param {{name: string, continuationMarks: string[], anonymousReturningCustomerMarks?: string[]}} master 泓文或哲瑋
+ * @returns {Promise<Array<object>>}
+ */
+async function parseMergedGridIntoRecords(rows, master) {
+  const subHeaderRows = [];
+  for (let r = 1; r < rows.length; r++) {
+    if (rows[r]?.[0]?.value === '師傅') subHeaderRows.push(r);
+  }
+  if (subHeaderRows.length === 0) {
+    throw new Error('合併分頁裡找不到任何「師傅」子表頭列，分頁結構可能跟預期不符');
+  }
+
+  const records = [];
+
+  for (const subHeaderRow of subHeaderRows) {
+    const dateRow = rows[subHeaderRow - 1] ?? [];
+    const subHeader = rows[subHeaderRow] ?? [];
+
+    const colDateMap = {};
+    for (let w = 0; w < 7; w++) {
+      const pairColA = 1 + w * 2;
+      const pairColB = 2 + w * 2;
+      const serial = dateRow[pairColA]?.value; // 日期只寫在配對的第一欄，兩位師傅共用
+      if (serial == null || serial === '') continue; // 這天跨到別的月份分頁，不屬於這裡要顯示的範圍
+
+      // 動態讀「師傅」列自己寫的名字來對應這位 master 是配對裡的哪一欄，
+      // 不假設固定順序——比較不會因為 Sheet 排列改變而悄悄讀錯欄位。
+      let masterCol = null;
+      if (subHeader[pairColA]?.value === master.name) masterCol = pairColA;
+      else if (subHeader[pairColB]?.value === master.name) masterCol = pairColB;
+      if (masterCol == null) {
+        throw new Error(`合併分頁第 ${subHeaderRow} 列(師傅子表頭)的第 ${pairColA}/${pairColB} 欄裡找不到「${master.name}」，可能欄位順序跟預期不符`);
+      }
+      colDateMap[masterCol] = serialToDateString(serial);
+    }
+
+    const dataStartRow = subHeaderRow + 1;
+
+    // 結構驗證：資料列跑完後應該接著「每日人數」小計列，抓錯行數的話這裡
+    // 會馬上報錯，不會悄悄讀錯資料到別的區塊上。
+    const afterDataRow = rows[dataStartRow + SLOTS_PER_BLOCK];
+    if (!afterDataRow || afterDataRow[0]?.value !== '每日人數') {
+      throw new Error(
+        `合併分頁週區塊(師傅列在第 ${subHeaderRow} 列)結構跟預期不符：第 ${dataStartRow + SLOTS_PER_BLOCK} 列應該是「每日人數」小計列，實際是 ${JSON.stringify(afterDataRow?.[0]?.value)}`
+      );
+    }
+
+    const ongoing = {};
+    for (let slot = 0; slot < SLOTS_PER_BLOCK; slot++) {
+      const r = dataStartRow + slot;
+      const timeSerial = rows[r]?.[0]?.value;
+      const startTime = serialToTimeString(timeSerial);
+      processTimeSlotRow({ rows, r, startTime, colDateMap, master, ongoing, records });
+    }
+  }
+
+  assignCompanionNames(records);
+  await assignIdentityAndHash(records);
+
+  return records;
+}
+
+/**
  * 把單一師傅、單一分頁的完整格子資料解析成 BookingRecord[]。
  * @param {Array<Array<{value: any, colorHex: string|null}>>} rows sheetsApi.fetchGridRows() 的 rows
  * @param {{name: string, continuationMarks: string[]}} master
  * @returns {Promise<Array<object>>}
  */
 async function parseGridIntoRecords(rows, master) {
-  const masterDbName = master.masterDbName ?? master.name;
   const weekdayCols = buildWeekdayColumnMap(rows);
   const headerRows = findBlockHeaderRows(rows);
   const records = [];
 
   for (const headerRow of headerRows) {
     const dateRow = rows[headerRow] ?? [];
-    const dateByCol = {};
+    const colDateMap = {};
     for (const colIdx of Object.values(weekdayCols)) {
       const serial = dateRow[colIdx]?.value;
-      if (serial != null && serial !== '') dateByCol[colIdx] = serialToDateString(serial);
+      if (serial != null && serial !== '') colDateMap[colIdx] = serialToDateString(serial);
     }
 
     const totalRowIdx = headerRow + 1 + SLOTS_PER_BLOCK;
@@ -170,134 +403,54 @@ async function parseGridIntoRecords(rows, master) {
       const r = headerRow + 1 + slot;
       const timeSerial = rows[r]?.[0]?.value;
       const startTime = serialToTimeString(timeSerial);
-
-      for (const colIdxStr of Object.keys(dateByCol)) {
-        const colIdx = Number(colIdxStr);
-        const date = dateByCol[colIdx];
-        const cellData = rows[r]?.[colIdx] ?? { value: null, colorHex: null };
-        const text = cellData.value == null ? '' : String(cellData.value).trim();
-        const colorTag = resolveColorTag(cellData.colorHex);
-
-        if (text === '') {
-          if (colorTag === 'none') {
-            delete ongoing[colIdx];
-            continue;
-          }
-          // 空白但底色有意義(休假/自訂)：Hanna 看過畫面後不喜歡合併成一格
-          // (跟同行者那次一樣的理由——合併會導致單一格在資料庫比對時對不到)，
-          // 每一格都各自獨立一筆，不delete ongoing[colIdx]。
-          const record = {
-            masterName: masterDbName,
-            sheetMasterLabel: master.name,
-            date,
-            startTime,
-            customerName: COLOR_DEFAULT_NAMES[colorTag] ?? colorTag,
-            colorTag,
-            isNewCustomer: false,
-            slotCount: 1,
-            needsReview: false,
-            reviewReasons: [],
-          };
-          records.push(record);
-          // 故意不設 ongoing[colIdx] = record——這種空白色塊格不會是延續符號的
-          // 「錨點」，萬一後面接了一個延續符號，要讓它落到「找不到可以延續的
-          // 東西」那個 needsReview 分支，而不是被誤接到休假/自訂區塊上。
-          delete ongoing[colIdx];
-          continue;
-        }
-
-        const isConfirmedContinuation = master.continuationMarks.includes(text);
-        if (isConfirmedContinuation && ongoing[colIdx]) {
-          // 不是「同一人療程比較長」——查證過 app 自己建立多位同行客人時，
-          // 是同師傅連續時段「每人各佔一格」，各自一筆 bookings 資料列，
-          // customerName 是「原名-同行」或「原名-同行1/2/3...」(超過2人才編號)。
-          // 延續符號代表的正是這個模式，所以這裡要各自產生獨立的一筆記錄，
-          // 不能合併成一筆(合併會導致這幾格在資料庫裡對應的既有預約，被
-          // reconcile-month 誤判成「Sheet 上找不到對應」而錯誤標記取消——
-          // 這是真的發生過的事故，不是假設)。
-          // customerName 最後的編號要看這組同行者總共幾位，這裡先記下來，
-          // 掃完整個 block 之後再統一回頭填(見下面迴圈外的 companions 後處理)。
-          const anchor = ongoing[colIdx];
-          const companionRecord = {
-            masterName: masterDbName,
-            sheetMasterLabel: master.name,
-            date,
-            startTime,
-            customerName: null, // 先留空，掃完這個 anchor 的所有同行者後才知道要編號幾號
-            colorTag: anchor.colorTag,
-            isNewCustomer: false,
-            slotCount: 1,
-            needsReview: false,
-            reviewReasons: [],
-          };
-          records.push(companionRecord);
-          anchor.companions = anchor.companions ?? [];
-          anchor.companions.push(companionRecord);
-          continue; // ongoing[colIdx] 保持指向 anchor 本人，讓下一位同行者能接著算
-        }
-
-        const isAnonymousReturningCustomer = (master.anonymousReturningCustomerMarks ?? []).includes(text);
-
-        const record = {
-          masterName: masterDbName,
-          sheetMasterLabel: master.name,
-          date,
-          startTime,
-          customerName: text, // 不翻譯成「舊客」之類的可讀標籤——實測發現資料庫裡
-          // 既有的 治 的「舊客不打名字」預約，customer_name 存的就是原始符號
-          // 本身(例如 "*")，不是翻譯過的文字。翻譯過會導致跟既有資料庫紀錄的
-          // customer_name 對不起來，被 validate.js 的排班衝突判斷誤判成
-          // 「這是不同一筆」，明明是同一筆卻被擋下來。保持原始文字，兩邊才會一致。
-          colorTag,
-          isNewCustomer: colorTag === 'new_customer',
-          slotCount: 1,
-          needsReview: false,
-          reviewReasons: [],
-        };
-
-        if (text === REF_ERROR_TEXT) {
-          record.needsReview = true;
-          record.reviewReasons.push('內容是壞掉的公式參照(#REF!)，可能是原本參照的列/儲存格被刪除，需要人工確認');
-        } else if (isConfirmedContinuation && !ongoing[colIdx]) {
-          // 延續符號出現，但前面沒有正在累積中的紀錄可以延續(例如區塊第一格就是延續符號)
-          record.needsReview = true;
-          record.reviewReasons.push(`內容是 ${master.name} 已確認的延續符號「${text}」，但前一格是空的，沒有東西可以延續，需要人工確認`);
-        } else if (!isConfirmedContinuation && !isAnonymousReturningCustomer && isKnownContinuationLikeSymbol(text)) {
-          record.needsReview = true;
-          record.reviewReasons.push(`內容「${text}」看起來像延續或特殊符號，但不在 ${master.name} 已確認的清單裡，先當一般內容處理，需要人工確認是否為新發現的符號用法`);
-        }
-
-        records.push(record);
-        ongoing[colIdx] = record;
-      }
+      processTimeSlotRow({ rows, r, startTime, colDateMap, master, ongoing, records });
     }
   }
 
-  // 同行者命名後處理：比照 app 自己建立多位同行客人的規則(guestsNum>2 才編號，
-  // 從 1 開始)。要等整個 block 掃完才能知道每組同行者的總人數，所以放在
-  // 主要掃描迴圈外面統一處理。
-  for (const record of records) {
-    if (record.companions?.length) {
-      const totalGuests = record.companions.length + 1; // 本人 + 同行人數
-      record.companions.forEach((companion, idx) => {
-        const i = idx + 1; // 對齊 app 的 for (let i = 1; i < guestsNum; i++)
-        const suffix = totalGuests > 2 ? String(i) : '';
-        companion.customerName = `${record.customerName}-同行${suffix}`;
-      });
-      delete record.companions; // 內部暫存用，不需要留在最終結果裡
-    }
-  }
-
-  for (const record of records) {
-    record.identityKey = buildIdentityKey({ masterName: record.masterName, date: record.date, startTime: record.startTime });
-    record.contentHash = await hashContent({
-      customerName: record.customerName,
-      colorTag: record.colorTag,
-      slotCount: record.slotCount,
-    });
-  }
+  assignCompanionNames(records);
+  await assignIdentityAndHash(records);
 
   return records;
+}
+
+/**
+ * 抓某位師傅、某個月份的記錄——依 master.sourceMode 決定要讀個別分頁還是
+ * 合併分頁。合併分頁是泓文/哲瑋共用同一份，mergedCache 讓同一輪呼叫裡
+ * 這兩位不會各自重複抓一次同樣的合併分頁。
+ * @param {object} env
+ * @param {{name: string, continuationMarks: string[], anonymousReturningCustomerMarks?: string[], sourceMode?: string}} master
+ * @param {number} month
+ * @param {string} accessToken
+ * @param {Map<number, Array>} mergedCache month -> 合併分頁的 rows(跨呼叫共用)
+ * @param {object} deps
+ * @returns {Promise<Array<object>>}
+ */
+async function fetchAndParseForMasterMonth(env, master, month, accessToken, mergedCache, deps) {
+  const doFetchGridRows = deps.fetchGridRows ?? defaultFetchGridRows;
+
+  if (master.sourceMode === 'merged') {
+    if (!mergedCache.has(month)) {
+      const sheetTitle = `${month}月-合併`;
+      try {
+        // 合併分頁比個別分頁寬(7天x2師傅=14欄+A欄=15欄)，範圍要跟著放寬，
+        // 不然哲瑋(每對欄位的第二欄)的資料會被切掉抓不到。
+        const gridResult = await doFetchGridRows(env, { sheetTitle, range: 'A1:O260', accessToken });
+        mergedCache.set(month, gridResult.rows);
+      } catch (err) {
+        throw new Error(`讀取分頁「${sheetTitle}」失敗: ${err.message}`);
+      }
+    }
+    return parseMergedGridIntoRecords(mergedCache.get(month), master);
+  }
+
+  const sheetTitle = `${month}月-${master.name}`;
+  let gridResult;
+  try {
+    gridResult = await doFetchGridRows(env, { sheetTitle, range: 'A1:H260', accessToken });
+  } catch (err) {
+    throw new Error(`讀取分頁「${sheetTitle}」失敗: ${err.message}`);
+  }
+  return parseGridIntoRecords(gridResult.rows, master);
 }
 
 /**
@@ -349,21 +502,12 @@ async function fetchAndParseWeek(env, weekKey, deps = {}) {
 
   const months = monthsSpannedByWeek(weekKey);
   const accessToken = await doGetAccessToken(env);
+  const mergedCache = new Map(); // month -> 合併分頁 rows，避免泓文/哲瑋各自重複抓
 
   const allRecords = [];
   for (const master of SHEET_MASTERS) {
     for (const { month } of months) {
-      const sheetTitle = `${month}月-${master.name}`;
-      let gridResult;
-      try {
-        // 一個月最多 6 個週區塊(header 1 列 + 6*34 = 205 列)，抓 260 列留寬裕
-        // 空間；原本抓到 1010 列，一個月分頁其實用不到那麼多，白白增加資料量
-        // 跟解析時間。
-        gridResult = await doFetchGridRows(env, { sheetTitle, range: 'A1:H260', accessToken });
-      } catch (err) {
-        throw new Error(`讀取分頁「${sheetTitle}」失敗: ${err.message}`);
-      }
-      const records = await parseGridIntoRecords(gridResult.rows, master);
+      const records = await fetchAndParseForMasterMonth(env, master, month, accessToken, mergedCache, deps);
       allRecords.push(...records);
     }
   }
@@ -384,21 +528,14 @@ async function fetchAndParseWeek(env, weekKey, deps = {}) {
  */
 async function fetchAndParseMonth(env, year, month, deps = {}) {
   const doGetAccessToken = deps.getAccessToken ?? defaultGetAccessToken;
-  const doFetchGridRows = deps.fetchGridRows ?? defaultFetchGridRows;
 
   const accessToken = await doGetAccessToken(env);
   const monthPrefix = `${year}-${String(month).padStart(2, '0')}`;
+  const mergedCache = new Map();
 
   const allRecords = [];
   for (const master of SHEET_MASTERS) {
-    const sheetTitle = `${month}月-${master.name}`;
-    let gridResult;
-    try {
-      gridResult = await doFetchGridRows(env, { sheetTitle, range: 'A1:H260', accessToken });
-    } catch (err) {
-      throw new Error(`讀取分頁「${sheetTitle}」失敗: ${err.message}`);
-    }
-    const records = await parseGridIntoRecords(gridResult.rows, master);
+    const records = await fetchAndParseForMasterMonth(env, master, month, accessToken, mergedCache, deps);
     // 分頁裡的週區塊可能帶到鄰月的日期(跨月那週)，只留真的屬於這個月的
     allRecords.push(...records.filter((r) => r.date.startsWith(monthPrefix)));
   }
@@ -450,6 +587,7 @@ async function fetchAndParseWeekCached(env, weekKey, cache, deps = {}) {
 
 export {
   parseGridIntoRecords,
+  parseMergedGridIntoRecords,
   findBlockHeaderRows,
   buildWeekdayColumnMap,
   monthsSpannedByWeek,
