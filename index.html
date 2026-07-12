@@ -6340,7 +6340,6 @@ function MainApp({
   }, "▶")), /*#__PURE__*/React.createElement("div", {
     className: "scroll-container",
     ref: scrollContainerRef,
-    style: !isMobile ? { display: "flex", justifyContent: "center" } : undefined,
     onTouchStart: e => {
       if (e.touches.length === 2) {
         // Samsung Internet瀏覽器有個已知多年未修的bug：即使viewport設了
@@ -6435,7 +6434,8 @@ function MainApp({
       borderCollapse: "separate",
       borderSpacing: 0,
       tableLayout: "fixed",
-      width: `${timeColWidth(cw) + ACTIVE_DAYS.length * cw}px`
+      width: `${timeColWidth(cw) + ACTIVE_DAYS.length * cw}px`,
+      margin: isMobile ? undefined : "0 auto"
     }
   }, /*#__PURE__*/React.createElement("colgroup", null, /*#__PURE__*/React.createElement("col", {
     style: {
@@ -10457,7 +10457,6 @@ function OverviewMonth({
   }, "放開即儲存")), sel.length > 0 && /*#__PURE__*/React.createElement("div", {
     className: "scroll-container",
     ref: ovScrollRef,
-    style: window.innerWidth <= 768 ? undefined : { display: "flex", justifyContent: "center" },
     onTouchStart: e => {
       if (e.touches.length === 2) {
         // 同MainApp那邊的修正：提早在touchstart就preventDefault，緩解
@@ -10516,7 +10515,8 @@ function OverviewMonth({
       borderCollapse: "separate",
       borderSpacing: 0,
       tableLayout: "fixed",
-      width: `${timeColWidth(ocw) + totalCols * ocw}px`
+      width: `${timeColWidth(ocw) + totalCols * ocw}px`,
+      margin: window.innerWidth <= 768 ? undefined : "0 auto"
     }
   }, /*#__PURE__*/React.createElement("colgroup", null, /*#__PURE__*/React.createElement("col", {
     style: {
