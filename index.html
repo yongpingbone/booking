@@ -3739,17 +3739,17 @@ function MainApp({
     const avail = Math.max(320, window.innerWidth - 32);
     try {
       const rawCw = localStorage.getItem("yp_cw");
-      if (rawCw === null || rawCw === "85") {
+      if (rawCw === null || rawCw === "85" || rawCw === "220") {
         const dayCols = 6;
-        const fillCw = Math.min(220, Math.max(85, Math.round(avail / (0.81 + dayCols))));
+        const fillCw = Math.min(280, Math.max(85, Math.round(avail / (0.81 + dayCols))));
         setColW(String(fillCw));
       }
     } catch (_) {}
     try {
       const rawOvCw = localStorage.getItem("yp_ov_cw");
-      if (rawOvCw === null || rawOvCw === "75") {
+      if (rawOvCw === null || rawOvCw === "75" || rawOvCw === "200") {
         const totalCols = 7 * Math.max(1, masters.length || 4);
-        const fillOvCw = Math.min(200, Math.max(75, Math.round(avail / (0.81 + totalCols))));
+        const fillOvCw = Math.min(240, Math.max(75, Math.round(avail / (0.81 + totalCols))));
         setOvColW(String(fillOvCw));
       }
     } catch (_) {}
@@ -5743,7 +5743,7 @@ function MainApp({
   }, /*#__PURE__*/React.createElement("input", {
     type: "range",
     min: "52",
-    max: "220",
+    max: "280",
     value: cw,
     onChange: e => setColW(e.target.value),
     style: {
@@ -6340,6 +6340,7 @@ function MainApp({
   }, "▶")), /*#__PURE__*/React.createElement("div", {
     className: "scroll-container",
     ref: scrollContainerRef,
+    style: !isMobile ? { display: "flex", justifyContent: "center" } : undefined,
     onTouchStart: e => {
       if (e.touches.length === 2) {
         // Samsung Internet瀏覽器有個已知多年未修的bug：即使viewport設了
@@ -10099,7 +10100,7 @@ function OverviewMonth({
   }, "欄"), /*#__PURE__*/React.createElement("input", {
     type: "range",
     min: "52",
-    max: "200",
+    max: "240",
     value: ocw,
     onChange: e => setOvColW(e.target.value),
     style: {
@@ -10456,6 +10457,7 @@ function OverviewMonth({
   }, "放開即儲存")), sel.length > 0 && /*#__PURE__*/React.createElement("div", {
     className: "scroll-container",
     ref: ovScrollRef,
+    style: window.innerWidth <= 768 ? undefined : { display: "flex", justifyContent: "center" },
     onTouchStart: e => {
       if (e.touches.length === 2) {
         // 同MainApp那邊的修正：提早在touchstart就preventDefault，緩解
