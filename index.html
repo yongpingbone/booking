@@ -1305,10 +1305,12 @@ function LoginScreen({
     let cancelled = false;
     (async () => {
       try {
-        if (isRunningInTWA()) {
-          if (!cancelled) setLineChecking(false);
-          return;
-        }
+        // 原本這裡有 if (isRunningInTWA()) 直接跳過LIFF初始化的判斷——
+        // 拿掉了。當時的判斷依據是「網頁版正常、只有APK不行」，但後來
+        // 發現網頁版點擊登入按鈕同樣「沒有跳轉」，代表這不是TWA特有的
+        // 限制，是liff.login()本身的問題，網頁版跟APK版都會受影響。
+        // 既然如此，不應該把APK直接排除在外，讓兩邊用同一套已經加強
+        // 錯誤處理的邏輯，才能一起把真正根因抓出來。
         if (typeof liff === "undefined" || MASTER_LOGIN_LIFF_ID.startsWith("TODO_")) {
           // LIFF SDK沒載入成功、或LIFF App還沒設定好，直接跳過，
           // 完全不影響帳密登入的正常使用
