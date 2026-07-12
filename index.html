@@ -1265,9 +1265,18 @@ function LoginScreen({
       });
       const j = await res.json().catch(() => ({}));
       if (!j.success) {
-        // not_bound / account_inactive 這些情況安靜退回帳密登入，不要用錯誤訊息
-        // 嚇到使用者——這是預期內、正常會發生的情況(例如師傅還沒被綁定LINE)
+        // 修正：原本這裡把「所有失敗情況」都當作not_bound處理、統一安靜
+        // 退回，導致這次的401(LINE身份驗證失敗，不是「還沒綁定」)也被
+        // 悄悄吞掉，畫面上完全看不出發生了什麼，只會停在登入頁面。
+        // not_bound/account_inactive才是真正「預期內、正常會發生」的
+        // 情況(例如師傅還沒被綁定LINE)，其他錯誤(包含這次的401)要
+        // 明確顯示，才能真正診斷問題。
+        if (j.error === "not_bound" || j.error === "account_inactive") {
+          setLineBusy(false);
+          return;
+        }
         setLineBusy(false);
+        setError("LINE 登入失敗：" + (j.error || "未知錯誤") + (j.debugBody ? `\n詳細：${j.debugBody}` : ""));
         return;
       }
       // 修正2：Supabase實際回傳的錯誤訊息明確講「Only the token_hash and type
@@ -1549,7 +1558,9 @@ function LoginScreen({
       marginBottom: 14,
       fontSize: 13,
       color: "#e94560",
-      textAlign: "center"
+      textAlign: "center",
+      whiteSpace: "pre-wrap",
+      wordBreak: "break-word"
     }
   }, error), /*#__PURE__*/React.createElement("button", {
     onClick: doLogin,
