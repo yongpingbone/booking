@@ -1334,6 +1334,14 @@ function MonthlyOpenReminder({ authMaster, msg }) {
 // 目前是占位值，還沒有真正的LIFF App，liff.init會失敗，但因為整段都包在
 // try-catch裡且失敗時不影響原本帳密登入，先部署也不會壞掉任何東西。
 const MASTER_LOGIN_LIFF_ID = "2010635540-wPS7CrP2";
+// 2026-07-12再修正：查證LIFF社群案例，logout()一律搭配window.location.reload()
+// 使用(從沒看過logout()後馬上同步呼叫login()的寫法)，代表logout()清掉session
+// 這件事不保證在下一行login()執行時已經完全生效——與其賭這個時序，改成
+// logout()後真的reload一次頁面，isLoggedIn()才會確定是false，再交給下面
+// mount時的邏輯接手呼叫真正的login()重新導向。用這個旗標記住「reload是
+// 因為要繼續登入流程」，讓mount effect知道要自動接著跳轉，使用者只需要
+// 按一次按鈕，不用reload後自己再按一次。
+const LINE_RELOGIN_FLAG = "yp_line_relogin_pending";
 // LINE的idToken從liff.login()發出後約1小時就會過期，但LIFF SDK不會自動更新
 // 它快取在瀏覽器storage裡的idToken，即使liff.isLoggedIn()一直回傳true(這個
 // 只檢查access token，不檢查idToken的exp)。過期時不會自動logout+login重新
@@ -1493,6 +1501,19 @@ function LoginScreen({
         await Promise.race([liff.init({ liffId: MASTER_LOGIN_LIFF_ID }), timeoutPromise]);
         if (cancelled) return;
         setLineAvailable(true);
+        if (sessionStorage.getItem(LINE_RELOGIN_FLAG)) {
+          // 上一步是使用者按了「重新使用LINE登入」→logout()→reload()，
+          // 這裡接手，真的觸發liff.login()重新導向。旗標先清掉，避免
+          // 這次登入萬一又失敗時，之後又被誤判成「還在繼續上次的流程」。
+          sessionStorage.removeItem(LINE_RELOGIN_FLAG);
+          try {
+            liff.login({ redirectUri: window.location.href });
+          } catch (e) {
+            console.error("[LINE重新登入] reload後liff.login()呼叫失敗:", e);
+            setError("LINE 登入啟動失敗，請改用帳號密碼，或再按一次「使用 LINE 登入」");
+          }
+          return;
+        }
         if (liff.isLoggedIn()) {
           await loginViaLine();
         }
@@ -1592,10 +1613,15 @@ function LoginScreen({
       try {
         if (lineTokenExpired) {
           // 已知快取的idToken過期，單純呼叫liff.login()在isLoggedIn()仍是
-          // true時不會真的導向——必須先logout()清掉舊session。這裡導向
-          // 是使用者自己按的，跳出去(customtabs/系統瀏覽器)是預期內的。
+          // true時不會真的導向——必須先logout()清掉舊session。
+          // 2026-07-12修正：logout()後不直接同步呼叫login()，改成真的
+          // reload一次頁面，讓isLoggedIn()確定變成false，交給mount時的
+          // 邏輯(見LINE_RELOGIN_FLAG)接手觸發真正的重新導向——查證過
+          // LIFF社群案例，logout()一律是搭配reload()用，沒有查到logout()
+          // 後馬上同步login()這種寫法，怕LIFF內部清理session的時序沒那麼快。
+          sessionStorage.setItem(LINE_RELOGIN_FLAG, "1");
           liff.logout();
-          liff.login({ redirectUri: window.location.href });
+          window.location.reload();
         } else if (liff.isLoggedIn()) {
           loginViaLine();
         } else {
