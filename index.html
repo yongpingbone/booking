@@ -52,6 +52,7 @@ body.light {
 .tab-btn.active { border-bottom-color:#e94560; color:#e94560; font-weight:700; }
 .c-none { background:transparent !important; }
 .c-new_customer { background:rgba(245,166,35,0.35) !important; border-left:3px solid #f5a623 !important; }
+.c-cui { background:rgba(255,77,148,0.30) !important; border-left:3px solid #ff4d94 !important; }
 .c-vacation { background:rgba(220,38,38,0.45) !important; border-left:3px solid #e94560 !important; }
 .c-reserved { background:rgba(34,211,238,0.30) !important; border-left:3px solid #22d3ee !important; }
 .c-custom { background:rgba(162,155,254,0.30) !important; border-left:3px solid #a29bfe !important; }
@@ -459,6 +460,14 @@ const COLORS = [{
   label: "新客",
   text: "#f5a623"
 }, {
+  // 2026-07-13新增：脆——用磁紅色(#ff4d94)，跟現有5種顏色(灰/橙/紅/紫/
+  // 青/綠)都不撞色，一眼能跟其他標記分開。Sheet匯入時偵測到客人名字裡
+  // 的「(脆)」「（脆）」文字會自動套用這個標記(見sheet-sync-worker的
+  // extractCuiMarker)，這裡是給APP自己手動新增/編輯預約時也能選這個標記用。
+  key: "cui",
+  label: "脆",
+  text: "#ff4d94"
+}, {
   key: "vacation",
   label: "休假",
   text: "#e94560"
@@ -486,6 +495,7 @@ const ALL_DEFAULT_NAMES = new Set(["休假", "卡位", "自訂", "售後"]);
 const SHEET_COLOR_LABELS = [
   { key: "none", label: "舊客" },
   { key: "new_customer", label: "新客" },
+  { key: "cui", label: "脆" },
   { key: "vacation", label: "休假" },
   { key: "reserved", label: "卡位" },
   { key: "custom", label: "自訂" },
@@ -7344,6 +7354,7 @@ function MainApp({
     const colorMap = {
       "none": "#888",
       "new_customer": "#f5a623",
+      "cui": "#ff4d94",
       "vacation": "#e94560",
       "custom": "#a29bfe"
     };
@@ -8177,6 +8188,7 @@ function MainApp({
     const colorMap = {
       "none": "#888",
       "new_customer": "#f5a623",
+      "cui": "#ff4d94",
       "vacation": "#e94560",
       "custom": "#a29bfe"
     };
@@ -11407,6 +11419,7 @@ function OverviewMonth({
     const colorMap = {
       "none": "#888",
       "new_customer": "#f5a623",
+      "cui": "#ff4d94",
       "vacation": "#e94560",
       "custom": "#a29bfe"
     };
@@ -12241,6 +12254,7 @@ function OverviewMonth({
     const colorMap = {
       "none": "#888",
       "new_customer": "#f5a623",
+      "cui": "#ff4d94",
       "vacation": "#e94560",
       "custom": "#a29bfe"
     };

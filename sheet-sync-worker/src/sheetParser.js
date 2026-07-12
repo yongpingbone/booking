@@ -72,7 +72,20 @@ const COLOR_HEX_TO_TAG = {
 const NEUTRAL_COLOR_HEXES = new Set(['#FFFFFF', '#FFF2CC']);
 // 空白但底色有意義時(休假/自訂)，沒有文字內容可以當 customerName，比照
 // app 自己「選色標沒打名字時」的既有規則(booking repo COLOR_DEFAULT_NAMES)。
-const COLOR_DEFAULT_NAMES = { vacation: '休假', custom: '自訂' };
+const COLOR_DEFAULT_NAMES = { vacation: '休假', custom: '自訂', cui: '脆' };
+
+// 「(脆)」「（脆）」是Hanna在Sheet上手動打在客人名字後面的文字慣例(不是靠
+// 底色分辨)，例如「蔡孟奇（脆）」。匯入時要偵測到就從名字裡拿掉這段文字、
+// 改成獨立的color_tag='cui'，不能讓「(脆)」原始文字留在customer_name裡
+// (2026-07-13 Hanna 需求)。全形「（）」跟半形「()」都要認得。這個標記
+// 代表的是文字本身，跟底色resolveColorTag()是兩套完全獨立的判斷依據；
+// 一旦偵測到文字標記，優先權蓋過底色判斷的結果(Hanna手動打字比儲存格
+// 底色更明確、更有意圖)。
+const CUI_MARKER_RE = /[（(]脆[）)]/;
+function extractCuiMarker(text) {
+  if (!CUI_MARKER_RE.test(text)) return { cleanedText: text, isCui: false };
+  return { cleanedText: text.replace(CUI_MARKER_RE, '').trim(), isCui: true };
+}
 
 /**
  * @param {string|null} colorHex
@@ -165,8 +178,9 @@ function processTimeSlotRow({ rows, r, startTime, colDateMap, master, ongoing, r
     const colIdx = Number(colIdxStr);
     const date = colDateMap[colIdx];
     const cellData = rows[r]?.[colIdx] ?? { value: null, colorHex: null };
-    const text = cellData.value == null ? '' : String(cellData.value).trim();
-    const colorTag = resolveColorTag(cellData.colorHex);
+    const rawText = cellData.value == null ? '' : String(cellData.value).trim();
+    const { cleanedText: text, isCui } = extractCuiMarker(rawText);
+    const colorTag = isCui ? 'cui' : resolveColorTag(cellData.colorHex);
 
     if (text === '') {
       if (colorTag === 'none') {
