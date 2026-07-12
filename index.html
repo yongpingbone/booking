@@ -1218,11 +1218,11 @@ function MonthlyOpenReminder({ authMaster, msg }) {
 // try-catch裡且失敗時不影響原本帳密登入，先部署也不會壞掉任何東西。
 const MASTER_LOGIN_LIFF_ID = "2010635540-wPS7CrP2";
 // LINE的idToken從liff.login()發出後約1小時就會過期，但LIFF SDK不會自動更新
-// 它快取在瀏覽器storage裡的idToken——即使liff.isLoggedIn()一直回傳true(這個
-// 只檢查access token，不檢查idToken的exp)。這個旗標用來限制loginViaLine()
-// 偵測到過期時最多自動執行一次「logout+login重新導向」復原，避免萬一新
-// token還是失敗(例如帳號真的被停權)時卡進無限跳轉迴圈。
-const LINE_RECOVERY_FLAG = "yp_line_login_recovering";
+// 它快取在瀏覽器storage裡的idToken，即使liff.isLoggedIn()一直回傳true(這個
+// 只檢查access token，不檢查idToken的exp)。過期時不會自動logout+login重新
+// 導向(2026-07-12實測：這個app的TWA未通過Digital Asset Links驗證，自動導向
+// 會把使用者甩出到系統瀏覽器)，只會標記lineTokenExpired、換提示文字，交給
+// 使用者自己按「使用LINE登入」才觸發真正的重新導向。
 function isRunningInTWA() {
   try {
     return typeof document !== "undefined" && document.referrer && document.referrer.startsWith("android-app://");
@@ -1242,6 +1242,15 @@ function LoginScreen({
   const [lineChecking, setLineChecking] = useState(true); // 剛進畫面先嘗試LINE自動登入，這段期間顯示載入中
   const [lineAvailable, setLineAvailable] = useState(false); // liff初始化成功、且環境支援，才顯示LINE登入按鈕
   const [lineBusy, setLineBusy] = useState(false);
+  // true代表偵測到idToken過期(見loginViaLine)。不自動觸發logout+login重新導向，
+  // 只改變按鈕行為跟提示文字——2026-07-12實測發現，這個app的TWA一直沒有
+  // 通過Digital Asset Links驗證(見下方isRunningInTWA附近的說明)，一直都是
+  // fallbackType:customtabs在跑，不是真正無縫的原生模式。在這個狀態下，自動
+  // (使用者沒操作)觸發liff.login()的重新導向，會直接把使用者甩出到系統瀏覽器
+  // (而不是留在app/customtabs裡)，比對話框裡看到過期錯誤訊息更讓人困惑。
+  // 所以改成：偵測到過期→只顯示訊息，按鈕文字跟著換→使用者自己按了才導向，
+  // 至少是使用者自己觸發、預期內的跳轉，不是無緣無故被甩出app。
+  const [lineTokenExpired, setLineTokenExpired] = useState(false);
   // 鎖：防止「頁面載入時的自動登入」跟「手動點擊LINE登入按鈕」幾乎同時
   // 觸發loginViaLine——這是實際發生過的bug根因：兩個呼叫各自向後端要了
   // 一組新的一次性登入憑證，其中一組驗證成功後，另一組就變成「已失效」，
@@ -1286,19 +1295,23 @@ function LoginScreen({
         // SDK會判斷「已登入」而不觸發真正的重新導向(之前已實測過這個現象，
         // 見上面拿掉isRunningInTWA判斷那段的說明)——所以單純重試沒有用，
         // 必須先liff.logout()清掉舊session，liff.login()才會真的跳轉去
-        // 換一組全新的idToken。整個過程最多自動做一次(見LINE_RECOVERY_FLAG)，
-        // 使用者通常只會感覺到頁面短暫重新整理一下，不需要自己按任何按鈕。
+        // 換一組全新的idToken。
+        //
+        // 不自動做這個logout+login導向(2026-07-12實測修正)：這個app的TWA
+        // 從來沒有通過Digital Asset Links驗證(host網域根目錄沒有assetlinks.json，
+        // 見下方說明)，一直是fallbackType:customtabs在跑，不是無縫原生模式。
+        // 在這個狀態下，*沒有使用者操作*就自動觸發liff.login()導向，實測
+        // 會直接把使用者甩出到系統瀏覽器(這次是Samsung Internet)、離開app，
+        // 比留在畫面上看錯誤訊息更糟。改成只標記狀態、換提示文字跟按鈕行為，
+        // 真正的logout+login導向留給使用者自己按「使用LINE登入」才觸發——
+        // 同樣會跳出去，但至少是自己按的、在預期內。
         const isExpired = j.error === "token_expired" || /expired/i.test(j.debugBody || "");
-        if (isExpired && !sessionStorage.getItem(LINE_RECOVERY_FLAG)) {
-          try {
-            sessionStorage.setItem(LINE_RECOVERY_FLAG, "1");
-            liff.logout();
-            liff.login({ redirectUri: window.location.href });
-            return; // liff.login()會導航離開頁面，不用再setLineBusy(false)
-          } catch (e) {
-            console.error("[LINE自動復原] logout+login重新導向失敗:", e);
-            // 復原本身就失敗(例如liff環境本來就不支援)，照常往下走顯示錯誤
-          }
+        if (isExpired) {
+          console.warn("[LINE登入] idToken已過期，debugBody:", j.debugBody);
+          setLineBusy(false);
+          setLineTokenExpired(true);
+          setError("LINE 登入已過期，請點下方「使用 LINE 登入」重新登入，或改用帳號密碼");
+          return;
         }
         setLineBusy(false);
         setError("LINE 登入失敗：" + (j.error || "未知錯誤") + (j.debugBody ? `\n詳細：${j.debugBody}` : ""));
@@ -1326,7 +1339,7 @@ function LoginScreen({
         setError("登入成功但讀取師傅資料失敗，請重新整理頁面再試一次");
         return;
       }
-      sessionStorage.removeItem(LINE_RECOVERY_FLAG); // 成功了，重置旗標讓下次過期還能再自動復原一次
+      setLineTokenExpired(false); // 成功了，重置狀態
       onLogin(masterData);
     } catch (e) {
       setLineBusy(false);
@@ -1458,9 +1471,15 @@ function LoginScreen({
       // 如果它內部狀態不對，可能會直接同步拋出例外，而不是靜默失敗——
       // 用try-catch包住，確保任何錯誤都會被明確看到，不會變成「按鈕點了
       // 完全沒反應」這種看不出原因的黑箱狀態。
-      console.log("[LINE登入按鈕] 點擊，isLoggedIn=", liff.isLoggedIn());
+      console.log("[LINE登入按鈕] 點擊，isLoggedIn=", liff.isLoggedIn(), "lineTokenExpired=", lineTokenExpired);
       try {
-        if (liff.isLoggedIn()) {
+        if (lineTokenExpired) {
+          // 已知快取的idToken過期，單純呼叫liff.login()在isLoggedIn()仍是
+          // true時不會真的導向——必須先logout()清掉舊session。這裡導向
+          // 是使用者自己按的，跳出去(customtabs/系統瀏覽器)是預期內的。
+          liff.logout();
+          liff.login({ redirectUri: window.location.href });
+        } else if (liff.isLoggedIn()) {
           loginViaLine();
         } else {
           liff.login({ redirectUri: window.location.href });
@@ -1483,7 +1502,7 @@ function LoginScreen({
       cursor: lineBusy ? "wait" : "pointer",
       marginBottom: 14
     }
-  }, lineBusy ? "登入中..." : "💬 使用 LINE 登入"), /*#__PURE__*/React.createElement("div", {
+  }, lineBusy ? "登入中..." : (lineTokenExpired ? "🔄 重新使用 LINE 登入" : "💬 使用 LINE 登入")), /*#__PURE__*/React.createElement("div", {
     style: { display: "flex", alignItems: "center", gap: 10, color: "#444", fontSize: 11 }
   }, /*#__PURE__*/React.createElement("div", { style: { flex: 1, height: 1, background: "#30363d" } }), "或使用帳號密碼", /*#__PURE__*/React.createElement("div", { style: { flex: 1, height: 1, background: "#30363d" } }))), /*#__PURE__*/React.createElement("div", {
     style: {
