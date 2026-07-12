@@ -3734,8 +3734,29 @@ function MainApp({
   // 升級過，存起來的就是一般數值，之後滑桿/雙指縮放調整完全不受影響，
   // 不會每次都蓋掉使用者自己選的欄寬。上限沿用滑桿本來就有的範圍
   // (220/200)，不是憑空新設一個更小的上限，避免over-engineer。
+  //
+  // 2026-07-12再修正：手機版時間欄「沒有一起放大、沒有凍結」的回報——
+  // 追查後發現isMobile只看window.innerWidth<=768，沒排除「螢幕很寬
+  // 但其實是觸控裝置」的情況(例如某些瀏覽器模式、平板橫放)。一旦誤判，
+  // 這段migration就會把手機的cw直接升到最高280，遠超手機正常可用
+  // 範圍，畫面跟pinch縮放就會整個跑掉。加isTouchDevice多一層防呆，
+  // 兩個條件都要成立(不是手機視窗尺寸 且 沒有觸控)才會跑桌面migration。
+  //
+  // 同時做反向修正：舊版pinch-zoom上限本來就是220(見下面雙指縮放那段)，
+  // 使用者手動縮放不可能超過220；如果現在偵測到是觸控裝置、但cw存的
+  // 值大於220，代表這組值只可能是之前這段bug造成的(不是使用者自己
+  // 縮放出來的)，直接修正回手機預設52，不用使用者自己清快取。
   useEffect(() => {
-    if (isMobile) return;
+    const isTouchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+    if (isMobile || isTouchDevice) {
+      try {
+        const rawCw = localStorage.getItem("yp_cw");
+        if (rawCw !== null && Number(rawCw) > 220) {
+          setColW("52");
+        }
+      } catch (_) {}
+      return;
+    }
     const avail = Math.max(320, window.innerWidth - 32);
     try {
       const rawCw = localStorage.getItem("yp_cw");
