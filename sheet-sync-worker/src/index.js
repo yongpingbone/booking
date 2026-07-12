@@ -18,7 +18,7 @@
 // Sheet、sheetWriter 寫備註這兩段需要真的打 sheets.googleapis.com，我的
 // sandbox 連不到，部署後第一次跑務必看 log。
 
-import { getLatestSnapshot, saveSnapshot, appendLog, deleteAllLogs, deleteStaleSnapshots } from './snapshotStore.js';
+import { getLatestSnapshot, saveSnapshot, appendLog, deleteAllLogs, deleteStaleSnapshots, acquireSyncLock, releaseSyncLock } from './snapshotStore.js';
 import { diffSnapshots } from './diff.js';
 import { fetchAndParseWeek, fetchAndParseWeekCached, SHEET_MASTERS, monthsSpannedByWeek } from './sheetParser.js';
 import { validateBookingRecord } from './validate.js';
@@ -381,8 +381,21 @@ export default {
     const monthCache = new Map();
     ctx.waitUntil(
       (async () => {
-        for (const weekKey of weekKeys) {
-          await safelyFetchAndSyncWeek(env, weekKey, monthCache);
+        // 保護機制：上一輪(不管是這個排程、還是手動/即時觸發的)如果還在
+        // 跑，這一輪直接跳過，不要疊上去——不然兩輪同時讀寫同一份資料，
+        // 會互相干擾判斷基準、甚至撞資料庫寫入衝突。
+        const runId = crypto.randomUUID();
+        const lock = await acquireSyncLock(env.SHEET_SYNC_BUCKET, runId);
+        if (!lock.acquired) {
+          console.log(`[sheet-sync] runId=${runId} 跳過這輪：上一輪(runId=${lock.existingLock?.runId}，${lock.existingLock?.acquiredAt} 開始)還在執行中`);
+          return;
+        }
+        try {
+          for (const weekKey of weekKeys) {
+            await safelyFetchAndSyncWeek(env, weekKey, monthCache);
+          }
+        } finally {
+          await releaseSyncLock(env.SHEET_SYNC_BUCKET);
         }
       })()
     );
@@ -740,17 +753,53 @@ export default {
       // 自動匯入，這次還是要真的執行(暫停只影響排程自動觸發)。
       // masterName —— App「立即匯入」按鈕如果是針對單一師傅，只帶這位
       // 師傅的名字，這次只處理他，不動其他師傅。
+      // background:true —— 立刻回傳「已開始」，實際同步在背景繼續跑(用
+      // ctx.waitUntil)，不等全部跑完才回應。給呼叫端本身有執行時間限制
+      // 的情境用(例如 Supabase Edge Function 直接等待可能會逾時)。
       const weekKeys = body.scope === 'current' ? weekKeysToSync(new Date()) : body.weekKeys;
-      const monthCache = new Map();
-      const logs = [];
-      for (const weekKey of weekKeys) {
-        logs.push(
-          await safelyFetchAndSyncWeek(env, weekKey, monthCache, {
-            forceNoteRecheck: body.forceNoteRecheck === true,
-            bypassSyncPause: body.bypassSyncPause === true,
-            onlyMasterName: body.masterName ?? null,
-          })
-        );
+      const syncOptions = {
+        forceNoteRecheck: body.forceNoteRecheck === true,
+        bypassSyncPause: body.bypassSyncPause === true,
+        onlyMasterName: body.masterName ?? null,
+      };
+      // 保護機制只套用在「大範圍、可能跑很久」的批次觸發(沒有指定
+      // onlyMasterName，代表要處理全部師傅)，不套用在單一師傅的立即匯入
+      // (App 按鈕用，範圍窄、風險本來就低，不希望被排程中的大範圍同步
+      // 卡住不能用)。
+      const needsLock = !syncOptions.onlyMasterName;
+
+      const runBatch = async () => {
+        const monthCache = new Map();
+        const logs = [];
+        for (const weekKey of weekKeys) {
+          logs.push(await safelyFetchAndSyncWeek(env, weekKey, monthCache, syncOptions));
+        }
+        return logs;
+      };
+
+      const runBatchWithLock = async () => {
+        if (!needsLock) return runBatch();
+        const runId = crypto.randomUUID();
+        const lock = await acquireSyncLock(env.SHEET_SYNC_BUCKET, runId);
+        if (!lock.acquired) {
+          console.log(`[sheet-sync] runId=${runId} 跳過：上一輪(runId=${lock.existingLock?.runId}) 還在執行中`);
+          return null; // null 代表被跳過，不是失敗
+        }
+        try {
+          return await runBatch();
+        } finally {
+          await releaseSyncLock(env.SHEET_SYNC_BUCKET);
+        }
+      };
+
+      if (body.background === true) {
+        ctx.waitUntil(runBatchWithLock());
+        return Response.json({ started: true, weekKeys }, { status: 202 });
+      }
+
+      const logs = await runBatchWithLock();
+      if (logs === null) {
+        return Response.json({ skipped: true, reason: '上一輪同步還在執行中，這次跳過' }, { status: 409 });
       }
       const allOk = logs.every((l) => l.ok);
       return Response.json({ weekKeys, logs }, { status: allOk ? 200 : 500 });

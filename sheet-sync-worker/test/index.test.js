@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MockR2Bucket } from './mockR2Bucket.js';
 import worker, { runSyncForWeek, runSyncForWeekWithRecords } from '../src/index.js';
-import { getLatestSnapshot } from '../src/snapshotStore.js';
+import { getLatestSnapshot, acquireSyncLock } from '../src/snapshotStore.js';
 
 function makeEnv(overrides = {}) {
   return {
@@ -888,4 +888,70 @@ test('fetch(): POST /sync 帶 scope:"current" + masterName + bypassSyncPause，�
   // 跑到 scope:"current" 這條路徑、算出了完整的 weekKeys 清單。
   assert.ok(Array.isArray(body.weekKeys));
   assert.ok(body.weekKeys.length >= 12);
+});
+
+test('fetch(): POST /sync 帶 background:true 立刻回應 202，不等同步跑完', async () => {
+  const env = makeEnv();
+  let backgroundPromiseCaptured = null;
+  const ctx = {
+    waitUntil: (promise) => {
+      backgroundPromiseCaptured = promise;
+    },
+  };
+  const request = new Request('https://worker.example/sync', {
+    method: 'POST',
+    headers: { 'X-Internal-Secret': 'test-secret' },
+    body: JSON.stringify({ scope: 'current', masterName: '泓文', background: true }),
+  });
+
+  const start = Date.now();
+  const res = await worker.fetch(request, env, ctx);
+  const elapsed = Date.now() - start;
+  const body = await res.json();
+
+  assert.equal(res.status, 202);
+  assert.equal(body.started, true);
+  assert.ok(Array.isArray(body.weekKeys));
+  assert.ok(elapsed < 500, '應該幾乎立刻回應，不等實際同步跑完');
+  assert.ok(backgroundPromiseCaptured, 'ctx.waitUntil 應該有被呼叫，背景任務有被交付出去');
+
+  // 讓背景任務跑完(這裡沒有真實 Google 憑證，會優雅失敗，但至少確認
+  // 有真的被執行到，不是完全沒動作)
+  await backgroundPromiseCaptured.catch(() => {});
+});
+
+test('fetch(): POST /sync scope:"current"(全範圍)：上一輪的鎖還在，這次要跳過(409)，不會疊上去執行', async () => {
+  const env = makeEnv();
+  await acquireSyncLock(env.SHEET_SYNC_BUCKET, 'previous-run');
+
+  const request = new Request('https://worker.example/sync', {
+    method: 'POST',
+    headers: { 'X-Internal-Secret': 'test-secret' },
+    body: JSON.stringify({ scope: 'current' }),
+  });
+  const res = await worker.fetch(request, env, {});
+  const body = await res.json();
+
+  assert.equal(res.status, 409);
+  assert.equal(body.skipped, true);
+});
+
+test('fetch(): POST /sync 帶 masterName(單一師傅立即匯入)：就算有鎖也不受影響，照常執行', async () => {
+  const env = makeEnv();
+  await acquireSyncLock(env.SHEET_SYNC_BUCKET, 'previous-run');
+
+  const request = new Request('https://worker.example/sync', {
+    method: 'POST',
+    headers: { 'X-Internal-Secret': 'test-secret' },
+    body: JSON.stringify({ scope: 'current', masterName: '泓文' }),
+  });
+  const res = await worker.fetch(request, env, {});
+  const body = await res.json();
+
+  // 沒有真實 Google 憑證，每一週都會在抓取階段失敗(不是被鎖擋下來)，
+  // 用回應裡有 weekKeys/logs(而不是 skipped:true)證明真的有跑到、
+  // 沒有被鎖攔住。
+  assert.ok(Array.isArray(body.weekKeys));
+  assert.ok(Array.isArray(body.logs));
+  assert.equal(body.skipped, undefined);
 });

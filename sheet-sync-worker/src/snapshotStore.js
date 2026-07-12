@@ -14,6 +14,12 @@
 //                                              驗證過了/沒過、寫進去了/衝突了)
 
 const SNAPSHOT_FORMAT_VERSION = 1;
+const SYNC_LOCK_KEY = 'sync-lock.json';
+// 上一輪如果真的卡死(例如中途掛掉、沒有正常執行到 finally 釋放鎖)，鎖超過
+// 這個時間就當作失效，允許下一輪接手，不會永遠卡住。30 分鐘遠超過正常一輪
+// (就算是完整三個月範圍)實際會花的時間，足夠寬鬆、不會誤判正常執行中的
+// 一輪為卡死。
+const SYNC_LOCK_STALE_AFTER_MS = 30 * 60 * 1000;
 
 function latestKey(weekKey) {
   assertSafeKeyPart(weekKey, 'weekKey');
@@ -154,3 +160,40 @@ async function deleteStaleSnapshots(bucket, currentWeekKeys) {
 }
 
 export { getLatestSnapshot, saveSnapshot, appendLog, listLogs, latestKey, historyKey, logKey, deleteAllLogs, deleteStaleSnapshots };
+
+/**
+ * 嘗試取得同步鎖——用來避免上一輪同步還沒跑完，下一輪(排程或即時觸發)
+ * 就疊上去，導致互相搶著讀寫同一份資料。
+ * 用簡單的「先讀再寫」而不是真正的原子性 compare-and-swap，因為實務上
+ * 真正會撞到的情境是「上一輪跑了好幾分鐘還沒完」，不是「兩個請求剛好
+ * 差幾毫秒同時到」——前者才是真正要防的風險，用簡單做法就足夠涵蓋，
+ * 不需要為了理論上極低機率的毫秒級競爭把邏輯搞複雜。
+ * @param {R2Bucket} bucket
+ * @param {string} runId 這一輪的識別碼，方便看鎖是誰持有的
+ * @returns {Promise<{acquired: boolean, existingLock?: object}>}
+ */
+async function acquireSyncLock(bucket, runId) {
+  const existing = await bucket.get(SYNC_LOCK_KEY);
+  if (existing) {
+    const data = await existing.json();
+    const age = Date.now() - new Date(data.acquiredAt).getTime();
+    if (age < SYNC_LOCK_STALE_AFTER_MS) {
+      return { acquired: false, existingLock: data };
+    }
+    // 鎖太舊了，當作上一輪卡死(中途掛掉、沒有正常釋放)，允許這一輪接手。
+  }
+  const lockData = { acquiredAt: new Date().toISOString(), runId };
+  await bucket.put(SYNC_LOCK_KEY, JSON.stringify(lockData));
+  return { acquired: true };
+}
+
+/**
+ * 釋放同步鎖。呼叫端要用 try/finally 包住，確保就算同步過程中丟出例外，
+ * 鎖還是會被正常釋放，不會卡住下一輪。
+ * @param {R2Bucket} bucket
+ */
+async function releaseSyncLock(bucket) {
+  await bucket.delete(SYNC_LOCK_KEY);
+}
+
+export { acquireSyncLock, releaseSyncLock };

@@ -1,7 +1,1 @@
-<html>
-<head><title>502 Bad Gateway</title></head>
-<body>
-<center><h1>502 Bad Gateway</h1></center>
-<hr><center>cloudflare</center>
-</body>
-</html>
+{"weekKey":"2026-07-06","runId":"50fca1a0-5d74-4253-8a0b-61a995e1a710","startedAt":"2026-07-12T10:07:27.156Z","diffSummary":{"added":0,"changed":0,"removed":0,"unchanged":635,"retriedInvalid":1,"noteRetried":0},"results":[{"identityKey":"哲瑋|2026-07-06|16:30","status":"invalid","errors":["內容「”」看起來像延續或特殊符號，但不在 哲瑋 已確認的清單裡，先當一般內容處理，需要人工確認是否為新發現的符號用法"]}],"ok":true,"finishedAt":"2026-07-12T10:07:32.437Z"}
