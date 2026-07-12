@@ -1217,6 +1217,13 @@ function MonthlyOpenReminder({ authMaster, msg }) {
 // 目前是占位值，還沒有真正的LIFF App，liff.init會失敗，但因為整段都包在
 // try-catch裡且失敗時不影響原本帳密登入，先部署也不會壞掉任何東西。
 const MASTER_LOGIN_LIFF_ID = "2010635540-wPS7CrP2";
+function isRunningInTWA() {
+  try {
+    return typeof document !== "undefined" && document.referrer && document.referrer.startsWith("android-app://");
+  } catch (e) {
+    return false;
+  }
+}
 
 function LoginScreen({
   onLogin
@@ -1298,6 +1305,10 @@ function LoginScreen({
     let cancelled = false;
     (async () => {
       try {
+        if (isRunningInTWA()) {
+          if (!cancelled) setLineChecking(false);
+          return;
+        }
         if (typeof liff === "undefined" || MASTER_LOGIN_LIFF_ID.startsWith("TODO_")) {
           // LIFF SDK沒載入成功、或LIFF App還沒設定好，直接跳過，
           // 完全不影響帳密登入的正常使用
