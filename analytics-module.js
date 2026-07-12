@@ -134,6 +134,41 @@ window.AnalyticsModule = function AnalyticsModule({
   const [allData, setAllData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [detailMonth, setDetailMonth] = useState(today.getMonth());
+  // 2026-07-12新增：讓「每日明細」正在瀏覽的月份也能直接跑AI分析，不用
+  // 只能對「本週/本月至今」這兩個寫死的區間——切到哪個月，分析哪個月。
+  const [monthAiBusy, setMonthAiBusy] = useState(false);
+  const [monthAiResult, setMonthAiResult] = useState(null);
+  const runMonthAI = async () => {
+    if (monthAiBusy) return;
+    setMonthAiBusy(true);
+    setMonthAiResult(null);
+    try {
+      const lastDay = new Date(year, detailMonth + 1, 0).getDate();
+      const isCurrentMonth = year === today.getFullYear() && detailMonth === today.getMonth();
+      const endDay = isCurrentMonth ? today.getDate() : lastDay; // 當月只分析到今天，避免把還沒發生的未來天數也算進去
+      const startDate = `${year}-${String(detailMonth + 1).padStart(2, "0")}-01`;
+      const endDate = `${year}-${String(detailMonth + 1).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
+      const resp = await fetch("https://ikzyzkhuireqztbhrtna.supabase.co/functions/v1/generate-monthly-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ startDate, endDate, masterId: selMasterId, pushToAdmins: false })
+      });
+      const result = await resp.json();
+      if (result.success) {
+        setMonthAiResult({ text: result.analysis, startDate, endDate });
+      } else {
+        setMonthAiResult({ error: result.error || "分析失敗" });
+      }
+    } catch (e) {
+      setMonthAiResult({ error: String(e?.message || e) });
+    } finally {
+      setMonthAiBusy(false);
+    }
+  };
+  useEffect(() => {
+    setMonthAiResult(null); // 切月份/切師傅/切年份時，上一次的分析結果就跟畫面對不上了，清掉避免誤會
+  }, [detailMonth, selMasterId, year]);
+
   const yearsNeeded = useMemo(() => [...new Set([year, yearA, yearB])], [year, yearA, yearB]);
   useEffect(() => {
     if (activeMasters.length > 0 && !selMasterId) {
@@ -407,7 +442,21 @@ window.AnalyticsModule = function AnalyticsModule({
       cursor: "pointer",
       fontFamily: "inherit"
     }
-  }, "🔍 檢查未計入紀錄"), /*#__PURE__*/React.createElement("div", {
+  }, "🔍 檢查未計入紀錄"), /*#__PURE__*/React.createElement("button", {
+    onClick: runMonthAI,
+    disabled: monthAiBusy,
+    style: {
+      padding: "2px 8px",
+      borderRadius: 12,
+      border: "1px solid #a29bfe60",
+      background: "transparent",
+      color: "#a29bfe",
+      fontSize: 10,
+      cursor: monthAiBusy ? "wait" : "pointer",
+      fontFamily: "inherit",
+      opacity: monthAiBusy ? 0.6 : 1
+    }
+  }, monthAiBusy ? "分析中(15-20秒)..." : `🤖 分析${MONTHS[detailMonth]}`), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 4,
@@ -425,7 +474,18 @@ window.AnalyticsModule = function AnalyticsModule({
       fontSize: 10,
       cursor: "pointer"
     }
-  }, mi + 1, "月")))), /*#__PURE__*/React.createElement("div", {
+  }, mi + 1, "月")))), monthAiResult && /*#__PURE__*/React.createElement("div", {
+    style: {
+      margin: "0 0 10px",
+      padding: 10,
+      borderRadius: 10,
+      border: `1px solid ${monthAiResult.error ? "#e94560" : "#a29bfe"}`,
+      background: monthAiResult.error ? "rgba(233,69,96,0.08)" : "rgba(162,155,254,0.08)",
+      fontSize: 12,
+      whiteSpace: "pre-wrap",
+      lineHeight: 1.5
+    }
+  }, monthAiResult.error ? `⚠️ ${monthAiResult.error}` : monthAiResult.text), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "grid",
       gridTemplateColumns: "repeat(7,1fr)",
