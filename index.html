@@ -759,6 +759,123 @@ function useLS(k, def) {
     localStorage.setItem(k, val);
   }];
 }
+// 依masterId算出一個固定色，同一個人不管誰的畫面看到都是同一個顏色，
+// 方便一眼認出來是誰(跟Google文件那種每人固定游標色是同樣的概念)。
+const PRESENCE_PALETTE = ["#e94560", "#00b894", "#74b9ff", "#fdcb6e", "#a29bfe", "#00cec9", "#fd79a8", "#55efc4"];
+function presenceColor(masterId) {
+  let h = 0;
+  const s = String(masterId || "");
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return PRESENCE_PALETTE[h % PRESENCE_PALETTE.length];
+}
+// 全店共用的線上狀態——用Supabase Realtime Presence(不是postgres_changes，
+// 這個是專門設計給「誰在線上/在做什麼」這種暫態資訊用的，斷線會自動從
+// 其他人畫面上消失，不用自己做心跳/逾時清理)。activity可以是任何可以
+// JSON化的物件，每次改變都會重新track、同步給頻道裡所有人。
+// 回傳「除了自己以外」目前在線的人清單。
+function usePresence(authMaster, activity) {
+  const [others, setOthers] = useState([]);
+  const channelRef = useRef(null);
+  const subscribedRef = useRef(false);
+  const activityRef = useRef(activity);
+  activityRef.current = activity;
+  useEffect(() => {
+    if (!authMaster?.id) return;
+    subscribedRef.current = false;
+    const ch = sb.channel("booking-presence", {
+      config: {
+        presence: {
+          key: authMaster.id
+        }
+      }
+    });
+    channelRef.current = ch;
+    ch.on("presence", {
+      event: "sync"
+    }, () => {
+      try {
+        const state = ch.presenceState();
+        const list = [];
+        Object.keys(state).forEach(key => {
+          if (key === authMaster.id) return; // 排除自己
+          const entries = state[key];
+          if (entries && entries[0]) list.push(entries[0]);
+        });
+        setOthers(list);
+      } catch (_) {}
+    }).subscribe(async status => {
+      if (status === "SUBSCRIBED") {
+        subscribedRef.current = true;
+        try {
+          await ch.track({
+            masterId: authMaster.id,
+            name: authMaster.name,
+            activity: activityRef.current,
+            at: Date.now()
+          });
+        } catch (_) {}
+      }
+    });
+    return () => {
+      subscribedRef.current = false;
+      channelRef.current = null;
+      try {
+        sb.removeChannel(ch);
+      } catch (_) {}
+    };
+  }, [authMaster?.id, authMaster?.name]);
+  useEffect(() => {
+    if (!subscribedRef.current || !channelRef.current || !authMaster?.id) return;
+    channelRef.current.track({
+      masterId: authMaster.id,
+      name: authMaster.name,
+      activity: activity,
+      at: Date.now()
+    }).catch(() => {});
+  }, [activity, authMaster?.id, authMaster?.name]);
+  return others;
+}
+// 在線頭像列——放在header裡，所有分頁都看得到。單顆頭像tap會跳一個
+// toast顯示完整的活動內容(手機上title tooltip不會有作用，用tap代替hover)。
+function PresenceBar({
+  others,
+  onTapPerson
+}) {
+  if (!others || others.length === 0) return null;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      marginRight: 4
+    }
+  }, others.slice(0, 6).map(p => /*#__PURE__*/React.createElement("div", {
+    key: p.masterId,
+    onClick: () => onTapPerson && onTapPerson(p),
+    title: `${p.name}：${p.activity?.summary || "在線上"}`,
+    style: {
+      width: 24,
+      height: 24,
+      borderRadius: "50%",
+      background: presenceColor(p.masterId),
+      color: "#fff",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: 11,
+      fontWeight: 800,
+      flexShrink: 0,
+      cursor: "pointer",
+      border: "2px solid var(--bg-header)",
+      boxShadow: "0 0 0 1px var(--border2)"
+    }
+  }, (p.name || "?").slice(0, 1))), others.length > 6 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      color: "var(--text-muted)"
+    }
+  }, "+", others.length - 6));
+}
 // 時間欄寬度依cw按比例縮放的共用公式——thTime跟table的colgroup/總寬度計算
 // 都要用同一套，不要各自寫一份，不然改了一邊、另一邊(尤其colgroup，在
 // tableLayout:fixed底下權重比儲存格自己的width還高)沒跟著改，等於白改。
@@ -3655,6 +3772,53 @@ function MainApp({
   const [showEditLogs, setShowEditLogs] = useState(false);
   const [cellHistory, setCellHistory] = useState(null); // {dateStr,time,masterId,logs}
   const [toast, setToast] = useState(null);
+  const [overviewEditing, setOverviewEditing] = useState(null); // 從OverviewMonth拉上來的「正在編輯」狀態(見該元件內的useEffect)
+  const TAB_LABELS = {
+    schedule: "📅 排班",
+    overview: "🗓 全覽",
+    crm: "👥 客戶",
+    analytics: "📊 數據",
+    pending: "📋 待確認",
+    availability: "🟢 開放",
+    settings: "⚙️ 設定"
+  };
+  // 給presence用的「目前在做什麼」——依tab跟正在編輯的預約算出一句話。
+  // 用useMemo是因為這個物件會被track()整包送到realtime頻道，沒有memo的話
+  // 每次render都是新物件參照，會導致usePresence裡的effect每次render都重送。
+  const activity = React.useMemo(() => {
+    const tabLabel = TAB_LABELS[tab] || tab;
+    if (tab === "schedule" && editForm?._booking) {
+      const b = editForm._booking;
+      const when = b.date ? `${parseInt(b.date.slice(5, 7))}/${parseInt(b.date.slice(8, 10))} ${b.start_time ? b.start_time.slice(0, 5) : ""}` : "";
+      return {
+        tab,
+        summary: `${tabLabel} · 編輯 ${editForm.customer_name || "客戶"} ${when} 的預約`
+      };
+    }
+    if (tab === "overview" && overviewEditing?._booking) {
+      const b = overviewEditing._booking;
+      const when = b.date ? `${parseInt(b.date.slice(5, 7))}/${parseInt(b.date.slice(8, 10))} ${b.start_time ? b.start_time.slice(0, 5) : ""}` : "";
+      return {
+        tab,
+        summary: `${tabLabel} · 編輯 ${overviewEditing.customer_name || "客戶"} ${when} 的預約`
+      };
+    }
+    if (tab === "schedule" && master) {
+      const wks = showSun === "1" ? getWeeksSun(year, month) : getWeeksMon(year, month, false);
+      const wk = wks[weekIdx];
+      const firstDay = wk ? wk.find(d => d != null) : null;
+      const whereStr = view === "week" && firstDay ? `${month + 1}/${firstDay} 這週` : `${year}/${month + 1}`;
+      return {
+        tab,
+        summary: `${tabLabel} · 查看 ${master.name} 的 ${whereStr}`
+      };
+    }
+    return {
+      tab,
+      summary: tabLabel
+    };
+  }, [tab, master?.id, master?.name, view, weekIdx, year, month, editForm?._booking?.id, editForm?.customer_name, overviewEditing?._booking?.id, overviewEditing?.customer_name, showSun]);
+  const presenceOthers = usePresence(authMaster, activity);
   const [showSearch, setShowSearch] = useState(false);
   const [showDisplaySettings, setShowDisplaySettings] = useState(false);
   const [searchQ, setSearchQ] = useState("");
@@ -5384,6 +5548,9 @@ function MainApp({
     style: {
       flex: 1
     }
+  }), /*#__PURE__*/React.createElement(PresenceBar, {
+    others: presenceOthers,
+    onTapPerson: p => msg(`${p.name}：${p.activity?.summary || "在線上"}`, false)
   }), /*#__PURE__*/React.createElement("button", {
     onClick: () => setTheme(t => t === "dark" ? "light" : "dark"),
     title: "切換深淺色",
@@ -6593,7 +6760,8 @@ function MainApp({
     loginMaster: loginMaster || master,
     undoStack: undoStack,
     pushUndo: pushUndo,
-    executeUndo: executeUndo
+    executeUndo: executeUndo,
+    onEditingChange: setOverviewEditing
   })), tab === "crm" && canViewCRM && /*#__PURE__*/React.createElement(CRMModule, {
     key: crmKey,
     masters: masters,
@@ -8691,7 +8859,8 @@ function OverviewMonth({
   loginMaster,
   undoStack,
   pushUndo,
-  executeUndo
+  executeUndo,
+  onEditingChange
 }) {
   const ocw = ovColW || 75;
   const orh = ovRowH || 22;
@@ -8716,6 +8885,15 @@ function OverviewMonth({
   });
   const [clipBoard, setClipBoard] = useState(null); // 暫存複製的預約，關掉後可貼上
   const [editForm, setEditForm] = useState(null); // 編輯預約用
+  // 把「正在編輯哪筆」往上回報給MainApp，讓在線狀態(presence)也看得到全覽
+  // 頁面的編輯動作，不是只有排班頁才有。分頁切走時這個元件會unmount，
+  // cleanup順便清掉，不會留著一個過期的「還在編輯」殘影。
+  useEffect(() => {
+    if (onEditingChange) onEditingChange(editForm);
+    return () => {
+      if (onEditingChange) onEditingChange(null);
+    };
+  }, [editForm]);
   const [extendRecur, setExtendRecur] = useState(null); // {booking, recurType, recurEndType, recurEndDate, recurEndCount}
   const [ovEditLogs, setOvEditLogs] = useState([]);
   const {
