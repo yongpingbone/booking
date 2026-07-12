@@ -3728,6 +3728,34 @@ function MainApp({
   const [master, setMaster] = useState(null);
   const loginMaster = authMaster; // 登入者永遠是 authMaster，不隨瀏覽切換
 
+  // 桌面版欄寬自動撐滿螢幕(2026-07-12)：cw/ovColW原本的85px/75px固定
+  // 預設值跟螢幕寬度完全無關，寬螢幕右邊會空一大塊。只在「偵測到還是
+  // 舊預設值、代表從沒被手動調過」時才自動升級成撐滿寬度的值；一旦
+  // 升級過，存起來的就是一般數值，之後滑桿/雙指縮放調整完全不受影響，
+  // 不會每次都蓋掉使用者自己選的欄寬。上限沿用滑桿本來就有的範圍
+  // (220/200)，不是憑空新設一個更小的上限，避免over-engineer。
+  useEffect(() => {
+    if (isMobile) return;
+    const avail = Math.max(320, window.innerWidth - 32);
+    try {
+      const rawCw = localStorage.getItem("yp_cw");
+      if (rawCw === null || rawCw === "85") {
+        const dayCols = 6;
+        const fillCw = Math.min(220, Math.max(85, Math.round(avail / (0.81 + dayCols))));
+        setColW(String(fillCw));
+      }
+    } catch (_) {}
+    try {
+      const rawOvCw = localStorage.getItem("yp_ov_cw");
+      if (rawOvCw === null || rawOvCw === "75") {
+        const totalCols = 7 * Math.max(1, masters.length || 4);
+        const fillOvCw = Math.min(200, Math.max(75, Math.round(avail / (0.81 + totalCols))));
+        setOvColW(String(fillOvCw));
+      }
+    } catch (_) {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
   const [bookings, setBookings] = useState({});
