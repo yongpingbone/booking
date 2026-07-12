@@ -15098,6 +15098,63 @@ function SettingsModule({
   // 休息時段：正在編輯哪位師傅（預設登入者自己）
   const [restMasterId, setRestMasterId] = useState(loginMaster?.id || "");
   const [restSet, setRestSet] = useState(() => new Set(restOf(loginMaster?.id)));
+  // ── 資料同步設定(Sheet 自動匯入開關 + 立即匯入)──
+  const [syncStatus, setSyncStatus] = useState({}); // { "泓文": true, "哲瑋": false, ... }
+  const [syncStatusLoading, setSyncStatusLoading] = useState(false);
+  const [syncActionBusy, setSyncActionBusy] = useState(""); // 目前正在處理哪個 "師傅名字:action"，避免重複點擊
+  const [syncMsg, setSyncMsg] = useState({}); // { "泓文": "已開始匯入..." }
+  const SYNC_MASTER_NAMES = ["麒", "治", "泓文", "哲瑋"];
+  const callSyncControl = async (payload) => {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session?.access_token) throw new Error("請重新登入");
+    const res = await fetch("https://ikzyzkhuireqztbhrtna.supabase.co/functions/v1/sync-control", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify(payload)
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!j.success) throw new Error(j.error || "操作失敗");
+    return j;
+  };
+  const loadSyncStatus = async () => {
+    setSyncStatusLoading(true);
+    try {
+      const j = await callSyncControl({ action: "get-status" });
+      const map = {};
+      (j.masters || []).forEach(m => { map[m.name] = m.sync_enabled; });
+      setSyncStatus(map);
+    } catch (e) {
+      msg(`載入同步狀態失敗: ${e.message}`);
+    } finally {
+      setSyncStatusLoading(false);
+    }
+  };
+  const toggleSyncEnabled = async (masterName, nextEnabled) => {
+    setSyncActionBusy(`${masterName}:toggle`);
+    try {
+      await callSyncControl({ action: "toggle", masterName, enabled: nextEnabled });
+      setSyncStatus(prev => ({ ...prev, [masterName]: nextEnabled }));
+    } catch (e) {
+      msg(`設定失敗: ${e.message}`);
+    } finally {
+      setSyncActionBusy("");
+    }
+  };
+  const importNowForMaster = async (masterName) => {
+    setSyncActionBusy(`${masterName}:import`);
+    setSyncMsg(prev => ({ ...prev, [masterName]: "" }));
+    try {
+      const j = await callSyncControl({ action: "import-now", masterName });
+      setSyncMsg(prev => ({ ...prev, [masterName]: j.message || "已開始匯入" }));
+    } catch (e) {
+      setSyncMsg(prev => ({ ...prev, [masterName]: `失敗: ${e.message}` }));
+    } finally {
+      setSyncActionBusy("");
+    }
+  };
   // ── 時段格子拖曳批次選取（休息時段設定共用）──
   // 觸控裝置上 pointermove 只會綁在手指一開始按下的元素，不會像滑鼠一樣自然觸發別的元素的
   // pointerenter，所以改成在容器上聽 pointermove，用座標算出目前實際壓在哪個按鈕上。
@@ -15252,12 +15309,13 @@ function SettingsModule({
       background: "var(--bg-header)",
       borderBottom: "1px solid var(--border)"
     }
-  }, [["masters", "帳號管理"], ["rest", "休息時段"], ["export", "批次刪除"], ["history", "歷史紀錄"]].map(([k, l]) => /*#__PURE__*/React.createElement("button", {
+  }, [["masters", "帳號管理"], ["rest", "休息時段"], ["export", "批次刪除"], ["history", "歷史紀錄"], ...(loginMaster?.can_view_all_stats ? [["sync", "資料同步"]] : [])].map(([k, l]) => /*#__PURE__*/React.createElement("button", {
     key: k,
     className: `tab-btn${settTab === k ? " active" : ""}`,
     onClick: () => {
       setSettTab(k);
       if (k === "history") loadHistory();
+      if (k === "sync") loadSyncStatus();
     }
   }, l))), settTab === "masters" && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -15580,7 +15638,74 @@ function SettingsModule({
       cursor: !delStart || !delEnd || deleting || !delCount ? "default" : "pointer",
       opacity: !delStart || !delEnd || deleting || !delCount ? 0.4 : 1
     }
-  }, deleting ? "刪除中…" : "批次刪除")), settTab === "history" && /*#__PURE__*/React.createElement("div", {
+  }, deleting ? "刪除中…" : "批次刪除")), settTab === "sync" && /*#__PURE__*/React.createElement("div", {
+    style: { padding: 12 }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "var(--bg-header)",
+      borderRadius: 10,
+      padding: "14px 16px",
+      border: "1px solid var(--border2)",
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: { fontWeight: 700, fontSize: 14, marginBottom: 8 }
+  }, "資料同步"), /*#__PURE__*/React.createElement("div", {
+    style: { fontSize: 12, color: "var(--text-dim)", lineHeight: 1.6 }
+  }, "控制各師傅的 Google Sheet 自動匯入。關閉後，排程不會再讀取/寫入這位師傅的資料，但既有預約不受影響。立即匯入涵蓋上個月、本月、下個月三個月的範圍。")), syncStatusLoading && /*#__PURE__*/React.createElement("div", {
+    style: { fontSize: 12, color: "var(--text-dim)", padding: "8px 0" }
+  }, "載入中…"), !syncStatusLoading && SYNC_MASTER_NAMES.map(mName => {
+    const enabled = syncStatus[mName] !== false; // 還沒載入完成前預設顯示開啟(比較不會嚇到人)
+    const toggleBusy = syncActionBusy === `${mName}:toggle`;
+    const importBusy = syncActionBusy === `${mName}:import`;
+    return /*#__PURE__*/React.createElement("div", {
+      key: mName,
+      style: {
+        background: "var(--bg-header)",
+        borderRadius: 10,
+        padding: "12px 16px",
+        border: "1px solid var(--border2)",
+        marginBottom: 10
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: { fontWeight: 700, fontSize: 14 }
+    }, mName), /*#__PURE__*/React.createElement("div", {
+      style: { display: "flex", gap: 8, alignItems: "center" }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => toggleSyncEnabled(mName, !enabled),
+      disabled: toggleBusy || importBusy,
+      style: {
+        padding: "6px 12px",
+        borderRadius: 6,
+        border: "none",
+        background: enabled ? "#00b894" : "#636e72",
+        color: "#fff",
+        fontWeight: 700,
+        fontSize: 12,
+        cursor: toggleBusy || importBusy ? "default" : "pointer",
+        opacity: toggleBusy ? 0.6 : 1,
+        minWidth: 78
+      }
+    }, toggleBusy ? "處理中…" : enabled ? "自動匯入：開啟" : "自動匯入：關閉"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => importNowForMaster(mName),
+      disabled: toggleBusy || importBusy,
+      style: {
+        padding: "6px 12px",
+        borderRadius: 6,
+        border: "1px solid var(--border2)",
+        background: "transparent",
+        color: "var(--text-main)",
+        fontWeight: 700,
+        fontSize: 12,
+        cursor: toggleBusy || importBusy ? "default" : "pointer",
+        opacity: importBusy ? 0.6 : 1
+      }
+    }, importBusy ? "匯入中…" : "立即匯入近3個月"))), syncMsg[mName] && /*#__PURE__*/React.createElement("div", {
+      style: { fontSize: 11, color: "var(--text-dim)", marginTop: 6 }
+    }, syncMsg[mName]));
+  })), settTab === "history" && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: 12
     }
