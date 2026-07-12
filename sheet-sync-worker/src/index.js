@@ -418,6 +418,29 @@ export default {
       }
     }
 
+    if (url.pathname === '/debug/dump-grid' && request.method === 'GET') {
+      const providedSecret = request.headers.get('X-Internal-Secret');
+      if (!env.INTERNAL_SYNC_SECRET || providedSecret !== env.INTERNAL_SYNC_SECRET) {
+        return new Response('Unauthorized', { status: 401 });
+      }
+      // 診斷用：原始傾印某個範圍的格子內容(value)，不做任何解析，純粹拿來
+      // 搞懂一個分頁的實際結構(合併分頁的欄位對應目前完全不確定，需要先
+      // 看過原始資料才能設計解析邏輯，不要用猜的)。
+      const sheetTitle = url.searchParams.get('sheetTitle');
+      const range = url.searchParams.get('range') || 'A1:P30';
+      if (!sheetTitle) {
+        return Response.json({ error: '需要 sheetTitle' }, { status: 400 });
+      }
+      try {
+        const accessToken = await getAccessToken(env);
+        const { rows } = await fetchGridRows(env, { sheetTitle, range, accessToken });
+        const grid = rows.map((row) => row.map((cell) => cell.value));
+        return Response.json({ sheetTitle, range, grid }, { status: 200 });
+      } catch (err) {
+        return Response.json({ error: String(err?.stack ?? err?.message ?? err) }, { status: 500 });
+      }
+    }
+
     if (url.pathname === '/debug/scan-colors' && request.method === 'GET') {
       const providedSecret = request.headers.get('X-Internal-Secret');
       if (!env.INTERNAL_SYNC_SECRET || providedSecret !== env.INTERNAL_SYNC_SECRET) {
