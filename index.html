@@ -3667,7 +3667,16 @@ function MainApp({
   }, [pushSupported]);
   const cw = parseInt(colW) || 85;
   const rh = parseInt(rowH) || 26;
-  const FS = {
+  // 2026-07-13：桌面版欄寬自動撐滿螢幕之後，欄位變寬很多，但字體大小
+  // 原本完全沒有跟著變，導致寬欄位裡文字看起來過小、比例不對(Hanna回報)。
+  // 改成桌面版字體跟著cw(欄寬)按比例計算——cw=85(舊版尚未撐寬的欄位
+  // 大小)時算出來的md剛好等於原本寫死的12，維持完全不變；cw越寬字體
+  // 跟著等比放大，上限20px(對應滑桿cw上限280)，不會無止盡放大。sm/md/lg
+  // 三檔之間的相對級距，是直接從原本寫死數字之間的差距換算出來的公式
+  // (驗證過：cw=85時三檔算出來的值跟原本寫死的值逐一對應，完全一致)，
+  // 不是隨便訂的新比例。手機版這段完全不受影響，維持原本寫死的值。
+  const deskBase = isMobile ? 12 : Math.round(Math.min(20, Math.max(12, 12 + (cw - 85) * 8 / 195)));
+  const FS = isMobile ? {
     sm: {
       b: 9,
       n: 9,
@@ -3691,6 +3700,30 @@ function MainApp({
     n: 12,
     t: 11,
     s: 10
+  } : {
+    sm: {
+      b: deskBase - 3,
+      n: deskBase - 3,
+      t: deskBase - 4,
+      s: deskBase - 5
+    },
+    md: {
+      b: deskBase,
+      n: deskBase,
+      t: deskBase - 1,
+      s: deskBase - 2
+    },
+    lg: {
+      b: deskBase + 4,
+      n: deskBase + 3,
+      t: deskBase + 2,
+      s: deskBase + 1
+    }
+  }[fontSize] || {
+    b: deskBase,
+    n: deskBase,
+    t: deskBase - 1,
+    s: deskBase - 2
   };
   useEffect(() => {
     document.body.className = theme;
