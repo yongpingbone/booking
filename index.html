@@ -5684,7 +5684,8 @@ function MainApp({
       background: "var(--bg-header)",
       borderBottom: "1px solid var(--border2)",
       flexShrink: 0,
-      position: "relative"
+      position: "relative",
+      zoom: deskZoom
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -5955,7 +5956,8 @@ function MainApp({
       background: "var(--bg-header)",
       borderBottom: "1px solid var(--border2)",
       overflowX: "auto",
-      flexShrink: 0
+      flexShrink: 0,
+      zoom: deskZoom
     }
   }, [["schedule", "📅 排班"], ["overview", "🗓 全覽"], ...(canViewCRM ? [["crm", "👥 客戶"]] : []), ["analytics", "📊 數據"], ["pending", "📋 待確認"], ["availability", "🟢 開放"], ...(isAdmin ? [["settings", "⚙️ 設定"]] : [])].map(([k, l]) => /*#__PURE__*/React.createElement("button", {
     key: k,
@@ -6946,19 +6948,22 @@ function MainApp({
       cursor: "pointer",
       fontWeight: 700
     }
-  }, "👤 客戶歸屬")), showOwnerPanel && /*#__PURE__*/React.createElement(CustomerOwnerPanel, {
+  }, "👤 客戶歸屬")), showOwnerPanel && /*#__PURE__*/React.createElement("div", {
+    style: { zoom: deskZoom }
+  }, /*#__PURE__*/React.createElement(CustomerOwnerPanel, {
     master: master,
     masters: masters,
     year: year,
     month: month,
     FS: FS,
     onClose: () => setShowOwnerPanel(false)
-  })), tab === "overview" && /*#__PURE__*/React.createElement("div", {
+  }))), tab === "overview" && /*#__PURE__*/React.createElement("div", {
     style: {
       flex: 1,
       minHeight: 0,
       display: "flex",
-      flexDirection: "column"
+      flexDirection: "column",
+      zoom: deskZoom
     }
   }, /*#__PURE__*/React.createElement(OverviewMonth, {
     masters: masters,
@@ -7033,7 +7038,8 @@ function MainApp({
       borderRadius: "16px 16px 0 0",
       padding: "16px 16px 32px",
       width: "100%",
-      maxWidth: 480
+      maxWidth: 480,
+      zoom: deskZoom
     },
     onClick: e => e.stopPropagation()
   }, /*#__PURE__*/React.createElement("div", {
