@@ -3676,6 +3676,15 @@ function MainApp({
   // (驗證過：cw=85時三檔算出來的值跟原本寫死的值逐一對應，完全一致)，
   // 不是隨便訂的新比例。手機版這段完全不受影響，維持原本寫死的值。
   const deskBase = isMobile ? 12 : Math.round(Math.min(20, Math.max(12, 12 + (cw - 85) * 8 / 195)));
+  // 2026-07-13：客戶/數據/待確認/開放/設定這五個分頁是列表/表單型的畫面，
+  // 沒有像排班表那種「欄寬」概念可以拿來算比例字體，裡面又是大量寫死的
+  // px數字(光CRM就將近80處)，逐一改成公式不切實際、風險也高。改用整體
+  // zoom縮放這五個分頁的最外層容器——縮放後子元素的文字/間距/按鈕全部
+  // 等比放大，不用一個個改，效果對整頁面來說更一致。用window.innerWidth
+  // (不是cw，因為這幾頁沒有cw這個概念)按比例算，越寬螢幕縮放越多，
+  // 上限1.4倍，下限(桌面最小情況)1.15倍，手機版完全不套用(zoom固定1，
+  // 也就是視覺上跟現在完全一樣，不受影響)。
+  const deskZoom = isMobile ? 1 : Math.min(1.4, Math.max(1.15, window.innerWidth / 1500));
   const FS = isMobile ? {
     sm: {
       b: 9,
@@ -6966,22 +6975,30 @@ function MainApp({
     pushUndo: pushUndo,
     executeUndo: executeUndo,
     onEditingChange: setOverviewEditing
-  })), tab === "crm" && canViewCRM && /*#__PURE__*/React.createElement(CRMModule, {
+  })), tab === "crm" && canViewCRM && /*#__PURE__*/React.createElement("div", {
+    style: { zoom: deskZoom }
+  }, /*#__PURE__*/React.createElement(CRMModule, {
     key: crmKey,
     masters: masters,
     FS: FS
-  }), tab === "analytics" && /*#__PURE__*/React.createElement(LazyAnalyticsModule, {
+  })), tab === "analytics" && /*#__PURE__*/React.createElement("div", {
+    style: { zoom: deskZoom }
+  }, /*#__PURE__*/React.createElement(LazyAnalyticsModule, {
     masters: masters,
     FS: FS,
     currentMaster: master,
     isAdmin: isAdmin
-  }), tab === "settings" && isAdmin && /*#__PURE__*/React.createElement(SettingsModule, {
+  })), tab === "settings" && isAdmin && /*#__PURE__*/React.createElement("div", {
+    style: { zoom: deskZoom }
+  }, /*#__PURE__*/React.createElement(SettingsModule, {
     masters: masters,
     setMasters: setMasters,
     FS: FS,
     msg: msg,
     loginMaster: loginMaster || master
-  }), tab === "pending" && /*#__PURE__*/React.createElement(PendingBookings, {
+  })), tab === "pending" && /*#__PURE__*/React.createElement("div", {
+    style: { zoom: deskZoom }
+  }, /*#__PURE__*/React.createElement(PendingBookings, {
     masters: masters,
     currentMaster: loginMaster || master,
     isAdmin: isAdmin,
@@ -6989,8 +7006,8 @@ function MainApp({
       loadBk();
       loadPendingCount();
     }
-  }), tab === "availability" && /*#__PURE__*/React.createElement("div", {
-    style: { flex: 1, minHeight: 0, overflow: "auto" }
+  })), tab === "availability" && /*#__PURE__*/React.createElement("div", {
+    style: { flex: 1, minHeight: 0, overflow: "auto", zoom: deskZoom }
   }, /*#__PURE__*/React.createElement(AvailabilityModule, {
     masters: masters,
     currentMaster: loginMaster || master,
