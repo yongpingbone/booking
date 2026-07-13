@@ -3650,6 +3650,21 @@ function MainApp({
   const [showSun, setShowSun] = useLS("yp_showsun", "0");
   const [pushSupported] = useState(() => typeof navigator !== "undefined" && "serviceWorker" in navigator && "PushManager" in window);
   const [pushSubscribed, setPushSubscribed] = useState(false);
+  // App推播通知(2026-07-13)：檢查這台裝置目前是否已經訂閱過(跟伺服器端
+  // 有沒有這筆訂閱無關，單純看瀏覽器自己記錄的subscription物件存不存在)。
+  // 2026-07-13修正：這個useEffect原本放在下面`if (!master) return`那個
+  // loading畫面的早退return「之後」，導致loading中的那次render完全不會
+  // 呼叫到它、等master載入完成的下一次render才第一次被呼叫——violate了
+  // React的hooks規則(每次render呼叫的hooks數量/順序都要一樣)，觸發
+  // React error #310、整個App白屏。搬到這裡、所有hooks都在任何條件式
+  // return之前，才是正確位置。
+  useEffect(() => {
+    if (!pushSupported) return;
+    navigator.serviceWorker.ready
+      .then(reg => reg.pushManager.getSubscription())
+      .then(sub => setPushSubscribed(!!sub))
+      .catch(() => {});
+  }, [pushSupported]);
   const cw = parseInt(colW) || 85;
   const rh = parseInt(rowH) || 26;
   const FS = {
@@ -4239,15 +4254,6 @@ function MainApp({
     });
     setTimeout(() => setToast(null), 2500);
   };
-  // App推播通知(2026-07-13)：檢查這台裝置目前是否已經訂閱過(跟伺服器端
-  // 有沒有這筆訂閱無關，單純看瀏覽器自己記錄的subscription物件存不存在)
-  useEffect(() => {
-    if (!pushSupported) return;
-    navigator.serviceWorker.ready
-      .then(reg => reg.pushManager.getSubscription())
-      .then(sub => setPushSubscribed(!!sub))
-      .catch(() => {});
-  }, [pushSupported]);
 
   function urlBase64ToUint8Array(base64String) {
     const padding = "=".repeat((4 - base64String.length % 4) % 4);
