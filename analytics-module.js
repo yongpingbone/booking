@@ -64,27 +64,27 @@ function QuickReportPanel({ isAdmin, currentMaster }) {
     /*#__PURE__*/React.createElement("div", { style: { fontWeight: 900, fontSize: 14, marginBottom: 8 } }, "📊 提前統計"),
     /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: "var(--text-dim)", marginBottom: 10 } },
       isAdmin ? "不用等自動排程，現在就送出數字報表（會推播給管理員），要不要一起跑AI分析直接選對應按鈕。" : "只會統計並推播給你自己的數據，不含其他師傅，要不要一起跑AI分析直接選對應按鈕。"),
-    busy && busy.endsWith("-ai") && /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: "#f5a623", marginBottom: 10, fontWeight: 700 } }, "⏳ AI分析需要15-20秒左右，畫面沒動不代表卡住，請耐心等待、不要重複點擊或重新整理"),
+    busy && busy.endsWith("-ai") && /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: "#cc9a56", marginBottom: 10, fontWeight: 700 } }, "⏳ AI分析需要15-20秒左右，畫面沒動不代表卡住，請耐心等待、不要重複點擊或重新整理"),
     /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: "var(--text-dim)", marginBottom: 4, fontWeight: 700 } }, "本週"),
     /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 10 } },
       /*#__PURE__*/React.createElement("button", {
         onClick: () => run("week", false), disabled: !!busy,
-        style: btnStyle("#74b9ff", "week")
+        style: btnStyle("#7f97a8", "week")
       }, busy === "week" ? "統計中..." : "只送數字"),
       /*#__PURE__*/React.createElement("button", {
         onClick: () => run("week", true), disabled: !!busy,
-        style: btnStyle("#74b9ff", "week-ai")
+        style: btnStyle("#7f97a8", "week-ai")
       }, busy === "week-ai" ? "統計中..." : "數字＋AI分析")
     ),
     /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: "var(--text-dim)", marginBottom: 4, fontWeight: 700 } }, "本月（至今）"),
     /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 12 } },
       /*#__PURE__*/React.createElement("button", {
         onClick: () => run("month", false), disabled: !!busy,
-        style: btnStyle("#a29bfe", "month")
+        style: btnStyle("#8f7a9e", "month")
       }, busy === "month" ? "統計中..." : "只送數字"),
       /*#__PURE__*/React.createElement("button", {
         onClick: () => run("month", true), disabled: !!busy,
-        style: btnStyle("#a29bfe", "month-ai")
+        style: btnStyle("#8f7a9e", "month-ai")
       }, busy === "month-ai" ? "統計中..." : "數字＋AI分析")
     ),
     showResult && lastMsg && /*#__PURE__*/React.createElement("div", {
@@ -96,7 +96,7 @@ function QuickReportPanel({ isAdmin, currentMaster }) {
     },
       /*#__PURE__*/React.createElement("div", { style: { fontWeight: 900, fontSize: 15, marginBottom: 10 } }, isAdmin ? "✓ 已推播給管理員" : "✓ 已推播給你"),
       /*#__PURE__*/React.createElement("pre", { style: { whiteSpace: "pre-wrap", fontFamily: "inherit", fontSize: 13, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, padding: 12, marginBottom: lastMsg.ai ? 10 : 16 } }, lastMsg.report),
-      lastMsg.ai && /*#__PURE__*/React.createElement("pre", { style: { whiteSpace: "pre-wrap", fontFamily: "inherit", fontSize: 13, background: "rgba(162,155,254,0.1)", border: "1px solid #a29bfe", borderRadius: 10, padding: 12, marginBottom: 16 } }, lastMsg.ai),
+      lastMsg.ai && /*#__PURE__*/React.createElement("pre", { style: { whiteSpace: "pre-wrap", fontFamily: "inherit", fontSize: 13, background: "rgba(143,122,158,0.1)", border: "1px solid #8f7a9e", borderRadius: 10, padding: 12, marginBottom: 16 } }, lastMsg.ai),
       /*#__PURE__*/React.createElement("button", {
         onClick: () => setShowResult(false),
         style: { width: "100%", padding: 12, borderRadius: 10, border: "1.5px solid var(--border)", background: "none", color: "var(--text-dim)", fontSize: 14, cursor: "pointer" }
@@ -339,9 +339,9 @@ window.AnalyticsModule = function AnalyticsModule({
     style: {
       padding: "3px 12px",
       borderRadius: 16,
-      border: `1px solid ${selMasterId === m.id ? "#e94560" : "var(--border2)"}`,
-      background: selMasterId === m.id ? "#e9456022" : "transparent",
-      color: selMasterId === m.id ? "#e94560" : "var(--text-muted)",
+      border: `1px solid ${selMasterId === m.id ? "#bd6f56" : "var(--border2)"}`,
+      background: selMasterId === m.id ? "#bd6f5622" : "transparent",
+      color: selMasterId === m.id ? "#bd6f56" : "var(--text-muted)",
       fontSize: 12,
       cursor: "pointer",
       fontWeight: selMasterId === m.id ? 700 : 400
@@ -380,10 +380,10 @@ window.AnalyticsModule = function AnalyticsModule({
     style: {
       ...TH,
       background: "var(--bg-week)",
-      color: "#74b9ff",
+      color: "#7f97a8",
       minWidth: 55
     }
-  }, "全年"))), /*#__PURE__*/React.createElement("tbody", null, [["總客", "#74b9ff", "total"], ["新客", "#f5a623", "newC"], ["舊客", "#00b894", "old"]].map(([label, color, key]) => /*#__PURE__*/React.createElement("tr", {
+  }, "全年"))), /*#__PURE__*/React.createElement("tbody", null, [["總客", "#7f97a8", "total"], ["新客", "#cc9a56", "newC"], ["舊客", "#6fa183", "old"]].map(([label, color, key]) => /*#__PURE__*/React.createElement("tr", {
     key: label
   }, /*#__PURE__*/React.createElement("td", {
     style: {
@@ -435,9 +435,9 @@ window.AnalyticsModule = function AnalyticsModule({
     style: {
       padding: "2px 8px",
       borderRadius: 12,
-      border: "1px solid #f5a62360",
+      border: "1px solid #cc9a5660",
       background: "transparent",
-      color: "#f5a623",
+      color: "#cc9a56",
       fontSize: 10,
       cursor: "pointer",
       fontFamily: "inherit"
@@ -448,9 +448,9 @@ window.AnalyticsModule = function AnalyticsModule({
     style: {
       padding: "2px 8px",
       borderRadius: 12,
-      border: "1px solid #a29bfe60",
+      border: "1px solid #8f7a9e60",
       background: "transparent",
-      color: "#a29bfe",
+      color: "#8f7a9e",
       fontSize: 10,
       cursor: monthAiBusy ? "wait" : "pointer",
       fontFamily: "inherit",
@@ -468,9 +468,9 @@ window.AnalyticsModule = function AnalyticsModule({
     style: {
       padding: "2px 8px",
       borderRadius: 12,
-      border: `1px solid ${detailMonth === mi ? "#74b9ff" : "var(--border2)"}`,
-      background: detailMonth === mi ? "#74b9ff22" : "transparent",
-      color: detailMonth === mi ? "#74b9ff" : "var(--text-dim)",
+      border: `1px solid ${detailMonth === mi ? "#7f97a8" : "var(--border2)"}`,
+      background: detailMonth === mi ? "#7f97a822" : "transparent",
+      color: detailMonth === mi ? "#7f97a8" : "var(--text-dim)",
       fontSize: 10,
       cursor: "pointer"
     }
@@ -479,8 +479,8 @@ window.AnalyticsModule = function AnalyticsModule({
       margin: "0 0 10px",
       padding: 10,
       borderRadius: 10,
-      border: `1px solid ${monthAiResult.error ? "#e94560" : "#a29bfe"}`,
-      background: monthAiResult.error ? "rgba(233,69,96,0.08)" : "rgba(162,155,254,0.08)",
+      border: `1px solid ${monthAiResult.error ? "#bd6f56" : "#8f7a9e"}`,
+      background: monthAiResult.error ? "rgba(189,111,86,0.08)" : "rgba(143,122,158,0.08)",
       fontSize: 12,
       whiteSpace: "pre-wrap",
       lineHeight: 1.5
@@ -499,11 +499,11 @@ window.AnalyticsModule = function AnalyticsModule({
   }) => /*#__PURE__*/React.createElement("div", {
     key: d,
     style: {
-      background: isVac ? "rgba(233,69,96,0.2)" : total > 0 ? "var(--bg-header)" : "var(--bg-sub)",
+      background: isVac ? "rgba(189,111,86,0.2)" : total > 0 ? "var(--bg-header)" : "var(--bg-sub)",
       borderRadius: 6,
       padding: "5px 3px",
       textAlign: "center",
-      border: `1px solid ${isVac ? "#e9456040" : newC > 0 ? "#f5a62340" : "var(--border)"}`
+      border: `1px solid ${isVac ? "#bd6f5640" : newC > 0 ? "#cc9a5640" : "var(--border)"}`
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -514,19 +514,19 @@ window.AnalyticsModule = function AnalyticsModule({
   }, d, "日"), isVac ? /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 11,
-      color: "#e94560",
+      color: "#bd6f56",
       fontWeight: 700
     }
   }, "休") : /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 14,
       fontWeight: 700,
-      color: total > 0 ? "#74b9ff" : "var(--text-dim)"
+      color: total > 0 ? "#7f97a8" : "var(--text-dim)"
     }
   }, total || "—"), newC > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 10,
-      color: "#f5c842",
+      color: "#d4a666",
       fontWeight: 900,
       marginTop: 1
     }
@@ -581,11 +581,11 @@ window.AnalyticsModule = function AnalyticsModule({
     }
   }, debugInfo.all), " 筆"), /*#__PURE__*/React.createElement("div", null, "✓ 計入人數：", /*#__PURE__*/React.createElement("b", {
     style: {
-      color: "#74b9ff"
+      color: "#7f97a8"
     }
   }, debugInfo.counted), " 筆"), /*#__PURE__*/React.createElement("div", null, "✗ 未計入：", /*#__PURE__*/React.createElement("b", {
     style: {
-      color: "#e94560"
+      color: "#bd6f56"
     }
   }, debugInfo.excluded.length), " 筆（明細如下）")), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -687,7 +687,7 @@ window.AnalyticsModule = function AnalyticsModule({
     }, b.guest_count), /*#__PURE__*/React.createElement("td", {
       style: {
         padding: "6px 4px",
-        color: "#f5a623",
+        color: "#cc9a56",
         fontSize: 10
       }
     }, reason));
@@ -727,7 +727,7 @@ window.AnalyticsModule = function AnalyticsModule({
   }, year, "年"), /*#__PURE__*/React.createElement("button", {
     onClick: () => setYear(y => y + 1),
     className: "nb"
-  }, "▶")), [["每月總客數表", "total", "#74b9ff"], ["每月新客總表", "newC", "#f5a623"], ["每月舊客總表", "old", "#00b894"]].map(([title, key, color]) => /*#__PURE__*/React.createElement("div", {
+  }, "▶")), [["每月總客數表", "total", "#7f97a8"], ["每月新客總表", "newC", "#cc9a56"], ["每月舊客總表", "old", "#6fa183"]].map(([title, key, color]) => /*#__PURE__*/React.createElement("div", {
     key: key,
     style: {
       marginBottom: 16,
@@ -910,7 +910,7 @@ window.AnalyticsModule = function AnalyticsModule({
       }
     }, /*#__PURE__*/React.createElement("span", {
       style: {
-        color: "#74b9ff"
+        color: "#7f97a8"
       }
     }, yearA, ":", totA), /*#__PURE__*/React.createElement("span", {
       style: {
@@ -919,12 +919,12 @@ window.AnalyticsModule = function AnalyticsModule({
       }
     }, "→"), /*#__PURE__*/React.createElement("span", {
       style: {
-        color: "#f5a623"
+        color: "#cc9a56"
       }
     }, yearB, ":", totB), /*#__PURE__*/React.createElement("span", {
       style: {
         marginLeft: 8,
-        color: diff >= 0 ? "#00b894" : "#e94560",
+        color: diff >= 0 ? "#6fa183" : "#bd6f56",
         fontWeight: 700
       }
     }, diff >= 0 ? "+" : "", diff))), /*#__PURE__*/React.createElement("div", {
@@ -954,7 +954,7 @@ window.AnalyticsModule = function AnalyticsModule({
         ...TH,
         minWidth: 50
       }
-    }, "全年"))), /*#__PURE__*/React.createElement("tbody", null, [[yearA, "#74b9ff"], [yearB, "#f5a623"]].map(([y, color]) => {
+    }, "全年"))), /*#__PURE__*/React.createElement("tbody", null, [[yearA, "#7f97a8"], [yearB, "#cc9a56"]].map(([y, color]) => {
       const stats = Array.from({
         length: 12
       }, (_, mi) => calcStat(m.id, y, mi));
@@ -1003,7 +1003,7 @@ window.AnalyticsModule = function AnalyticsModule({
         key: mi,
         style: {
           ...TC,
-          color: d > 0 ? "#00b894" : d < 0 ? "#e94560" : "var(--text-dim)",
+          color: d > 0 ? "#6fa183" : d < 0 ? "#bd6f56" : "var(--text-dim)",
           fontWeight: d !== 0 ? 700 : 400,
           fontSize: 10
         }
@@ -1012,10 +1012,10 @@ window.AnalyticsModule = function AnalyticsModule({
       style: {
         ...TC,
         fontWeight: 800,
-        color: diff >= 0 ? "#00b894" : "#e94560",
+        color: diff >= 0 ? "#6fa183" : "#bd6f56",
         background: "var(--bg-week)"
       }
-    }, diff >= 0 ? "+" : "", diff)), [[yearA, "#74b9ff"], [yearB, "#f5a623"]].map(([y, color]) => {
+    }, diff >= 0 ? "+" : "", diff)), [[yearA, "#7f97a8"], [yearB, "#cc9a56"]].map(([y, color]) => {
       const stats = Array.from({
         length: 12
       }, (_, mi) => calcStat(m.id, y, mi));
@@ -1029,7 +1029,7 @@ window.AnalyticsModule = function AnalyticsModule({
         style: {
           ...TC,
           fontSize: 9,
-          color: "#f5a623",
+          color: "#cc9a56",
           textAlign: "left"
         }
       }, y, "新客"), stats.map((s, mi) => /*#__PURE__*/React.createElement("td", {
@@ -1037,14 +1037,14 @@ window.AnalyticsModule = function AnalyticsModule({
         style: {
           ...TC,
           fontSize: 9,
-          color: s.newC > 0 ? "#f5a623" : "var(--text-dim)"
+          color: s.newC > 0 ? "#cc9a56" : "var(--text-dim)"
         }
       }, s.newC || "—")), /*#__PURE__*/React.createElement("td", {
         style: {
           ...TC,
           fontSize: 10,
           fontWeight: 700,
-          color: "#f5a623",
+          color: "#cc9a56",
           background: "var(--bg-week)"
         }
       }, yNew || "—"));
