@@ -6,13 +6,13 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#1c1815">
+<meta name="theme-color" content="#0d1117">
 <meta name="apple-mobile-web-app-title" content="永平預約">
 <link rel="apple-touch-icon" href="/booking/icon-192.png">
 <link rel="manifest" href="/booking/manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Noto+Serif+TC:wght@500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
 <title>永平整復保健 預約系統</title>
 <script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/booking/sw.js');</script>
 <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
@@ -32,57 +32,45 @@ input, select, button, textarea { font-family: inherit; outline: none; }
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: var(--bg-main); }
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
-.serif-display { font-family: 'Noto Serif TC', serif; letter-spacing: 0.02em; }
-/* 2026-07-13 視覺重新設計：韓系質感兩套色調——暗色系「木質書房」(男性化，
-   暖木炭配黃銅/赤陶色調) / 亮色系「奶霧」(女性化，奶霜米白配塵玫瑰)。
-   刻意避開常見的AI預設「暖米白#F4F1EA配赤陶#D97757」組合，兩邊都往
-   更深的暖色調偏移，讓整體更像精品spa/理容院，不是通用template配色。
-   純粹改CSS變數跟class，沒有動任何互動邏輯/state/函式。 */
 body.dark {
-  --bg-main:#1c1815; --bg-header:#262019; --bg-sub:#332a20;
-  --bg-week:#16120d; --bg-rest:rgba(237,226,208,0.10);
-  --border:#3d3226; --border2:#4d4030; --border-week:#4d4030;
-  --text-main:#ede2d0; --text-muted:#c2b39c; --text-dim:#8a7a64;
-  --text-time:#cc9a5c; --text-week:#5c5040;
-  --input-bg:#1c1815; --nav-bg:#332a20; --nav-color:#c2b39c;
-  --accent:#c17a5f; --accent-2:#9584ab; --accent-3:#7a95a8; --accent-ok:#6fa183;
-  --mt-0:#7a95a8; --mt-1:#6fa183; --mt-2:#cc9a5c; --mt-3:#9584ab; --mt-4:#c07a94;
+  --bg-main:#0d1117; --bg-header:#161b22; --bg-sub:#21262d;
+  --bg-week:#0a0e14; --bg-rest:rgba(255,255,255,0.12);
+  --border:#1e2530; --border2:#30363d; --border-week:#2d3748;
+  --text-main:#f0f6fc; --text-muted:#c9d1d9; --text-dim:#666;
+  --text-time:#f5a623; --text-week:#4a5568;
+  --input-bg:#0d1117; --nav-bg:#21262d; --nav-color:#c9d1d9;
+  --mt-0:#74b9ff; --mt-1:#2ed9c3; --mt-2:#ffa94d; --mt-3:#da77f2; --mt-4:#f783ac;
 }
 body.light {
-  /* 2026-07-13 參考 It's Saturday(its-saturday.com，台灣水泥香氛蠟燭品牌)
-     的配色重新調整——用他們的環保水泥當底色概念(比純奶油白更接近
-     水泥灰米色)，強調色取材自產品色號本身：粉塵藕(塵玫瑰)、酪梨綠、
-     落日餘暉(赤陶橘)、午後奶茶(暖棕)，這幾個是品牌實際在用的產品色名。 */
-  --bg-main:#ece4d6; --bg-header:#f8f3e9; --bg-sub:#ded1bb;
-  --bg-week:#e0d3bd; --bg-rest:rgba(66,57,47,0.08);
-  --border:#d9c9ac; --border2:#c9b797; --border-week:#c9b797;
-  --text-main:#42392f; --text-muted:#7d6f5c; --text-dim:#a3927a;
-  --text-time:#b06d4a; --text-week:#a3927a;
-  --input-bg:#f8f3e9; --nav-bg:#f8f3e9; --nav-color:#7d6f5c;
-  --accent:#bd7f8a; --accent-2:#8a9678; --accent-3:#a68966; --accent-ok:#8a9678;
-  --mt-0:#a68966; --mt-1:#8a9678; --mt-2:#b06d4a; --mt-3:#9c7f9e; --mt-4:#bd7f8a;
+  --bg-main:#f6f8fa; --bg-header:#ffffff; --bg-sub:#f0f2f5;
+  --bg-week:#eaeef2; --bg-rest:rgba(0,0,0,0.10);
+  --border:#d0d7de; --border2:#d0d7de; --border-week:#b0bec5;
+  --text-main:#0d1117; --text-muted:#24292f; --text-dim:#888;
+  --text-time:#cf6b00; --text-week:#999;
+  --input-bg:#fff; --nav-bg:#fff; --nav-color:#24292f;
+  --mt-0:#1c7ed6; --mt-1:#0ca678; --mt-2:#d9480f; --mt-3:#7048e8; --mt-4:#c2255c;
 }
-.nb { background:var(--nav-bg); border:1px solid var(--border2); color:var(--nav-color); border-radius:8px; padding:4px 10px; cursor:pointer; font-size:12px; }
+.nb { background:var(--nav-bg); border:1px solid var(--border2); color:var(--nav-color); border-radius:5px; padding:4px 10px; cursor:pointer; font-size:12px; }
 .tab-btn { padding:8px 14px; background:transparent; border:none; border-bottom:2px solid transparent; color:var(--text-muted); font-size:12px; cursor:pointer; white-space:nowrap; }
-.tab-btn.active { border-bottom-color:var(--accent); color:var(--accent); font-weight:700; }
+.tab-btn.active { border-bottom-color:#e94560; color:#e94560; font-weight:700; }
 .c-none { background:transparent !important; }
-.c-new_customer { background:rgba(204,154,86,0.28) !important; border-left:3px solid #cc9a56 !important; }
-.c-cui { background:rgba(192,122,148,0.26) !important; border-left:3px solid #c07a94 !important; }
-.c-vacation { background:rgba(184,87,74,0.30) !important; border-left:3px solid var(--accent) !important; }
-.c-reserved { background:rgba(111,168,168,0.26) !important; border-left:3px solid #6fa8a8 !important; }
-.c-custom { background:rgba(149,132,171,0.26) !important; border-left:3px solid var(--accent-2) !important; }
-.c-aftercare { background:rgba(111,168,138,0.22) !important; border-left:3px solid #6fa88a !important; }
-.drag-select { background:rgba(149,132,171,0.35) !important; border:1px solid var(--accent-2) !important; }
-.drag-over-cell { background:rgba(122,149,168,0.22) !important; outline:2px solid var(--accent-3) !important; outline-offset:-2px; }
-.search-hl { outline:2px solid #cc9a56 !important; outline-offset:-2px; background:rgba(204,154,86,0.18) !important; }
-.search-hl-cur { outline:2px solid #cc9a56 !important; outline-offset:-2px; background:rgba(204,154,86,0.45) !important; z-index:2; }
+.c-new_customer { background:rgba(245,166,35,0.35) !important; border-left:3px solid #f5a623 !important; }
+.c-cui { background:rgba(255,77,148,0.30) !important; border-left:3px solid #ff4d94 !important; }
+.c-vacation { background:rgba(220,38,38,0.45) !important; border-left:3px solid #e94560 !important; }
+.c-reserved { background:rgba(34,211,238,0.30) !important; border-left:3px solid #22d3ee !important; }
+.c-custom { background:rgba(162,155,254,0.30) !important; border-left:3px solid #a29bfe !important; }
+.c-aftercare { background:rgba(0,208,156,0.20) !important; border-left:3px solid #00d09c !important; }
+.drag-select { background:rgba(162,155,254,0.4) !important; border:1px solid #a29bfe !important; }
+.drag-over-cell { background:rgba(116,185,255,0.22) !important; outline:2px solid #74b9ff !important; outline-offset:-2px; }
+.search-hl { outline:2px solid #f5a623 !important; outline-offset:-2px; background:rgba(245,166,35,0.18) !important; }
+.search-hl-cur { outline:2px solid #f5a623 !important; outline-offset:-2px; background:rgba(245,166,35,0.45) !important; z-index:2; }
 .th-corner { position:sticky; top:0; left:0; z-index:15 !important; background:var(--bg-header); }
 input[type="date"]::-webkit-calendar-picker-indicator {
-  background:rgba(189,111,86,0.18); border:1px solid rgba(189,111,86,0.45); border-radius:5px;
+  background:rgba(233,69,96,0.18); border:1px solid rgba(233,69,96,0.45); border-radius:5px;
   padding:3px 4px; cursor:pointer; width:20px; height:20px;
 }
 input[type="date"]::-webkit-calendar-picker-indicator:hover {
-  background:rgba(189,111,86,0.35);
+  background:rgba(233,69,96,0.35);
 }
 body.dark input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(0.85) sepia(1) saturate(4) hue-rotate(295deg) brightness(1.1);
@@ -473,23 +461,23 @@ const COLORS = [{
 }, {
   key: "new_customer",
   label: "新客",
-  text: "#cc9a56"
+  text: "#f5a623"
 }, {
-  // 2026-07-13新增：脆——用磁紅色(#c07a94)，跟現有5種顏色(灰/橙/紅/紫/
+  // 2026-07-13新增：脆——用磁紅色(#ff4d94)，跟現有5種顏色(灰/橙/紅/紫/
   // 青/綠)都不撞色，一眼能跟其他標記分開。Sheet匯入時偵測到客人名字裡
   // 的「(脆)」「（脆）」文字會自動套用這個標記(見sheet-sync-worker的
   // extractCuiMarker)，這裡是給APP自己手動新增/編輯預約時也能選這個標記用。
   key: "cui",
   label: "脆",
-  text: "#c07a94"
+  text: "#ff4d94"
 }, {
   key: "vacation",
   label: "休假",
-  text: "#bd6f56"
+  text: "#e94560"
 }, {
   key: "custom",
   label: "自訂",
-  text: "#8f7a9e"
+  text: "#a29bfe"
 }];
 // 售後(aftercare)不再是互斥標記的一員，改成獨立勾選(is_aftercare)，可以跟上面任一標記並存
 
@@ -786,7 +774,7 @@ function useLS(k, def) {
 }
 // 依masterId算出一個固定色，同一個人不管誰的畫面看到都是同一個顏色，
 // 方便一眼認出來是誰(跟Google文件那種每人固定游標色是同樣的概念)。
-const PRESENCE_PALETTE = ["#bd6f56", "#6fa183", "#7f97a8", "#cc9a56", "#8f7a9e", "#6fa8a3", "#c07a94", "#8ba888"];
+const PRESENCE_PALETTE = ["#e94560", "#00b894", "#74b9ff", "#fdcb6e", "#a29bfe", "#00cec9", "#fd79a8", "#55efc4"];
 function presenceColor(masterId) {
   let h = 0;
   const s = String(masterId || "");
@@ -1108,7 +1096,7 @@ function UpdatePasswordScreen({
       flexDirection: "column",
       alignItems: "center",
       justifyContent: "center",
-      background: "#1c1815",
+      background: "#0d1117",
       padding: "0 24px"
     }
   }, /*#__PURE__*/React.createElement("div", {
@@ -1130,18 +1118,18 @@ function UpdatePasswordScreen({
     style: {
       fontSize: 18,
       fontWeight: 800,
-      color: "#ede2d0"
+      color: "#f0f6fc"
     }
   }, "設定新密碼"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12,
-      color: "#9c8d7a",
+      color: "#8b949e",
       marginTop: 6
     }
   }, "嗨 ", masterName, "，首次登入請設定專屬密碼")), /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "#262019",
-      border: "1px solid #4d4030",
+      background: "#161b22",
+      border: "1px solid #30363d",
       borderRadius: 16,
       padding: 24
     }
@@ -1152,7 +1140,7 @@ function UpdatePasswordScreen({
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12,
-      color: "#9c8d7a",
+      color: "#8b949e",
       marginBottom: 6,
       fontWeight: 600
     }
@@ -1172,10 +1160,10 @@ function UpdatePasswordScreen({
     style: {
       width: "100%",
       padding: "12px 44px 12px 14px",
-      background: "#1c1815",
-      border: "1px solid #4d4030",
+      background: "#0d1117",
+      border: "1px solid #30363d",
       borderRadius: 10,
-      color: "#ede2d0",
+      color: "#f0f6fc",
       fontSize: 16,
       boxSizing: "border-box"
     }
@@ -1188,7 +1176,7 @@ function UpdatePasswordScreen({
       transform: "translateY(-50%)",
       background: "none",
       border: "none",
-      color: "#9c8d7a",
+      color: "#8b949e",
       cursor: "pointer",
       fontSize: 18,
       padding: 0
@@ -1200,7 +1188,7 @@ function UpdatePasswordScreen({
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12,
-      color: "#9c8d7a",
+      color: "#8b949e",
       marginBottom: 6,
       fontWeight: 600
     }
@@ -1217,22 +1205,22 @@ function UpdatePasswordScreen({
     style: {
       width: "100%",
       padding: "12px 14px",
-      background: "#1c1815",
-      border: "1px solid #4d4030",
+      background: "#0d1117",
+      border: "1px solid #30363d",
       borderRadius: 10,
-      color: "#ede2d0",
+      color: "#f0f6fc",
       fontSize: 16,
       boxSizing: "border-box"
     }
   })), error && /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "rgba(189,111,86,0.12)",
-      border: "1px solid rgba(189,111,86,0.4)",
+      background: "rgba(233,69,96,0.12)",
+      border: "1px solid rgba(233,69,96,0.4)",
       borderRadius: 8,
       padding: "8px 12px",
       marginBottom: 14,
       fontSize: 13,
-      color: "#bd6f56",
+      color: "#e94560",
       textAlign: "center"
     }
   }, error), /*#__PURE__*/React.createElement("button", {
@@ -1242,7 +1230,7 @@ function UpdatePasswordScreen({
       width: "100%",
       padding: 14,
       borderRadius: 10,
-      background: loading || !newPw || !confirm ? "#332a20" : "#bd6f56",
+      background: loading || !newPw || !confirm ? "#21262d" : "#e94560",
       border: "none",
       color: loading || !newPw || !confirm ? "#666" : "#fff",
       fontSize: 16,
@@ -1341,11 +1329,11 @@ function MonthlyOpenReminder({ authMaster, msg }) {
     ),
     /*#__PURE__*/React.createElement("button", {
       onClick: doOpen, disabled: busy,
-      style: { width: "100%", padding: 12, borderRadius: 10, border: "none", background: "#6fa88a", color: "#2a2015", fontWeight: 900, fontSize: 14, cursor: busy ? "wait" : "pointer", marginBottom: 8 }
+      style: { width: "100%", padding: 12, borderRadius: 10, border: "none", background: "#2ed9c3", color: "#00171f", fontWeight: 900, fontSize: 14, cursor: busy ? "wait" : "pointer", marginBottom: 8 }
     }, `🚀 一鍵開放${nextMonthLabel}`),
     /*#__PURE__*/React.createElement("button", {
       onClick: doClose, disabled: busy,
-      style: { width: "100%", padding: 10, borderRadius: 10, border: "1px solid #bd6f56", background: "none", color: "#bd6f56", fontWeight: 700, fontSize: 13, cursor: busy ? "wait" : "pointer", marginBottom: 10 }
+      style: { width: "100%", padding: 10, borderRadius: 10, border: "1px solid #e94560", background: "none", color: "#e94560", fontWeight: 700, fontSize: 13, cursor: busy ? "wait" : "pointer", marginBottom: 10 }
     }, `${nextMonthLabel}不開放`),
     /*#__PURE__*/React.createElement("button", {
       onClick: () => setDismissedThisSession(true),
@@ -1593,7 +1581,7 @@ function LoginScreen({
       flexDirection: "column",
       alignItems: "center",
       justifyContent: "center",
-      background: "#1c1815",
+      background: "#0d1117",
       padding: "0 24px"
     }
   }, /*#__PURE__*/React.createElement("div", {
@@ -1615,7 +1603,7 @@ function LoginScreen({
     style: {
       fontSize: 22,
       fontWeight: 800,
-      color: "#ede2d0",
+      color: "#f0f6fc",
       letterSpacing: 1
     }
   }, "永平整復保健"), /*#__PURE__*/React.createElement("div", {
@@ -1625,7 +1613,7 @@ function LoginScreen({
       marginTop: 6
     }
   }, "預約管理系統")), lineChecking && /*#__PURE__*/React.createElement("div", {
-    style: { textAlign: "center", fontSize: 12, color: "#9c8d7a", marginBottom: 12 }
+    style: { textAlign: "center", fontSize: 12, color: "#8b949e", marginBottom: 12 }
   }, "檢查 LINE 登入狀態中..."), lineAvailable && !lineChecking && /*#__PURE__*/React.createElement("div", {
     style: { marginBottom: 20 }
   }, /*#__PURE__*/React.createElement("button", {
@@ -1672,10 +1660,10 @@ function LoginScreen({
     }
   }, lineBusy ? "登入中..." : (lineTokenExpired ? "🔄 重新使用 LINE 登入" : "💬 使用 LINE 登入")), /*#__PURE__*/React.createElement("div", {
     style: { display: "flex", alignItems: "center", gap: 10, color: "#444", fontSize: 11 }
-  }, /*#__PURE__*/React.createElement("div", { style: { flex: 1, height: 1, background: "#4d4030" } }), "或使用帳號密碼", /*#__PURE__*/React.createElement("div", { style: { flex: 1, height: 1, background: "#4d4030" } }))), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", { style: { flex: 1, height: 1, background: "#30363d" } }), "或使用帳號密碼", /*#__PURE__*/React.createElement("div", { style: { flex: 1, height: 1, background: "#30363d" } }))), /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "#262019",
-      border: "1px solid #4d4030",
+      background: "#161b22",
+      border: "1px solid #30363d",
       borderRadius: 16,
       padding: 24
     }
@@ -1686,7 +1674,7 @@ function LoginScreen({
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12,
-      color: "#9c8d7a",
+      color: "#8b949e",
       marginBottom: 6,
       fontWeight: 600
     }
@@ -1704,10 +1692,10 @@ function LoginScreen({
     style: {
       width: "100%",
       padding: "12px 14px",
-      background: "#1c1815",
-      border: "1px solid #4d4030",
+      background: "#0d1117",
+      border: "1px solid #30363d",
       borderRadius: 10,
-      color: "#ede2d0",
+      color: "#f0f6fc",
       fontSize: 16,
       boxSizing: "border-box"
     }
@@ -1718,7 +1706,7 @@ function LoginScreen({
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12,
-      color: "#9c8d7a",
+      color: "#8b949e",
       marginBottom: 6,
       fontWeight: 600
     }
@@ -1740,10 +1728,10 @@ function LoginScreen({
       width: "100%",
       padding: "12px 14px",
       paddingRight: 44,
-      background: "#1c1815",
-      border: "1px solid #4d4030",
+      background: "#0d1117",
+      border: "1px solid #30363d",
       borderRadius: 10,
-      color: "#ede2d0",
+      color: "#f0f6fc",
       fontSize: 16,
       boxSizing: "border-box"
     }
@@ -1756,7 +1744,7 @@ function LoginScreen({
       transform: "translateY(-50%)",
       background: "none",
       border: "none",
-      color: "#9c8d7a",
+      color: "#8b949e",
       cursor: "pointer",
       fontSize: 18,
       padding: 0,
@@ -1764,13 +1752,13 @@ function LoginScreen({
     }
   }, showPw ? "🙈" : "👁"))), error && /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "rgba(189,111,86,0.12)",
-      border: "1px solid rgba(189,111,86,0.4)",
+      background: "rgba(233,69,96,0.12)",
+      border: "1px solid rgba(233,69,96,0.4)",
       borderRadius: 8,
       padding: "8px 12px",
       marginBottom: 14,
       fontSize: 13,
-      color: "#bd6f56",
+      color: "#e94560",
       textAlign: "center",
       whiteSpace: "pre-wrap",
       wordBreak: "break-word"
@@ -1782,7 +1770,7 @@ function LoginScreen({
       width: "100%",
       padding: "14px",
       borderRadius: 10,
-      background: loading || !username.trim() || !password.trim() ? "#332a20" : "#bd6f56",
+      background: loading || !username.trim() || !password.trim() ? "#21262d" : "#e94560",
       border: "none",
       color: loading || !username.trim() || !password.trim() ? "#666" : "#fff",
       fontSize: 16,
@@ -2281,7 +2269,7 @@ function PendingBookings({
       maxWidth: 480,
       margin: '0 auto'
     }
-  }, [['new', `新預約${counts.new > 0 ? ` (${counts.new})` : ''}`, '#6fa8a3'], ['cancel_req', `取消請求${counts.cancel_req > 0 ? ` (${counts.cancel_req})` : ''}`, '#bd6f56'], ['reschedule_req', `改期請求${counts.reschedule_req > 0 ? ` (${counts.reschedule_req})` : ''}`, '#9584ab'], ['history', '取消歷史', '#9c8d7a']].map(([k, l, c]) => /*#__PURE__*/React.createElement("button", {
+  }, [['new', `新預約${counts.new > 0 ? ` (${counts.new})` : ''}`, '#00e5e5'], ['cancel_req', `取消請求${counts.cancel_req > 0 ? ` (${counts.cancel_req})` : ''}`, '#e94560'], ['reschedule_req', `改期請求${counts.reschedule_req > 0 ? ` (${counts.reschedule_req})` : ''}`, '#a78bfa'], ['history', '取消歷史', '#8b949e']].map(([k, l, c]) => /*#__PURE__*/React.createElement("button", {
     key: k,
     onClick: () => setSubTab(k),
     style: {
@@ -2292,7 +2280,7 @@ function PendingBookings({
       fontWeight: 700,
       cursor: 'pointer',
       background: subTab === k ? c : 'transparent',
-      border: `1.5px solid ${subTab === k ? c : '#4d4030'}`,
+      border: `1.5px solid ${subTab === k ? c : '#30363d'}`,
       color: subTab === k ? k === 'history' ? '#fff' : '#000' : c,
       fontFamily: 'inherit'
     }
@@ -2323,9 +2311,9 @@ function PendingBookings({
       fontSize: 11,
       cursor: 'pointer',
       fontFamily: 'inherit',
-      background: historyDays === n ? '#4d4030' : 'transparent',
-      border: '1px solid #4d4030',
-      color: historyDays === n ? '#ede2d0' : '#9c8d7a'
+      background: historyDays === n ? '#30363d' : 'transparent',
+      border: '1px solid #30363d',
+      color: historyDays === n ? '#f0f6fc' : '#8b949e'
     }
   }, "近 ", n, " 天"))), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -2340,13 +2328,13 @@ function PendingBookings({
     style: {
       padding: 40,
       textAlign: 'center',
-      color: '#9c8d7a'
+      color: '#8b949e'
     }
   }, "載入中..."), !loading && !items.length && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: 40,
       textAlign: 'center',
-      color: '#9c8d7a',
+      color: '#8b949e',
       fontSize: 14
     }
   }, subTab === 'new' ? '✅ 目前沒有待確認的預約' : subTab === 'cancel_req' ? '✅ 目前沒有取消申請' : `📭 近 ${historyDays} 天沒有取消紀錄`), !loading && (() => {
@@ -2381,16 +2369,16 @@ function PendingBookings({
         reason: null,
         rest: b.note
       };
-      let badge = ['#cc9a56', 'rgba(204,154,86,.15)', '待確認'];
-      if (subTab === 'cancel_req') badge = ['#bd6f56', 'rgba(189,111,86,.15)', '取消申請中'];else if (subTab === 'reschedule_req') badge = ['#9584ab', 'rgba(149,132,171,.15)', '改期申請中'];else if (subTab === 'history') {
-        if (b.status === 'no_show') badge = ['#bd6f56', 'rgba(189,111,86,.15)', '放鳥'];else badge = ['#9c8d7a', 'rgba(139,148,158,.15)', '已取消'];
-      } else if (isReq) badge = ['#cc9a56', 'rgba(204,154,86,.15)', '申請制'];
+      let badge = ['#ffb300', 'rgba(255,179,0,.15)', '待確認'];
+      if (subTab === 'cancel_req') badge = ['#e94560', 'rgba(233,69,96,.15)', '取消申請中'];else if (subTab === 'reschedule_req') badge = ['#a78bfa', 'rgba(167,139,250,.15)', '改期申請中'];else if (subTab === 'history') {
+        if (b.status === 'no_show') badge = ['#e94560', 'rgba(233,69,96,.15)', '放鳥'];else badge = ['#8b949e', 'rgba(139,148,158,.15)', '已取消'];
+      } else if (isReq) badge = ['#ffb300', 'rgba(255,179,0,.15)', '申請制'];
       const baseName = b.customer_name.replace(/-同行\d*$/, '');
       return /*#__PURE__*/React.createElement("div", {
         key: key,
         style: {
-          background: '#262019',
-          border: isGroupBooking ? '1.5px solid #6fa8a3' : '1px solid #4d4030',
+          background: '#161b22',
+          border: isGroupBooking ? '1.5px solid #00e5e5' : '1px solid #30363d',
           borderRadius: 12,
           padding: '14px 16px',
           marginBottom: 10,
@@ -2404,7 +2392,7 @@ function PendingBookings({
         }
       }, /*#__PURE__*/React.createElement("div", {
         style: {
-          background: '#1c1815',
+          background: '#0d1117',
           borderRadius: 8,
           padding: '8px 10px',
           textAlign: 'center',
@@ -2414,7 +2402,7 @@ function PendingBookings({
       }, /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: 10,
-          color: '#9c8d7a'
+          color: '#8b949e'
         }
       }, d ? `${d.getMonth() + 1}月` : '待'), /*#__PURE__*/React.createElement("div", {
         style: {
@@ -2425,7 +2413,7 @@ function PendingBookings({
       }, d ? d.getDate() : '?'), /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: 10,
-          color: '#9c8d7a'
+          color: '#8b949e'
         }
       }, d ? `週${wk[d.getDay()]}` : '')), /*#__PURE__*/React.createElement("div", {
         style: {
@@ -2444,7 +2432,7 @@ function PendingBookings({
         style: {
           fontSize: 16,
           fontWeight: 700,
-          color: '#6fa8a3'
+          color: '#00e5e5'
         }
       }, timeStr), /*#__PURE__*/React.createElement("span", {
         style: {
@@ -2459,8 +2447,8 @@ function PendingBookings({
           fontSize: 11,
           padding: '2px 8px',
           borderRadius: 10,
-          background: 'rgba(127,151,168,.12)',
-          color: '#7f97a8'
+          background: 'rgba(116,185,255,.12)',
+          color: '#74b9ff'
         }
       }, MASTER_IDS[b.master_id] || ''), isGroupBooking && /*#__PURE__*/React.createElement("span", {
         style: {
@@ -2468,7 +2456,7 @@ function PendingBookings({
           padding: '2px 8px',
           borderRadius: 10,
           background: 'rgba(0,229,229,.15)',
-          color: '#6fa8a3',
+          color: '#00e5e5',
           fontWeight: 700
         }
       }, "👥 ", group.length, "人")), /*#__PURE__*/React.createElement("div", {
@@ -2480,21 +2468,21 @@ function PendingBookings({
       }, baseName), lineInfo.name && /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: 12,
-          color: '#6fa8a3',
+          color: '#00e5e5',
           marginBottom: 2
         }
       }, "💬 LINE：", lineInfo.name), /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: 12,
-          color: '#9c8d7a',
+          color: '#8b949e',
           marginBottom: 2
         }
       }, "📞 ", b.customer_phone || '未留電話'), isGroupBooking && /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: 12,
-          color: '#9c8d7a',
+          color: '#8b949e',
           marginTop: 6,
-          background: '#1c1815',
+          background: '#0d1117',
           borderRadius: 6,
           padding: '7px 9px',
           lineHeight: 1.7
@@ -2504,10 +2492,10 @@ function PendingBookings({
       }, "• ", MASTER_IDS[g.master_id] || '', " ", g.start_time ? g.start_time.slice(0, 5) : '待定', g.reservation_type === 'split' ? ' (同時段)' : ''))), subTab === 'cancel_req' && cancelInfo.reason && /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: 12,
-          color: '#bd6f56',
+          color: '#e94560',
           marginTop: 6,
-          background: 'rgba(189,111,86,.08)',
-          border: '1px solid rgba(189,111,86,.3)',
+          background: 'rgba(233,69,96,.08)',
+          border: '1px solid rgba(233,69,96,.3)',
           borderRadius: 6,
           padding: '7px 9px',
           lineHeight: 1.5
@@ -2520,15 +2508,15 @@ function PendingBookings({
       }, "取消原因"), /*#__PURE__*/React.createElement("div", null, cancelInfo.reason), cancelInfo.time && /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: 10,
-          color: '#9c8d7a',
+          color: '#8b949e',
           marginTop: 3
         }
       }, "申請時間：", cancelInfo.time)), subTab === 'cancel_req' && cancelInfo.rest && /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: 12,
-          color: '#9c8d7a',
+          color: '#8b949e',
           marginTop: 4,
-          background: '#1c1815',
+          background: '#0d1117',
           borderRadius: 6,
           padding: '6px 8px',
           lineHeight: 1.6
@@ -2536,10 +2524,10 @@ function PendingBookings({
       }, cancelInfo.rest), subTab === 'reschedule_req' && rescheduleInfo.reason && /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: 12,
-          color: '#9584ab',
+          color: '#a78bfa',
           marginTop: 6,
-          background: 'rgba(149,132,171,.08)',
-          border: '1px solid rgba(149,132,171,.3)',
+          background: 'rgba(167,139,250,.08)',
+          border: '1px solid rgba(167,139,250,.3)',
           borderRadius: 6,
           padding: '7px 9px',
           lineHeight: 1.5
@@ -2552,15 +2540,15 @@ function PendingBookings({
       }, "希望時段"), /*#__PURE__*/React.createElement("div", null, rescheduleInfo.reason), rescheduleInfo.time && /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: 10,
-          color: '#9c8d7a',
+          color: '#8b949e',
           marginTop: 3
         }
       }, "申請時間：", rescheduleInfo.time)), subTab === 'reschedule_req' && rescheduleInfo.rest && /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: 12,
-          color: '#9c8d7a',
+          color: '#8b949e',
           marginTop: 4,
-          background: '#1c1815',
+          background: '#0d1117',
           borderRadius: 6,
           padding: '6px 8px',
           lineHeight: 1.6
@@ -2568,9 +2556,9 @@ function PendingBookings({
       }, rescheduleInfo.rest), subTab !== 'cancel_req' && subTab !== 'reschedule_req' && b.note && /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: 12,
-          color: '#9c8d7a',
+          color: '#8b949e',
           marginTop: 4,
-          background: '#1c1815',
+          background: '#0d1117',
           borderRadius: 6,
           padding: '6px 8px',
           lineHeight: 1.6,
@@ -2579,7 +2567,7 @@ function PendingBookings({
       }, b.note), subTab === 'history' && b.last_edited_at && /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: 11,
-          color: '#9c8d7a',
+          color: '#8b949e',
           marginTop: 6
         }
       }, "⏱ 取消於 ", new Date(b.last_edited_at).toLocaleString('zh-TW', {
@@ -2615,7 +2603,7 @@ function PendingBookings({
           flex: 2,
           padding: '9px',
           borderRadius: 8,
-          background: '#6fa8a3',
+          background: '#00e5e5',
           border: 'none',
           color: '#000',
           fontSize: 13,
@@ -2629,8 +2617,8 @@ function PendingBookings({
           padding: '9px',
           borderRadius: 8,
           background: 'none',
-          border: '1.5px solid #bd6f56',
-          color: '#bd6f56',
+          border: '1.5px solid #e94560',
+          color: '#e94560',
           fontSize: 13,
           fontWeight: 700,
           cursor: 'pointer'
@@ -2660,7 +2648,7 @@ function PendingBookings({
           flex: 2,
           padding: '9px',
           borderRadius: 8,
-          background: '#bd6f56',
+          background: '#e94560',
           border: 'none',
           color: '#fff',
           fontSize: 13,
@@ -2674,8 +2662,8 @@ function PendingBookings({
           padding: '9px',
           borderRadius: 8,
           background: 'none',
-          border: '1.5px solid #7f97a8',
-          color: '#7f97a8',
+          border: '1.5px solid #74b9ff',
+          color: '#74b9ff',
           fontSize: 13,
           fontWeight: 700,
           cursor: 'pointer'
@@ -2711,7 +2699,7 @@ function PendingBookings({
           flex: 2,
           padding: '9px',
           borderRadius: 8,
-          background: '#9584ab',
+          background: '#a78bfa',
           border: 'none',
           color: '#000',
           fontSize: 13,
@@ -2725,8 +2713,8 @@ function PendingBookings({
           padding: '9px',
           borderRadius: 8,
           background: 'none',
-          border: '1.5px solid #7f97a8',
-          color: '#7f97a8',
+          border: '1.5px solid #74b9ff',
+          color: '#74b9ff',
           fontSize: 13,
           fontWeight: 700,
           cursor: 'pointer'
@@ -2768,7 +2756,7 @@ function PendingBookings({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      background: '#262019',
+      background: '#161b22',
       borderRadius: '20px 20px 0 0',
       padding: '20px 18px 40px',
       width: '100%',
@@ -2779,7 +2767,7 @@ function PendingBookings({
     style: {
       width: 36,
       height: 4,
-      background: '#4d4030',
+      background: '#30363d',
       borderRadius: 2,
       margin: '0 auto 16px'
     }
@@ -2792,13 +2780,13 @@ function PendingBookings({
   }, "✅ 已通知客人確認"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 13,
-      color: '#9c8d7a',
+      color: '#8b949e',
       marginBottom: 16
     }
   }, "已自動傳送 2 小時確認連結給客人。可複製客人資訊到 LINE 改備註名稱。"), /*#__PURE__*/React.createElement("div", {
     style: {
-      background: '#1c1815',
-      border: '1.5px solid #4d4030',
+      background: '#0d1117',
+      border: '1.5px solid #30363d',
       borderRadius: 10,
       padding: '14px',
       marginBottom: 14,
@@ -2816,9 +2804,9 @@ function PendingBookings({
       width: '100%',
       padding: 14,
       borderRadius: 12,
-      background: copied ? '#4d4030' : '#6fa8a3',
+      background: copied ? '#30363d' : '#00e5e5',
       border: 'none',
-      color: copied ? '#9c8d7a' : '#000',
+      color: copied ? '#8b949e' : '#000',
       fontSize: 15,
       fontWeight: 900,
       cursor: 'pointer',
@@ -2848,8 +2836,8 @@ function PendingBookings({
       padding: 12,
       borderRadius: 12,
       background: 'none',
-      border: '1.5px solid #4d4030',
-      color: '#9c8d7a',
+      border: '1.5px solid #30363d',
+      color: '#8b949e',
       fontSize: 14,
       cursor: 'pointer'
     }
@@ -2866,7 +2854,7 @@ function PendingBookings({
     onClick: () => setConfirmDialog(null)
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      background: '#262019',
+      background: '#161b22',
       borderRadius: '20px 20px 0 0',
       padding: '20px 18px 40px',
       width: '100%',
@@ -2877,7 +2865,7 @@ function PendingBookings({
     style: {
       width: 36,
       height: 4,
-      background: '#4d4030',
+      background: '#30363d',
       borderRadius: 2,
       margin: '0 auto 16px'
     }
@@ -2895,17 +2883,17 @@ function PendingBookings({
       padding: '10px 12px',
       marginBottom: 14,
       fontSize: 13,
-      color: '#6fa8a3'
+      color: '#00e5e5'
     }
   }, "👥 這是一組 ", confirmDialog.length, " 人的預約，確認後全部會一起變成已確認"), (!confirmDialog[0].date || confirmDialog[0].status === 'reschedule_requested') && /*#__PURE__*/React.createElement("div", {
     style: {
-      background: 'rgba(204,154,86,.1)',
-      border: '1px solid rgba(204,154,86,.3)',
+      background: 'rgba(255,179,0,.1)',
+      border: '1px solid rgba(255,179,0,.3)',
       borderRadius: 8,
       padding: '10px 12px',
       marginBottom: 14,
       fontSize: 13,
-      color: '#cc9a56'
+      color: '#ffb300'
     }
   }, confirmDialog[0].status === 'reschedule_requested' ? "⚡ 客人申請改期，請填入與客人確認的新時間" : "⚡ 申請制預約，請填入與客人確認的時間"), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -2914,7 +2902,7 @@ function PendingBookings({
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12,
-      color: '#9c8d7a',
+      color: '#8b949e',
       marginBottom: 5,
       fontWeight: 700
     }
@@ -2928,11 +2916,11 @@ function PendingBookings({
     },
     style: {
       width: '100%',
-      background: '#1c1815',
-      border: '1.5px solid #4d4030',
+      background: '#0d1117',
+      border: '1.5px solid #30363d',
       borderRadius: 8,
       padding: '11px 12px',
-      color: '#ede2d0',
+      color: '#f0f6fc',
       fontSize: 15,
       outline: 'none'
     }
@@ -2943,19 +2931,19 @@ function PendingBookings({
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12,
-      color: '#9c8d7a',
+      color: '#8b949e',
       marginBottom: 5,
       fontWeight: 700
     }
   }, "時段", confLoadingSlots && /*#__PURE__*/React.createElement("span", {
     style: {
-      color: '#cc9a56',
+      color: '#ffb300',
       marginLeft: 6,
       fontWeight: 400
     }
   }, "查詢空檔中…"), confDate && !confLoadingSlots && confTakenSlots.size > 0 && /*#__PURE__*/React.createElement("span", {
     style: {
-      color: '#9c8d7a',
+      color: '#8b949e',
       marginLeft: 6,
       fontWeight: 400
     }
@@ -2964,11 +2952,11 @@ function PendingBookings({
     onChange: e => setConfTime(e.target.value),
     style: {
       width: '100%',
-      background: '#1c1815',
-      border: `1.5px solid ${confTime && confTakenSlots.has(confTime) ? '#bd6f56' : '#4d4030'}`,
+      background: '#0d1117',
+      border: `1.5px solid ${confTime && confTakenSlots.has(confTime) ? '#e94560' : '#30363d'}`,
       borderRadius: 8,
       padding: '11px 12px',
-      color: confTime && confTakenSlots.has(confTime) ? '#bd6f56' : '#ede2d0',
+      color: confTime && confTakenSlots.has(confTime) ? '#e94560' : '#f0f6fc',
       fontSize: 15,
       outline: 'none'
     }
@@ -2981,15 +2969,15 @@ function PendingBookings({
       key: t,
       value: t,
       style: {
-        color: taken ? '#bd6f56' : '#ede2d0',
-        background: taken ? '#2a1620' : '#1c1815'
+        color: taken ? '#e94560' : '#f0f6fc',
+        background: taken ? '#2a1620' : '#0d1117'
       }
     }, t, taken ? `　⚠️ 已滿（${takenName}）` : '');
   })), confTime && confTakenSlots.has(confTime) && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 6,
       fontSize: 12,
-      color: '#bd6f56'
+      color: '#e94560'
     }
   }, "⚠️ 此時段已有預約（" + (confTakenSlots.get(confTime) || '') + "），確認時會再次提醒")), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -3003,8 +2991,8 @@ function PendingBookings({
       padding: 14,
       borderRadius: 12,
       background: 'none',
-      border: '1.5px solid #4d4030',
-      color: '#ede2d0',
+      border: '1.5px solid #30363d',
+      color: '#f0f6fc',
       fontSize: 15,
       fontWeight: 700,
       cursor: 'pointer'
@@ -3016,9 +3004,9 @@ function PendingBookings({
       flex: 2,
       padding: 14,
       borderRadius: 12,
-      background: saving ? '#4d4030' : '#6fa8a3',
+      background: saving ? '#30363d' : '#00e5e5',
       border: 'none',
-      color: saving ? '#9c8d7a' : '#000',
+      color: saving ? '#8b949e' : '#000',
       fontSize: 15,
       fontWeight: 900,
       cursor: saving ? 'wait' : 'pointer'
@@ -3073,8 +3061,8 @@ function SplitMasterSelect({
         borderRadius: 8,
         marginBottom: 6,
         cursor: "pointer",
-        background: isSelected ? "rgba(127,151,168,0.15)" : "var(--input-bg)",
-        border: `1.5px solid ${isSelected ? "#7f97a8" : hasConflict ? "rgba(189,111,86,0.4)" : "var(--border2)"}`,
+        background: isSelected ? "rgba(116,185,255,0.15)" : "var(--input-bg)",
+        border: `1.5px solid ${isSelected ? "#74b9ff" : hasConflict ? "rgba(233,69,96,0.4)" : "var(--border2)"}`,
         transition: ".15s"
       }
     }, /*#__PURE__*/React.createElement("div", {
@@ -3083,7 +3071,7 @@ function SplitMasterSelect({
         height: 10,
         borderRadius: "50%",
         flexShrink: 0,
-        background: avail[m.id] === undefined ? "#555" : hasConflict ? "#bd6f56" : "#6fa183"
+        background: avail[m.id] === undefined ? "#555" : hasConflict ? "#e94560" : "#00b894"
       }
     }), /*#__PURE__*/React.createElement("div", {
       style: {
@@ -3093,18 +3081,18 @@ function SplitMasterSelect({
       style: {
         fontSize: 13,
         fontWeight: 700,
-        color: isSelected ? "#7f97a8" : "var(--text-main)"
+        color: isSelected ? "#74b9ff" : "var(--text-main)"
       }
     }, m.name), hasConflict && /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 11,
-        color: "#bd6f56",
+        color: "#e94560",
         marginTop: 1
       }
     }, "已有：", conflict), !hasConflict && avail[m.id] !== undefined && /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 11,
-        color: "#6fa183",
+        color: "#00b894",
         marginTop: 1
       }
     }, "空位"), avail[m.id] === undefined && /*#__PURE__*/React.createElement("div", {
@@ -3115,7 +3103,7 @@ function SplitMasterSelect({
       }
     }, "查詢中...")), isSelected && /*#__PURE__*/React.createElement("span", {
       style: {
-        color: "#7f97a8",
+        color: "#74b9ff",
         fontSize: 14
       }
     }, "✓"));
@@ -3183,7 +3171,7 @@ function StoreClosuresPanel({ isAdmin, msg, currentMaster }) {
       /*#__PURE__*/React.createElement("div", { style: { fontWeight: 900, fontSize: 14 } }, "🏖️ 店休設定"),
       isAdmin && /*#__PURE__*/React.createElement("button", {
         onClick: () => setShowForm(s => !s),
-        style: { fontSize: 12, fontWeight: 700, padding: "5px 10px", borderRadius: 8, border: "1px solid #bd6f56", background: showForm ? "#bd6f5620" : "none", color: "#bd6f56", cursor: "pointer" }
+        style: { fontSize: 12, fontWeight: 700, padding: "5px 10px", borderRadius: 8, border: "1px solid #e94560", background: showForm ? "#e9456020" : "none", color: "#e94560", cursor: "pointer" }
       }, showForm ? "取消" : "＋ 新增店休")
     ),
     showForm && isAdmin && /*#__PURE__*/React.createElement("div", { style: { background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, padding: 12, marginBottom: 10 } },
@@ -3194,7 +3182,7 @@ function StoreClosuresPanel({ isAdmin, msg, currentMaster }) {
       /*#__PURE__*/React.createElement("input", { type: "text", placeholder: "原因（選填，例：員工旅遊）", value: reason, onChange: e => setReason(e.target.value), style: { width: "100%", padding: 8, borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg-header)", color: "var(--text-main)", marginBottom: 8, boxSizing: "border-box" } }),
       /*#__PURE__*/React.createElement("button", {
         onClick: addClosure, disabled: saving,
-        style: { width: "100%", padding: 11, borderRadius: 8, border: "none", background: "#bd6f56", color: "#fff", fontWeight: 900, fontSize: 13, cursor: saving ? "wait" : "pointer" }
+        style: { width: "100%", padding: 11, borderRadius: 8, border: "none", background: "#e94560", color: "#fff", fontWeight: 900, fontSize: 13, cursor: saving ? "wait" : "pointer" }
       }, saving ? "儲存中..." : "確認設定店休"),
       /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: "var(--text-dim)", marginTop: 6 } }, "店休期間客人完全無法線上預約；師傅內部手動排班仍可操作，但會跳警告提醒。")
     ),
@@ -3203,7 +3191,7 @@ function StoreClosuresPanel({ isAdmin, msg, currentMaster }) {
       : /*#__PURE__*/React.createElement("div", { style: { paddingBottom: 10 } },
           list.map(c => /*#__PURE__*/React.createElement("div", {
             key: c.id,
-            style: { display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(189,111,86,0.1)", border: "1px solid #bd6f56", borderRadius: 8, padding: "8px 10px", marginBottom: 6, fontSize: 12 }
+            style: { display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(233,69,96,0.1)", border: "1px solid #e94560", borderRadius: 8, padding: "8px 10px", marginBottom: 6, fontSize: 12 }
           },
             /*#__PURE__*/React.createElement("div", null,
               /*#__PURE__*/React.createElement("span", { style: { fontWeight: 700 } }, c.start_date === c.end_date ? c.start_date : `${c.start_date} ~ ${c.end_date}`),
@@ -3211,7 +3199,7 @@ function StoreClosuresPanel({ isAdmin, msg, currentMaster }) {
             ),
             isAdmin && /*#__PURE__*/React.createElement("button", {
               onClick: () => removeClosure(c.id),
-              style: { background: "none", border: "none", color: "#bd6f56", cursor: "pointer", fontSize: 16, padding: "0 4px" }
+              style: { background: "none", border: "none", color: "#e94560", cursor: "pointer", fontSize: 16, padding: "0 4px" }
             }, "✕")
           ))
         )
@@ -3390,13 +3378,13 @@ function AvailabilityModule({
         onClick: () => setTargetId(m.id),
         style: {
           padding: "7px 14px", borderRadius: 20, cursor: "pointer", fontSize: 13, fontWeight: 700,
-          border: targetId === m.id ? "2px solid #6fa88a" : "1px solid var(--border)",
-          background: targetId === m.id ? "#6fa88a20" : "var(--bg-card)",
-          color: targetId === m.id ? "#6fa88a" : "var(--text-main)"
+          border: targetId === m.id ? "2px solid #2ed9c3" : "1px solid var(--border)",
+          background: targetId === m.id ? "#2ed9c320" : "var(--bg-card)",
+          color: targetId === m.id ? "#2ed9c3" : "var(--text-main)"
         }
       }, m.name, !CURRENTLY_LIVE_IDS.has(m.id) && "（申請制）"))
     ),
-    !CURRENTLY_LIVE_IDS.has(targetId) && /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: "#cc9a56", background: "#cc9a5615", border: "1px solid #cc9a56", borderRadius: 8, padding: "8px 10px", marginBottom: 10, lineHeight: 1.6 } },
+    !CURRENTLY_LIVE_IDS.has(targetId) && /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: "#f5a623", background: "#f5a62315", border: "1px solid #f5a623", borderRadius: 8, padding: "8px 10px", marginBottom: 10, lineHeight: 1.6 } },
       "⚠️ 目前設定好也不會馬上生效——客人 app 這邊還沒接這位師傅的線上日曆，客人還是只能送申請。這裡先讓你把資料準備好，正式串接後才會真的能線上約。"
     ),
     /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 } },
@@ -3407,21 +3395,21 @@ function AvailabilityModule({
     /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" } },
       /*#__PURE__*/React.createElement("button", {
         onClick: () => bulkOpenMonth("this"), disabled: bulkBusy,
-        style: { flex: "1 1 auto", padding: "10px 12px", borderRadius: 10, border: "none", background: "#6fa88a", color: "#2a2015", fontWeight: 900, fontSize: 13, cursor: bulkBusy ? "wait" : "pointer" }
+        style: { flex: "1 1 auto", padding: "10px 12px", borderRadius: 10, border: "none", background: "#2ed9c3", color: "#00171f", fontWeight: 900, fontSize: 13, cursor: bulkBusy ? "wait" : "pointer" }
       }, "🚀 一鍵開放本月"),
       /*#__PURE__*/React.createElement("button", {
         onClick: () => bulkCloseMonth("this"), disabled: bulkBusy,
-        style: { padding: "10px 12px", borderRadius: 10, border: "1px solid #bd6f56", background: "none", color: "#bd6f56", fontWeight: 700, fontSize: 13, cursor: bulkBusy ? "wait" : "pointer" }
+        style: { padding: "10px 12px", borderRadius: 10, border: "1px solid #e94560", background: "none", color: "#e94560", fontWeight: 700, fontSize: 13, cursor: bulkBusy ? "wait" : "pointer" }
       }, "關閉本月")
     ),
     /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" } },
       /*#__PURE__*/React.createElement("button", {
         onClick: () => bulkOpenMonth("next"), disabled: bulkBusy,
-        style: { flex: "1 1 auto", padding: "10px 12px", borderRadius: 10, border: "none", background: "#6fa88a", color: "#2a2015", fontWeight: 900, fontSize: 13, cursor: bulkBusy ? "wait" : "pointer" }
+        style: { flex: "1 1 auto", padding: "10px 12px", borderRadius: 10, border: "none", background: "#2ed9c3", color: "#00171f", fontWeight: 900, fontSize: 13, cursor: bulkBusy ? "wait" : "pointer" }
       }, "🚀 一鍵開放下個月"),
       /*#__PURE__*/React.createElement("button", {
         onClick: () => bulkCloseMonth("next"), disabled: bulkBusy,
-        style: { padding: "10px 12px", borderRadius: 10, border: "1px solid #bd6f56", background: "none", color: "#bd6f56", fontWeight: 700, fontSize: 13, cursor: bulkBusy ? "wait" : "pointer" }
+        style: { padding: "10px 12px", borderRadius: 10, border: "1px solid #e94560", background: "none", color: "#e94560", fontWeight: 700, fontSize: 13, cursor: bulkBusy ? "wait" : "pointer" }
       }, "關閉下個月")
     ),
     loading ? /*#__PURE__*/React.createElement("div", { style: { textAlign: "center", padding: 30, color: "var(--text-dim)" } }, "載入中…") :
@@ -3438,8 +3426,8 @@ function AvailabilityModule({
           const isSun = isSundayStr(dateStr);
           const isOpen = !!(r && r.is_open);
           const isPartial = isOpen && Array.isArray(r.open_slots) && r.open_slots.length > 0;
-          const bg = isSun ? "var(--bg2)" : isPast ? "var(--bg2)" : isOpen ? (isPartial ? "rgba(204,154,86,0.28)" : "rgba(111,168,138,0.25)") : "var(--bg-card)";
-          const border = isSun ? "1px dashed var(--border)" : isPast ? "1px solid var(--border)" : isOpen ? (isPartial ? "1.5px solid #cc9a56" : "1.5px solid #6fa88a") : "1px solid var(--border)";
+          const bg = isSun ? "var(--bg2)" : isPast ? "var(--bg2)" : isOpen ? (isPartial ? "rgba(245,166,35,0.28)" : "rgba(46,217,195,0.25)") : "var(--bg-card)";
+          const border = isSun ? "1px dashed var(--border)" : isPast ? "1px solid var(--border)" : isOpen ? (isPartial ? "1.5px solid #f5a623" : "1.5px solid #2ed9c3") : "1px solid var(--border)";
           return /*#__PURE__*/React.createElement("div", {
             key: di,
             onClick: () => openEditor(dateStr),
@@ -3448,7 +3436,7 @@ function AvailabilityModule({
               borderRadius: 8, background: bg, border, cursor: (isPast || isSun) ? "default" : "pointer",
               opacity: (isPast || isSun) ? 0.4 : 1, fontSize: 13, fontWeight: 700, color: "var(--text-main)"
             }
-          }, d, isSun && !isPast && /*#__PURE__*/React.createElement("span", { style: { fontSize: 7, color: "var(--text-dim)" } }, "僅內部"), !isSun && !isPast && isOpen && /*#__PURE__*/React.createElement("span", { style: { fontSize: 7, color: isPartial ? "#cc9a56" : "#6fa88a", fontWeight: 900 } }, isPartial ? "部分" : "整天"));
+          }, d, isSun && !isPast && /*#__PURE__*/React.createElement("span", { style: { fontSize: 7, color: "var(--text-dim)" } }, "僅內部"), !isSun && !isPast && isOpen && /*#__PURE__*/React.createElement("span", { style: { fontSize: 7, color: isPartial ? "#f5a623" : "#2ed9c3", fontWeight: 900 } }, isPartial ? "部分" : "整天"));
         })
       ))
     ),
@@ -3468,11 +3456,11 @@ function AvailabilityModule({
       /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 14 } },
         /*#__PURE__*/React.createElement("button", {
           onClick: () => saveDay(true, new Set(BUSINESS_HOUR_SLOTS)), disabled: savingDay,
-          style: { flex: 1, padding: 12, borderRadius: 10, border: "none", background: "#6fa88a", color: "#2a2015", fontWeight: 900, fontSize: 14, cursor: "pointer" }
+          style: { flex: 1, padding: 12, borderRadius: 10, border: "none", background: "#2ed9c3", color: "#00171f", fontWeight: 900, fontSize: 14, cursor: "pointer" }
         }, "🟢 整天開放"),
         /*#__PURE__*/React.createElement("button", {
           onClick: () => setEditSlots(editSlots === null ? new Set() : editSlots), disabled: savingDay,
-          style: { flex: 1, padding: 12, borderRadius: 10, border: "1.5px solid #cc9a56", background: editSlots !== null ? "#cc9a5620" : "none", color: "#cc9a56", fontWeight: 900, fontSize: 14, cursor: "pointer" }
+          style: { flex: 1, padding: 12, borderRadius: 10, border: "1.5px solid #f5a623", background: editSlots !== null ? "#f5a62320" : "none", color: "#f5a623", fontWeight: 900, fontSize: 14, cursor: "pointer" }
         }, "🟠 只開放部分時段")
       ),
       editSlots !== null && /*#__PURE__*/React.createElement("div", null,
@@ -3485,21 +3473,21 @@ function AvailabilityModule({
               onClick: () => setEditSlots(prev => { const n = new Set(prev); n.has(t) ? n.delete(t) : n.add(t); return n; }),
               style: {
                 padding: "8px 4px", borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 700,
-                border: on ? "1.5px solid #cc9a56" : "1px solid var(--border)",
-                background: on ? "#cc9a5625" : "var(--bg-card)",
-                color: on ? "#cc9a56" : "var(--text-main)"
+                border: on ? "1.5px solid #f5a623" : "1px solid var(--border)",
+                background: on ? "#f5a62325" : "var(--bg-card)",
+                color: on ? "#f5a623" : "var(--text-main)"
               }
             }, t);
           })
         ),
         /*#__PURE__*/React.createElement("button", {
           onClick: () => saveDay(true, editSlots), disabled: savingDay || editSlots.size === 0,
-          style: { width: "100%", padding: 13, borderRadius: 10, border: "none", background: editSlots.size === 0 ? "var(--border)" : "#cc9a56", color: "#1a1200", fontWeight: 900, fontSize: 14, cursor: editSlots.size === 0 ? "default" : "pointer", marginBottom: 10 }
+          style: { width: "100%", padding: 13, borderRadius: 10, border: "none", background: editSlots.size === 0 ? "var(--border)" : "#f5a623", color: "#1a1200", fontWeight: 900, fontSize: 14, cursor: editSlots.size === 0 ? "default" : "pointer", marginBottom: 10 }
         }, `儲存（已選 ${editSlots.size} 個時段）`)
       ),
       /*#__PURE__*/React.createElement("button", {
         onClick: clearDay, disabled: savingDay,
-        style: { width: "100%", padding: 12, borderRadius: 10, border: "1px solid #bd6f56", background: "none", color: "#bd6f56", fontWeight: 700, fontSize: 13, cursor: "pointer", marginBottom: 8 }
+        style: { width: "100%", padding: 12, borderRadius: 10, border: "1px solid #e94560", background: "none", color: "#e94560", fontWeight: 700, fontSize: 13, cursor: "pointer", marginBottom: 8 }
       }, "⚪ 設為不開放"),
       /*#__PURE__*/React.createElement("button", {
         onClick: () => setEditDate(null),
@@ -3630,7 +3618,7 @@ function App() {
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      background: "#1c1815",
+      background: "#0d1117",
       color: "#666",
       fontSize: 14
     }
@@ -4041,13 +4029,13 @@ function MainApp({
       if (start.isRemoving) {
         if (cell.dataset.vac === "1") {
           dragBufferRef.current.add(k);
-          cell.style.background = "rgba(204,154,86,0.45)";
+          cell.style.background = "rgba(245,166,35,0.45)";
           dragDOMRef.current.push(cell);
         }
       } else {
         if (cell.dataset.empty === "1") {
           dragBufferRef.current.add(k);
-          cell.style.background = "rgba(143,122,158,0.45)";
+          cell.style.background = "rgba(162,155,254,0.45)";
           dragDOMRef.current.push(cell);
         }
       }
@@ -4075,7 +4063,7 @@ function MainApp({
       };
       // 立刻處理第一格
       dragBufferRef.current.add(k);
-      cell.style.background = isRemoving ? "rgba(204,154,86,0.45)" : "rgba(143,122,158,0.45)";
+      cell.style.background = isRemoving ? "rgba(245,166,35,0.45)" : "rgba(162,155,254,0.45)";
       dragDOMRef.current.push(cell);
       e.preventDefault();
     };
@@ -4300,7 +4288,7 @@ function MainApp({
   const canDelete = isAdmin || master.can_delete;
   const canViewOthers = isAdmin || (loginMaster || master).can_view_others;
   const canViewCRM = isAdmin || (loginMaster || master).can_view_crm;
-  const reserveColor = master.reserve_color || "#8f7a9e";
+  const reserveColor = master.reserve_color || "#a29bfe";
   const msg = (m, err) => {
     setToast({
       m,
@@ -4910,7 +4898,7 @@ function MainApp({
       transform: "translate(-50%,-130%)",
       pointerEvents: "none",
       zIndex: "9999",
-      background: "#7f97a8",
+      background: "#74b9ff",
       border: "2px solid #fff",
       borderRadius: "8px",
       padding: "5px 12px",
@@ -4966,7 +4954,7 @@ function MainApp({
       });
       if (td) {
         td.classList.add("drag-over-active");
-        td.style.outline = "2px solid #7f97a8";
+        td.style.outline = "2px solid #74b9ff";
       }
       return;
     }
@@ -5239,7 +5227,7 @@ function MainApp({
           const targetRect = target.getBoundingClientRect();
           const deltaTop = targetRect.top - containerRect.top - containerRect.height / 2 + targetRect.height / 2;
           container.scrollTo({ top: container.scrollTop + deltaTop, behavior: "smooth" });
-          target.style.outline = "2px solid #6fa88a";
+          target.style.outline = "2px solid #2ed9c3";
           setTimeout(() => { target.style.outline = ""; }, 2500);
           setTimeout(() => {
             if (container) container.style.scrollSnapType = prevSnap;
@@ -5524,12 +5512,12 @@ function MainApp({
         width: cw,
         minWidth: cw,
         maxWidth: cw,
-        background: isDragSel ? "rgba(143,122,158,0.4)" : isR && !b ? "var(--bg-rest)" : "var(--bg-main)",
+        background: isDragSel ? "rgba(162,155,254,0.4)" : isR && !b ? "var(--bg-rest)" : "var(--bg-main)",
         cursor: !b && d || dragMode && isVac ? "pointer" : "default",
         verticalAlign: "middle",
         userSelect: "none",
         touchAction: dragMode ? "none" : isDragActive ? "none" : "auto",
-        outline: dragMode && isVac && removeVacCells.has(cellKey) ? "2px dashed #cc9a56" : b && b.status === "awaiting_customer" ? "2px solid #cc9a56" : "none",
+        outline: dragMode && isVac && removeVacCells.has(cellKey) ? "2px dashed #f5a623" : b && b.status === "awaiting_customer" ? "2px solid #f5a623" : "none",
         outlineOffset: dragMode && isVac && removeVacCells.has(cellKey) || b && b.status === "awaiting_customer" ? -2 : 0
       }
     }, b && b.guest_count > 0 && !isVac && /*#__PURE__*/React.createElement("div", {
@@ -5580,7 +5568,7 @@ function MainApp({
     }, /*#__PURE__*/React.createElement("span", {
       style: {
         fontSize: FS.n - 1,
-        color: b.color_tag === "new_customer" ? "#d4a666" : b.color_tag === "reserved" ? "#6fa8a3" : "var(--text-main)",
+        color: b.color_tag === "new_customer" ? "#f5c842" : b.color_tag === "reserved" ? "#22d3ee" : "var(--text-main)",
         fontWeight: b.color_tag === "new_customer" ? 900 : 700,
         overflow: "hidden",
         whiteSpace: "nowrap",
@@ -5594,14 +5582,14 @@ function MainApp({
       style: {
         fontSize: FS.s - 1,
         marginRight: 2,
-        color: "#bd6f56"
+        color: "#e94560"
       }
     }, "❌"), b.status === "awaiting_customer" && /*#__PURE__*/React.createElement("span", {
       title: "待客人確認",
       style: {
         fontSize: FS.s - 1,
         marginRight: 2,
-        color: "#cc9a56"
+        color: "#f5a623"
       }
     }, "⏳"), b.color_tag === "new_customer" && /*#__PURE__*/React.createElement("span", {
       style: {
@@ -5624,7 +5612,7 @@ function MainApp({
         fontSize: FS.s,
         fontWeight: 700,
         textAlign: "center",
-        color: dragMode && removeVacCells.has(cellKey) ? "#cc9a56" : "#bd6f56",
+        color: dragMode && removeVacCells.has(cellKey) ? "#f5a623" : "#e94560",
         textDecoration: dragMode && removeVacCells.has(cellKey) ? "line-through" : "none",
         pointerEvents: "none"
       }
@@ -5646,7 +5634,7 @@ function MainApp({
       top: 12,
       left: "50%",
       transform: "translateX(-50%)",
-      background: toast.err ? "#bd6f56" : "#6fa183",
+      background: toast.err ? "#e94560" : "#00b894",
       color: "#fff",
       padding: "7px 18px",
       borderRadius: 20,
@@ -5681,9 +5669,9 @@ function MainApp({
       width: 40,
       height: 40,
       borderRadius: "50%",
-      border: "2px solid #6fa88a",
+      border: "2px solid #2ed9c3",
       background: "rgba(0,0,0,.7)",
-      color: "#6fa88a",
+      color: "#2ed9c3",
       fontSize: 16,
       cursor: "pointer"
     },
@@ -5708,7 +5696,7 @@ function MainApp({
       gap: 6
     }
   }, /*#__PURE__*/React.createElement("div", {
-    className: "store-name-label serif-display",
+    className: "store-name-label",
     style: {
       fontWeight: 800,
       fontSize: 13,
@@ -5797,8 +5785,8 @@ function MainApp({
     onClick: () => setShowDisplaySettings(v => !v),
     title: "顯示設定（字體、欄寬、列高）",
     style: {
-      background: showDisplaySettings ? "#7f97a822" : "var(--nav-bg)",
-      border: `1px solid ${showDisplaySettings ? "#7f97a8" : "var(--border2)"}`,
+      background: showDisplaySettings ? "#74b9ff22" : "var(--nav-bg)",
+      border: `1px solid ${showDisplaySettings ? "#74b9ff" : "var(--border2)"}`,
       borderRadius: 5,
       width: 28,
       height: 28,
@@ -5810,16 +5798,16 @@ function MainApp({
       fontWeight: 700,
       flexShrink: 0,
       padding: 0,
-      color: showDisplaySettings ? "#7f97a8" : "var(--nav-color)"
+      color: showDisplaySettings ? "#74b9ff" : "var(--nav-color)"
     }
   }, "Aa"), /*#__PURE__*/React.createElement("button", {
     onClick: () => window.open("./quick-booking.html", "_blank"),
     title: "快速登記預約",
     "aria-label": "快速登記預約",
     style: {
-      background: "#6fa88a20",
-      border: "1px solid #6fa88a",
-      color: "#6fa88a",
+      background: "#2ed9c320",
+      border: "1px solid #2ed9c3",
+      color: "#2ed9c3",
       cursor: "pointer",
       fontSize: 13,
       width: 28,
@@ -5849,7 +5837,7 @@ function MainApp({
     style: {
       background: "none",
       border: "none",
-      color: "#bd6f56",
+      color: "#e94560",
       cursor: "pointer",
       fontSize: 12,
       padding: 0,
@@ -5890,9 +5878,9 @@ function MainApp({
       flex: 1,
       padding: "6px 0",
       borderRadius: 5,
-      border: `1px solid ${fontSize === k ? "#bd6f56" : "var(--border2)"}`,
-      background: fontSize === k ? "#bd6f5622" : "transparent",
-      color: fontSize === k ? "#bd6f56" : "var(--nav-color)",
+      border: `1px solid ${fontSize === k ? "#e94560" : "var(--border2)"}`,
+      background: fontSize === k ? "#e9456022" : "transparent",
+      color: fontSize === k ? "#e94560" : "var(--nav-color)",
       fontSize: 12,
       fontWeight: 700,
       cursor: "pointer"
@@ -5920,12 +5908,12 @@ function MainApp({
     style: {
       flex: 1,
       cursor: "pointer",
-      accentColor: "#7f97a8"
+      accentColor: "#74b9ff"
     }
   }), /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 11,
-      color: "#7f97a8",
+      color: "#74b9ff",
       minWidth: 24,
       fontWeight: 700,
       textAlign: "right"
@@ -5945,12 +5933,12 @@ function MainApp({
     style: {
       flex: 1,
       cursor: "pointer",
-      accentColor: "#6fa183"
+      accentColor: "#00b894"
     }
   }), /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 11,
-      color: "#6fa183",
+      color: "#00b894",
       minWidth: 24,
       fontWeight: 700,
       textAlign: "right"
@@ -5989,7 +5977,7 @@ function MainApp({
       height: 16,
       padding: "0 3px",
       borderRadius: 8,
-      background: "#bd6f56",
+      background: "#e94560",
       color: "#fff",
       fontSize: 10,
       fontWeight: 800,
@@ -6043,8 +6031,8 @@ function MainApp({
     },
     className: "nb",
     style: {
-      color: "#6fa183",
-      borderColor: "#6fa183",
+      color: "#00b894",
+      borderColor: "#00b894",
       fontWeight: 700
     }
   }, "📍當日"), /*#__PURE__*/React.createElement("button", {
@@ -6054,8 +6042,8 @@ function MainApp({
     },
     className: "nb",
     style: {
-      color: showSlots && slotDate === "pick" ? "#6fa183" : "var(--nav-color)",
-      borderColor: showSlots && slotDate === "pick" ? "#6fa183" : "var(--border2)"
+      color: showSlots && slotDate === "pick" ? "#00b894" : "var(--nav-color)",
+      borderColor: showSlots && slotDate === "pick" ? "#00b894" : "var(--border2)"
     }
   }, "⚡ 選日"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
@@ -6069,8 +6057,8 @@ function MainApp({
     },
     className: "nb",
     style: {
-      color: showSearch ? "#7f97a8" : "var(--nav-color)",
-      borderColor: showSearch ? "#7f97a8" : "var(--border2)"
+      color: showSearch ? "#74b9ff" : "var(--nav-color)",
+      borderColor: showSearch ? "#74b9ff" : "var(--border2)"
     }
   }, "🔍 搜尋"), /*#__PURE__*/React.createElement("button", {
     onClick: findNearestOpenSlot,
@@ -6078,8 +6066,8 @@ function MainApp({
     className: "nb",
     title: "最近空檔",
     style: {
-      color: "#6fa88a",
-      borderColor: "#6fa88a",
+      color: "#2ed9c3",
+      borderColor: "#2ed9c3",
       fontWeight: 700
     }
   }, findingSlot ? "查詢中" : "⚡ 空檔"), undoStack.length > 0 ? /*#__PURE__*/React.createElement("button", {
@@ -6087,8 +6075,8 @@ function MainApp({
     className: "nb",
     title: `還原：${undoStack[0]?.desc || ""}`,
     style: {
-      color: "#8f7a9e",
-      borderColor: "#8f7a9e",
+      color: "#a29bfe",
+      borderColor: "#a29bfe",
       fontWeight: 700,
       fontSize: 12
     }
@@ -6116,8 +6104,8 @@ function MainApp({
     className: "nb",
     title: showSun === "1" ? "點一下隱藏週日欄位" : "點一下顯示週日欄位",
     style: {
-      color: showSun === "1" ? "#8f7a9e" : "var(--nav-color)",
-      borderColor: showSun === "1" ? "#8f7a9e" : "var(--border2)"
+      color: showSun === "1" ? "#a29bfe" : "var(--nav-color)",
+      borderColor: showSun === "1" ? "#a29bfe" : "var(--border2)"
     }
   }, showSun === "1" ? "🙈 週日" : "👁 週日"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
@@ -6127,8 +6115,8 @@ function MainApp({
     },
     className: "nb",
     style: {
-      color: dragMode ? "#bd6f56" : "var(--nav-color)",
-      borderColor: dragMode ? "#bd6f56" : "var(--border2)",
+      color: dragMode ? "#e94560" : "var(--nav-color)",
+      borderColor: dragMode ? "#e94560" : "var(--border2)",
       fontWeight: dragMode ? 700 : 400
     }
   }, "🔴 ", dragMode ? "退出" : "休假"), /*#__PURE__*/React.createElement("button", {
@@ -6138,8 +6126,8 @@ function MainApp({
     },
     className: "nb",
     style: {
-      color: moveMode ? "#8f7a9e" : "var(--nav-color)",
-      borderColor: moveMode ? "#8f7a9e" : "var(--border2)",
+      color: moveMode ? "#a29bfe" : "var(--nav-color)",
+      borderColor: moveMode ? "#a29bfe" : "var(--border2)",
       fontWeight: moveMode ? 700 : 400
     }
   }, "🔀 ", moveMode ? "退出" : "移動"), /*#__PURE__*/React.createElement("button", {
@@ -6147,8 +6135,8 @@ function MainApp({
     className: "nb",
     style: {
       color: "#fff",
-      background: "#bd6f56",
-      borderColor: "#bd6f56",
+      background: "#e94560",
+      borderColor: "#e94560",
       fontWeight: 700
     }
   }, "＋ 新增"))), showSearch && /*#__PURE__*/React.createElement("div", {
@@ -6188,7 +6176,7 @@ function MainApp({
     style: {
       padding: "0 14px",
       height: 30,
-      background: "#7f97a8",
+      background: "#74b9ff",
       border: "none",
       borderRadius: 6,
       color: "#fff",
@@ -6238,7 +6226,7 @@ function MainApp({
       justifyContent: "space-between",
       alignItems: "center"
     },
-    onMouseEnter: e => e.currentTarget.style.background = "rgba(127,151,168,0.08)",
+    onMouseEnter: e => e.currentTarget.style.background = "rgba(116,185,255,0.08)",
     onMouseLeave: e => e.currentTarget.style.background = "transparent"
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -6259,7 +6247,7 @@ function MainApp({
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12,
-      color: "#7f97a8",
+      color: "#74b9ff",
       fontWeight: 700
     }
   }, b.date), /*#__PURE__*/React.createElement("div", {
@@ -6326,7 +6314,7 @@ function MainApp({
     return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: FS.s,
-        color: "#6fa183",
+        color: "#00b894",
         marginBottom: 4
       }
     }, master.name, " ", m + 1, "/", d, " 空檔 ", slots.length, " 格"), /*#__PURE__*/React.createElement("div", {
@@ -6344,9 +6332,9 @@ function MainApp({
       },
       style: {
         padding: "2px 7px",
-        background: "#6fa18315",
-        border: "1px solid #6fa18340",
-        color: "#6fa183",
+        background: "#00b89415",
+        border: "1px solid #00b89440",
+        color: "#00b894",
         borderRadius: 4,
         fontSize: 10,
         cursor: "pointer"
@@ -6355,7 +6343,7 @@ function MainApp({
   })(), (!slotDate || slotDate === null) && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: FS.s,
-      color: "#6fa183",
+      color: "#00b894",
       marginBottom: 4
     }
   }, master.name, " 今日空檔 ", todaySlots.length, " 格"), /*#__PURE__*/React.createElement("div", {
@@ -6372,20 +6360,20 @@ function MainApp({
     },
     style: {
       padding: "2px 7px",
-      background: "#6fa18315",
-      border: "1px solid #6fa18340",
-      color: "#6fa183",
+      background: "#00b89415",
+      border: "1px solid #00b89440",
+      color: "#00b894",
       borderRadius: 4,
       fontSize: 10,
       cursor: "pointer"
     }
   }, t))))), dragMode && /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "rgba(189,111,86,0.12)",
-      borderBottom: "1px solid #bd6f56",
+      background: "rgba(233,69,96,0.12)",
+      borderBottom: "1px solid #e94560",
       padding: "6px 12px",
       fontSize: 11,
-      color: "#bd6f56",
+      color: "#e94560",
       display: "flex",
       justifyContent: "space-between",
       alignItems: "center",
@@ -6404,7 +6392,7 @@ function MainApp({
     }
   }, "\u3000", dragCells.size > 0 && `新增 ${dragCells.size}`, dragCells.size > 0 && removeVacCells.size > 0 && "｜", removeVacCells.size > 0 && /*#__PURE__*/React.createElement("span", {
     style: {
-      color: "#cc9a56"
+      color: "#f5a623"
     }
   }, "取消 ", removeVacCells.size)) : "— 拖曳經過即加選/點時間整列/點日期整欄"), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -6458,7 +6446,7 @@ function MainApp({
       padding: "3px 12px",
       borderRadius: 6,
       border: "none",
-      background: dragCells.size > 0 || removeVacCells.size > 0 ? "#bd6f56" : "#444",
+      background: dragCells.size > 0 || removeVacCells.size > 0 ? "#e94560" : "#444",
       color: "#fff",
       fontSize: 11,
       fontWeight: 700,
@@ -6467,11 +6455,11 @@ function MainApp({
     }
   }, "✓ 確認"))), isDragging && !dragMode && /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "rgba(189,111,86,0.12)",
-      borderBottom: "1px solid #bd6f56",
+      background: "rgba(233,69,96,0.12)",
+      borderBottom: "1px solid #e94560",
       padding: "4px 12px",
       fontSize: 11,
-      color: "#bd6f56",
+      color: "#e94560",
       display: "flex",
       justifyContent: "space-between",
       flexShrink: 0
@@ -6631,13 +6619,13 @@ function MainApp({
       ...thDay(FS.t, cw),
       width: cw,
       maxWidth: cw,
-      color: d === "日" ? "#bd6f56" : "var(--text-muted)"
+      color: d === "日" ? "#e94560" : "var(--text-muted)"
     }
   }, "週", d)) : (weeksLocal[weekIdx] || []).map((d, i) => /*#__PURE__*/React.createElement("th", {
     key: i,
     style: {
       ...thDay(FS.t, cw),
-      color: d === today.getDate() && month === today.getMonth() && year === today.getFullYear() ? "#bd6f56" : ACTIVE_DAYS[i] === "日" ? "rgba(189,111,86,0.7)" : "var(--text-muted)"
+      color: d === today.getDate() && month === today.getMonth() && year === today.getFullYear() ? "#e94560" : ACTIVE_DAYS[i] === "日" ? "rgba(233,69,96,0.7)" : "var(--text-muted)"
     }
   }, d ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", null, "週", ACTIVE_DAYS[i]), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -6668,8 +6656,8 @@ function MainApp({
           borderBottom: "1px solid var(--border)",
           borderRight: "1px solid var(--border)",
           borderTop: "1px solid var(--border-week)",
-          background: dragMode ? "rgba(189,111,86,0.06)" : "var(--bg-week)",
-          color: isT ? "#bd6f56" : isSun ? "rgba(189,111,86,0.7)" : "var(--text-muted)",
+          background: dragMode ? "rgba(233,69,96,0.06)" : "var(--bg-week)",
+          color: isT ? "#e94560" : isSun ? "rgba(233,69,96,0.7)" : "var(--text-muted)",
           width: cw,
           minWidth: cw,
           maxWidth: cw
@@ -6783,7 +6771,7 @@ function MainApp({
         ...thTime(FS.t, false, cw),
         borderBottom: "1px solid var(--border)",
         cursor: dragMode ? "pointer" : "default",
-        background: dragMode ? "rgba(189,111,86,0.06)" : "var(--bg-header)"
+        background: dragMode ? "rgba(233,69,96,0.06)" : "var(--bg-header)"
       }
     }, t), wk.map((d, i) => renderCell(d, t, bk(d, t), i)))), /*#__PURE__*/React.createElement("tr", {
       style: {
@@ -6821,7 +6809,7 @@ function MainApp({
       }, t), n > 0 && /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: FS.s - 1,
-          color: "#d4a666",
+          color: "#f5c842",
           fontWeight: 900
         }
       }, "★", n)) : d ? /*#__PURE__*/React.createElement("div", {
@@ -6875,8 +6863,8 @@ function MainApp({
     }
   })))))), clipBoard && /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "rgba(111,161,131,0.15)",
-      borderTop: "2px solid #6fa183",
+      background: "rgba(0,184,148,0.15)",
+      borderTop: "2px solid #00b894",
       padding: "5px 12px",
       display: "flex",
       alignItems: "center",
@@ -6886,7 +6874,7 @@ function MainApp({
   }, /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 12,
-      color: "#6fa183",
+      color: "#00b894",
       fontWeight: 700
     }
   }, "📌 已暫存：", displayName(clipBoard.customer_name)), /*#__PURE__*/React.createElement("span", {
@@ -6899,8 +6887,8 @@ function MainApp({
     style: {
       marginLeft: "auto",
       background: "transparent",
-      border: "1px solid #6fa18360",
-      color: "#6fa183",
+      border: "1px solid #00b89460",
+      color: "#00b894",
       borderRadius: 5,
       padding: "2px 8px",
       fontSize: 11,
@@ -6924,25 +6912,25 @@ function MainApp({
   }, "📊 ", year, "/", month + 1), /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: FS.b,
-      color: "#7f97a8",
+      color: "#74b9ff",
       fontWeight: 700
     }
   }, "共 ", mT, " 人"), /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: FS.b,
-      color: "#cc9a56",
+      color: "#f5a623",
       fontWeight: 700
     }
   }, "新客 ", mN), /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: FS.b,
-      color: "#6fa183",
+      color: "#00b894",
       fontWeight: 700
     }
   }, "回頭 ", mT - mN), dragMode && /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: FS.s,
-      color: "#bd6f56",
+      color: "#e94560",
       marginLeft: "auto",
       cursor: "pointer"
     },
@@ -6953,9 +6941,9 @@ function MainApp({
       marginLeft: "auto",
       padding: "3px 10px",
       borderRadius: 8,
-      border: `1px solid ${showOwnerPanel ? "#7f97a8" : "var(--border2)"}`,
-      background: showOwnerPanel ? "rgba(127,151,168,0.12)" : "transparent",
-      color: showOwnerPanel ? "#7f97a8" : "var(--text-dim)",
+      border: `1px solid ${showOwnerPanel ? "#74b9ff" : "var(--border2)"}`,
+      background: showOwnerPanel ? "rgba(116,185,255,0.12)" : "transparent",
+      color: showOwnerPanel ? "#74b9ff" : "var(--text-dim)",
       fontSize: 11,
       cursor: "pointer",
       fontWeight: 700
@@ -7123,7 +7111,7 @@ function MainApp({
       flex: 1,
       padding: 10,
       borderRadius: 8,
-      background: "#bd6f56",
+      background: "#e94560",
       border: "none",
       color: "#fff",
       fontWeight: 700,
@@ -7192,8 +7180,8 @@ function MainApp({
       value: t,
       disabled: !!taken,
       style: {
-        color: taken ? "#bd6f56" : "inherit",
-        background: taken ? "#bd6f5620" : "inherit"
+        color: taken ? "#e94560" : "inherit",
+        background: taken ? "#e9456020" : "inherit"
       }
     }, t, taken ? ` ✕已佔（${taken.customer_name || ''}）` : "");
   })), /*#__PURE__*/React.createElement("select", {
@@ -7233,7 +7221,7 @@ function MainApp({
     },
     style: {
       fontSize: 11,
-      color: "#8f7a9e",
+      color: "#a29bfe",
       cursor: "pointer",
       userSelect: "none"
     }
@@ -7283,14 +7271,14 @@ function MainApp({
     style: {
       width: "100%",
       background: COLOR_NO_INPUT.has(form.color) && !form.input.trim() ? `${{
-        "reserved": "rgba(111,168,163,0.10)",
-        "custom": "rgba(143,122,158,0.10)",
-        "vacation": "rgba(189,111,86,0.10)"
+        "reserved": "rgba(34,211,238,0.10)",
+        "custom": "rgba(162,155,254,0.10)",
+        "vacation": "rgba(233,69,96,0.10)"
       }[form.color] || "var(--input-bg)"}` : "var(--input-bg)",
       border: `1px solid ${COLOR_NO_INPUT.has(form.color) && !form.input.trim() ? {
-        "reserved": "#6fa8a388",
-        "custom": "#8f7a9e88",
-        "vacation": "#bd6f5688"
+        "reserved": "#22d3ee88",
+        "custom": "#a29bfe88",
+        "vacation": "#e9456088"
       }[form.color] || "var(--border2)" : "var(--border2)"}`,
       borderRadius: 8,
       padding: "8px 11px",
@@ -7338,9 +7326,9 @@ function MainApp({
         justifyContent: "space-between",
         alignItems: "center",
         borderBottom: i < acSug.length - 1 ? "1px solid var(--border)" : "none",
-        borderLeft: `3px solid ${isOwn ? "#6fa183" : hasDiffMaster ? "#cc9a56" : "transparent"}`
+        borderLeft: `3px solid ${isOwn ? "#00b894" : hasDiffMaster ? "#f5a623" : "transparent"}`
       },
-      onMouseEnter: e => e.currentTarget.style.background = "rgba(127,151,168,0.1)",
+      onMouseEnter: e => e.currentTarget.style.background = "rgba(116,185,255,0.1)",
       onMouseLeave: e => e.currentTarget.style.background = "transparent"
     }, /*#__PURE__*/React.createElement("div", {
       style: {
@@ -7364,8 +7352,8 @@ function MainApp({
       style: {
         fontSize: 11,
         fontWeight: 700,
-        color: isOwn ? "#6fa183" : "#cc9a56",
-        background: isOwn ? "rgba(111,161,131,0.15)" : "rgba(204,154,86,0.15)",
+        color: isOwn ? "#00b894" : "#f5a623",
+        background: isOwn ? "rgba(0,184,148,0.15)" : "rgba(245,166,35,0.15)",
         borderRadius: 5,
         padding: "1px 6px",
         display: "flex",
@@ -7375,7 +7363,7 @@ function MainApp({
     }, isOwn ? "👤" : "🔁", c._masterName, "師傅"), hasDiffMaster && /*#__PURE__*/React.createElement("span", {
       style: {
         fontSize: 10,
-        color: "#cc9a56",
+        color: "#f5a623",
         opacity: 0.8
       }
     }, "→ 自動切換")), c.phone && /*#__PURE__*/React.createElement("span", {
@@ -7387,7 +7375,7 @@ function MainApp({
     }, c.phone)), hasDiffMaster && /*#__PURE__*/React.createElement("span", {
       style: {
         fontSize: 10,
-        color: "#cc9a56",
+        color: "#f5a623",
         flexShrink: 0,
         marginLeft: 4
       }
@@ -7400,7 +7388,7 @@ function MainApp({
     return phone ? /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 10,
-        color: "#6fa183",
+        color: "#00b894",
         marginTop: 3
       }
     }, "✓ ", name, "\u3000", phone) : null;
@@ -7408,9 +7396,9 @@ function MainApp({
     style: {
       fontSize: 10,
       color: {
-        "reserved": "#6fa8a3",
-        "custom": "#8f7a9e",
-        "vacation": "#bd6f56"
+        "reserved": "#22d3ee",
+        "custom": "#a29bfe",
+        "vacation": "#e94560"
       }[form.color] || "var(--text-dim)",
       marginTop: 3
     }
@@ -7443,9 +7431,9 @@ function MainApp({
       flex: 1,
       padding: 6,
       borderRadius: 6,
-      border: `1px solid ${form.guests === n ? "#7f97a8" : "var(--border2)"}`,
-      background: form.guests === n ? "#7f97a822" : "transparent",
-      color: form.guests === n ? "#7f97a8" : "var(--text-muted)",
+      border: `1px solid ${form.guests === n ? "#74b9ff" : "var(--border2)"}`,
+      background: form.guests === n ? "#74b9ff22" : "transparent",
+      color: form.guests === n ? "#74b9ff" : "var(--text-muted)",
       fontSize: 14,
       fontWeight: 700,
       cursor: "pointer"
@@ -7454,7 +7442,7 @@ function MainApp({
     style: {
       marginBottom: 10,
       padding: 8,
-      background: "rgba(127,151,168,0.1)",
+      background: "rgba(116,185,255,0.1)",
       borderRadius: 8
     }
   }, /*#__PURE__*/React.createElement("label", {
@@ -7506,10 +7494,10 @@ function MainApp({
     const isSel = form.color === cc.key || (cc.key === "custom" && form.color === "reserved");
     const colorMap = {
       "none": "#888",
-      "new_customer": "#cc9a56",
-      "cui": "#c07a94",
-      "vacation": "#bd6f56",
-      "custom": "#8f7a9e"
+      "new_customer": "#f5a623",
+      "cui": "#ff4d94",
+      "vacation": "#e94560",
+      "custom": "#a29bfe"
     };
     const col = colorMap[cc.key] || "#888";
     return /*#__PURE__*/React.createElement("button", {
@@ -7539,7 +7527,7 @@ function MainApp({
       gap: 6,
       marginTop: 8,
       fontSize: 12,
-      color: form.isAftercare ? "#6fa88a" : "var(--text-muted)",
+      color: form.isAftercare ? "#00d09c" : "var(--text-muted)",
       fontWeight: form.isAftercare ? 700 : 400,
       cursor: "pointer"
     }
@@ -7551,14 +7539,14 @@ function MainApp({
     style: {
       marginBottom: 10,
       padding: 10,
-      background: form.recurType !== "none" ? "rgba(143,122,158,0.08)" : "transparent",
-      border: `1px solid ${form.recurType !== "none" ? "rgba(143,122,158,0.3)" : "transparent"}`,
+      background: form.recurType !== "none" ? "rgba(162,155,254,0.08)" : "transparent",
+      border: `1px solid ${form.recurType !== "none" ? "rgba(162,155,254,0.3)" : "transparent"}`,
       borderRadius: 8
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 11,
-      color: form.recurType !== "none" ? "#8f7a9e" : "var(--text-muted)",
+      color: form.recurType !== "none" ? "#a29bfe" : "var(--text-muted)",
       marginBottom: 6,
       fontWeight: 700
     }
@@ -7597,9 +7585,9 @@ function MainApp({
         flex: 1,
         padding: "6px 2px",
         borderRadius: 6,
-        border: `1px solid ${sel ? "#8f7a9e" : "var(--border2)"}`,
-        background: sel ? "rgba(143,122,158,0.2)" : "transparent",
-        color: sel ? "#8f7a9e" : "var(--text-muted)",
+        border: `1px solid ${sel ? "#a29bfe" : "var(--border2)"}`,
+        background: sel ? "rgba(162,155,254,0.2)" : "transparent",
+        color: sel ? "#a29bfe" : "var(--text-muted)",
         fontSize: 11,
         fontWeight: sel ? 800 : 500,
         cursor: "pointer"
@@ -7620,9 +7608,9 @@ function MainApp({
       flex: 1,
       padding: "5px 2px",
       borderRadius: 6,
-      border: `1px solid ${form.recurEndType === "date" ? "#8f7a9e" : "var(--border2)"}`,
-      background: form.recurEndType === "date" ? "rgba(143,122,158,0.15)" : "transparent",
-      color: form.recurEndType === "date" ? "#8f7a9e" : "var(--text-muted)",
+      border: `1px solid ${form.recurEndType === "date" ? "#a29bfe" : "var(--border2)"}`,
+      background: form.recurEndType === "date" ? "rgba(162,155,254,0.15)" : "transparent",
+      color: form.recurEndType === "date" ? "#a29bfe" : "var(--text-muted)",
       fontSize: 11,
       fontWeight: form.recurEndType === "date" ? 700 : 400,
       cursor: "pointer"
@@ -7636,9 +7624,9 @@ function MainApp({
       flex: 1,
       padding: "5px 2px",
       borderRadius: 6,
-      border: `1px solid ${form.recurEndType === "count" ? "#8f7a9e" : "var(--border2)"}`,
-      background: form.recurEndType === "count" ? "rgba(143,122,158,0.15)" : "transparent",
-      color: form.recurEndType === "count" ? "#8f7a9e" : "var(--text-muted)",
+      border: `1px solid ${form.recurEndType === "count" ? "#a29bfe" : "var(--border2)"}`,
+      background: form.recurEndType === "count" ? "rgba(162,155,254,0.15)" : "transparent",
+      color: form.recurEndType === "count" ? "#a29bfe" : "var(--text-muted)",
       fontSize: 11,
       fontWeight: form.recurEndType === "count" ? 700 : 400,
       cursor: "pointer"
@@ -7742,9 +7730,9 @@ function MainApp({
       flex: 1.5,
       padding: 10,
       borderRadius: 8,
-      border: "1px solid #7f97a8",
+      border: "1px solid #74b9ff",
       background: "transparent",
-      color: "#7f97a8",
+      color: "#74b9ff",
       cursor: "pointer"
     }
   }, "儲存並繼續"), /*#__PURE__*/React.createElement("button", {
@@ -7754,7 +7742,7 @@ function MainApp({
       flex: 1.5,
       padding: 10,
       borderRadius: 8,
-      background: (COLOR_NO_INPUT.has(form.color) || form.input.trim()) && !saving ? "#bd6f56" : "var(--border2)",
+      background: (COLOR_NO_INPUT.has(form.color) || form.input.trim()) && !saving ? "#e94560" : "var(--border2)",
       border: "none",
       color: (COLOR_NO_INPUT.has(form.color) || form.input.trim()) && !saving ? "#fff" : "var(--text-dim)",
       fontWeight: 700,
@@ -7855,9 +7843,9 @@ function MainApp({
     style: {
       padding: "3px 8px",
       borderRadius: 7,
-      border: "1px solid #7f97a8",
-      background: "rgba(127,151,168,0.1)",
-      color: "#7f97a8",
+      border: "1px solid #74b9ff",
+      background: "rgba(116,185,255,0.1)",
+      color: "#74b9ff",
       cursor: "pointer",
       fontSize: 12,
       fontWeight: 700,
@@ -7892,7 +7880,7 @@ function MainApp({
     }
   }, /*#__PURE__*/React.createElement("span", null, cpMode.booking.last_edited_by ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
     style: {
-      color: "#7f97a8",
+      color: "#74b9ff",
       fontWeight: 700
     }
   }, cpMode.booking.last_edited_by), " · ", cpMode.booking.last_edited_at ? new Date(cpMode.booking.last_edited_at).toLocaleString("zh-TW", {
@@ -7904,7 +7892,7 @@ function MainApp({
   }) : "", "  編輯") : /*#__PURE__*/React.createElement("span", null, "尚未編輯過")), editLogs.length > 0 && /*#__PURE__*/React.createElement("span", {
     onClick: () => setShowEditLogs(p => !p),
     style: {
-      color: "#8f7a9e",
+      color: "#a29bfe",
       cursor: "pointer",
       fontSize: 11,
       fontWeight: 700
@@ -7930,7 +7918,7 @@ function MainApp({
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
-      color: "#7f97a8",
+      color: "#74b9ff",
       fontWeight: 700,
       flexShrink: 0
     }
@@ -7974,9 +7962,9 @@ function MainApp({
       width: "100%",
       padding: "10px",
       borderRadius: 10,
-      border: "1px solid #8f7a9e",
-      background: "rgba(143,122,158,0.1)",
-      color: "#8f7a9e",
+      border: "1px solid #a29bfe",
+      background: "rgba(162,155,254,0.1)",
+      color: "#a29bfe",
       fontSize: 13,
       fontWeight: 700,
       cursor: "pointer"
@@ -8043,7 +8031,7 @@ function MainApp({
       value: t,
       disabled: !!taken,
       style: {
-        color: taken ? "#bd6f56" : "inherit"
+        color: taken ? "#e94560" : "inherit"
       }
     }, t, taken ? ` ✕已佔（${taken.customer_name || ''}）` : "");
   }))), /*#__PURE__*/React.createElement("button", {
@@ -8053,7 +8041,7 @@ function MainApp({
       width: "100%",
       padding: "10px 16px",
       borderRadius: 10,
-      background: cpTarget.date && cpTarget.time ? "#8f7a9e" : "var(--border2)",
+      background: cpTarget.date && cpTarget.time ? "#a29bfe" : "var(--border2)",
       border: "none",
       color: cpTarget.date && cpTarget.time ? "#fff" : "var(--text-dim)",
       fontWeight: 700,
@@ -8096,9 +8084,9 @@ function MainApp({
     style: {
       padding: "13px 0",
       borderRadius: 12,
-      border: "1px solid #8f7a9e",
-      background: "rgba(143,122,158,0.1)",
-      color: "#8f7a9e",
+      border: "1px solid #a29bfe",
+      background: "rgba(162,155,254,0.1)",
+      color: "#a29bfe",
       cursor: "pointer",
       fontSize: 13,
       fontWeight: 700
@@ -8137,9 +8125,9 @@ function MainApp({
     style: {
       padding: "13px 0",
       borderRadius: 12,
-      border: "1px solid #7f97a8",
-      background: "rgba(127,151,168,0.1)",
-      color: "#7f97a8",
+      border: "1px solid #74b9ff",
+      background: "rgba(116,185,255,0.1)",
+      color: "#74b9ff",
       cursor: "pointer",
       fontSize: 13,
       fontWeight: 700
@@ -8159,9 +8147,9 @@ function MainApp({
     style: {
       padding: "14px 0",
       borderRadius: 12,
-      border: "2px solid #6fa183",
-      background: "rgba(111,161,131,0.12)",
-      color: "#6fa183",
+      border: "2px solid #00b894",
+      background: "rgba(0,184,148,0.12)",
+      color: "#00b894",
       cursor: "pointer",
       fontSize: 14,
       fontWeight: 800
@@ -8174,9 +8162,9 @@ function MainApp({
     style: {
       padding: "14px 0",
       borderRadius: 12,
-      border: "1px solid #bd6f56",
-      background: "rgba(189,111,86,0.1)",
-      color: "#bd6f56",
+      border: "1px solid #e94560",
+      background: "rgba(233,69,96,0.1)",
+      color: "#e94560",
       cursor: "pointer",
       fontSize: 14,
       fontWeight: 700
@@ -8208,7 +8196,7 @@ function MainApp({
       fontWeight: 700,
       fontSize: 15,
       marginBottom: 12,
-      color: "#7f97a8"
+      color: "#74b9ff"
     }
   }, "✏️ 編輯預約"), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -8314,9 +8302,9 @@ function MainApp({
       flex: 1,
       padding: 6,
       borderRadius: 6,
-      border: `1px solid ${editForm.guest_count === n ? "#7f97a8" : "var(--border2)"}`,
-      background: editForm.guest_count === n ? "#7f97a822" : "transparent",
-      color: editForm.guest_count === n ? "#7f97a8" : "var(--text-muted)",
+      border: `1px solid ${editForm.guest_count === n ? "#74b9ff" : "var(--border2)"}`,
+      background: editForm.guest_count === n ? "#74b9ff22" : "transparent",
+      color: editForm.guest_count === n ? "#74b9ff" : "var(--text-muted)",
       fontSize: 14,
       fontWeight: 700,
       cursor: "pointer"
@@ -8340,10 +8328,10 @@ function MainApp({
     const isSel = editForm.color_tag === cc.key || (cc.key === "custom" && editForm.color_tag === "reserved");
     const colorMap = {
       "none": "#888",
-      "new_customer": "#cc9a56",
-      "cui": "#c07a94",
-      "vacation": "#bd6f56",
-      "custom": "#8f7a9e"
+      "new_customer": "#f5a623",
+      "cui": "#ff4d94",
+      "vacation": "#e94560",
+      "custom": "#a29bfe"
     };
     const col = colorMap[cc.key] || "#888";
     return /*#__PURE__*/React.createElement("button", {
@@ -8373,7 +8361,7 @@ function MainApp({
       gap: 6,
       marginTop: 8,
       fontSize: 12,
-      color: editForm.isAftercare ? "#6fa88a" : "var(--text-muted)",
+      color: editForm.isAftercare ? "#00d09c" : "var(--text-muted)",
       fontWeight: editForm.isAftercare ? 700 : 400,
       cursor: "pointer"
     }
@@ -8407,9 +8395,9 @@ function MainApp({
       width: "100%",
       padding: 10,
       borderRadius: 8,
-      border: "1px solid #8f7a9e",
-      background: "rgba(143,122,158,0.1)",
-      color: "#8f7a9e",
+      border: "1px solid #a29bfe",
+      background: "rgba(162,155,254,0.1)",
+      color: "#a29bfe",
       fontSize: 13,
       fontWeight: 700,
       cursor: "pointer"
@@ -8472,7 +8460,7 @@ function MainApp({
       flex: 2,
       padding: 10,
       borderRadius: 8,
-      background: "#7f97a8",
+      background: "#74b9ff",
       border: "none",
       color: "#fff",
       fontSize: 13,
@@ -8494,7 +8482,7 @@ function MainApp({
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       background: "var(--bg-header)",
-      border: "1px solid #8f7a9e",
+      border: "1px solid #a29bfe",
       borderRadius: 16,
       padding: 18,
       width: "92%",
@@ -8509,7 +8497,7 @@ function MainApp({
       fontWeight: 800,
       fontSize: 16,
       marginBottom: 14,
-      color: "#8f7a9e"
+      color: "#a29bfe"
     }
   }, "🔁 套用到未來重複"), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -8527,7 +8515,7 @@ function MainApp({
     }
   }, extendRecur.booking.customer_name || "-"), " 在 ", /*#__PURE__*/React.createElement("span", {
     style: {
-      color: "#7f97a8"
+      color: "#74b9ff"
     }
   }, extendRecur.booking.date, " ", extendRecur.booking.start_time?.slice(0, 5)), " 為起點，建立未來重複預約（不影響原本這筆）"), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -8566,9 +8554,9 @@ function MainApp({
         flex: 1,
         padding: "8px 4px",
         borderRadius: 6,
-        border: `1px solid ${sel ? "#8f7a9e" : "var(--border2)"}`,
-        background: sel ? "rgba(143,122,158,0.2)" : "transparent",
-        color: sel ? "#8f7a9e" : "var(--text-muted)",
+        border: `1px solid ${sel ? "#a29bfe" : "var(--border2)"}`,
+        background: sel ? "rgba(162,155,254,0.2)" : "transparent",
+        color: sel ? "#a29bfe" : "var(--text-muted)",
         fontSize: 13,
         fontWeight: sel ? 800 : 500,
         cursor: "pointer"
@@ -8577,7 +8565,7 @@ function MainApp({
   })), extendRecur.recurType === "monthly" && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 10,
-      color: "#8f7a9e",
+      color: "#a29bfe",
       marginTop: 4
     }
   }, "📌 每月", describeMonthlyNth(extendRecur.booking.date))), /*#__PURE__*/React.createElement("div", {
@@ -8606,9 +8594,9 @@ function MainApp({
       flex: 1,
       padding: "6px 2px",
       borderRadius: 6,
-      border: `1px solid ${extendRecur.recurEndType === "date" ? "#8f7a9e" : "var(--border2)"}`,
-      background: extendRecur.recurEndType === "date" ? "rgba(143,122,158,0.15)" : "transparent",
-      color: extendRecur.recurEndType === "date" ? "#8f7a9e" : "var(--text-muted)",
+      border: `1px solid ${extendRecur.recurEndType === "date" ? "#a29bfe" : "var(--border2)"}`,
+      background: extendRecur.recurEndType === "date" ? "rgba(162,155,254,0.15)" : "transparent",
+      color: extendRecur.recurEndType === "date" ? "#a29bfe" : "var(--text-muted)",
       fontSize: 12,
       fontWeight: extendRecur.recurEndType === "date" ? 700 : 400,
       cursor: "pointer"
@@ -8622,9 +8610,9 @@ function MainApp({
       flex: 1,
       padding: "6px 2px",
       borderRadius: 6,
-      border: `1px solid ${extendRecur.recurEndType === "count" ? "#8f7a9e" : "var(--border2)"}`,
-      background: extendRecur.recurEndType === "count" ? "rgba(143,122,158,0.15)" : "transparent",
-      color: extendRecur.recurEndType === "count" ? "#8f7a9e" : "var(--text-muted)",
+      border: `1px solid ${extendRecur.recurEndType === "count" ? "#a29bfe" : "var(--border2)"}`,
+      background: extendRecur.recurEndType === "count" ? "rgba(162,155,254,0.15)" : "transparent",
+      color: extendRecur.recurEndType === "count" ? "#a29bfe" : "var(--text-muted)",
       fontSize: 12,
       fontWeight: extendRecur.recurEndType === "count" ? 700 : 400,
       cursor: "pointer"
@@ -8795,7 +8783,7 @@ function MainApp({
       flex: 2,
       padding: 11,
       borderRadius: 8,
-      background: "#8f7a9e",
+      background: "#a29bfe",
       border: "none",
       color: "#fff",
       fontSize: 13,
@@ -8912,7 +8900,7 @@ function CustomerOwnerPanel({
   };
   const dateStyle = {
     fontSize: 11,
-    color: "#7f97a8",
+    color: "#74b9ff",
     textAlign: "right",
     flexShrink: 0
   };
@@ -8962,14 +8950,14 @@ function CustomerOwnerPanel({
   }, "載入中..."), !loading && data && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "6px 12px 4px",
-      background: "rgba(111,161,131,0.08)",
+      background: "rgba(0,184,148,0.08)",
       borderBottom: "1px solid var(--border)"
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 11,
       fontWeight: 800,
-      color: "#6fa183"
+      color: "#00b894"
     }
   }, "✅ ", master.name, "師傅的客人\u3000", data.own.length, " 位")), data.own.length === 0 && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -8981,14 +8969,14 @@ function CustomerOwnerPanel({
     key: i,
     style: {
       ...rowStyle,
-      background: "rgba(111,161,131,0.04)"
+      background: "rgba(0,184,148,0.04)"
     }
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: nameStyle
   }, bookingDisplayName(b), b.color_tag === "new_customer" && /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 10,
-      color: "#cc9a56",
+      color: "#f5a623",
       marginLeft: 5
     }
   }, "★新客")), b.customer_phone && /*#__PURE__*/React.createElement("div", {
@@ -9003,7 +8991,7 @@ function CustomerOwnerPanel({
   }, b.start_time?.slice(0, 5))))), /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "6px 12px 4px",
-      background: "rgba(204,154,86,0.08)",
+      background: "rgba(245,166,35,0.08)",
       borderBottom: "1px solid var(--border)",
       borderTop: "2px solid var(--border2)"
     }
@@ -9011,7 +8999,7 @@ function CustomerOwnerPanel({
     style: {
       fontSize: 11,
       fontWeight: 800,
-      color: "#cc9a56"
+      color: "#f5a623"
     }
   }, "🔁 其他師傅的客人（本月轉入）\u3000", data.other.length, " 位")), data.other.length === 0 && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -9029,7 +9017,7 @@ function CustomerOwnerPanel({
   }, bookingDisplayName(b), b.color_tag === "new_customer" && /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 10,
-      color: "#cc9a56",
+      color: "#f5a623",
       marginLeft: 5
     }
   }, "★新客")), /*#__PURE__*/React.createElement("div", {
@@ -9044,8 +9032,8 @@ function CustomerOwnerPanel({
   }, b.customer_phone), /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 10,
-      color: "#cc9a56",
-      background: "rgba(204,154,86,0.15)",
+      color: "#f5a623",
+      background: "rgba(245,166,35,0.15)",
       borderRadius: 4,
       padding: "1px 5px",
       fontWeight: 700
@@ -9068,12 +9056,12 @@ function CustomerOwnerPanel({
 // bgH: 師傅名稱列的強調背景; bg: 空格淡底色
 const MASTER_TINTS = [{
   text: "var(--mt-0)",
-  bg: "rgba(127,151,168,0.05)",
-  bgH: "rgba(127,151,168,0.15)"
+  bg: "rgba(116,185,255,0.05)",
+  bgH: "rgba(116,185,255,0.15)"
 }, {
   text: "var(--mt-1)",
-  bg: "rgba(111,168,138,0.05)",
-  bgH: "rgba(111,168,138,0.15)"
+  bg: "rgba(46,217,195,0.05)",
+  bgH: "rgba(46,217,195,0.15)"
 }, {
   text: "var(--mt-2)",
   bg: "rgba(255,169,77,0.05)",
@@ -9752,7 +9740,7 @@ function OverviewMonth({
       transform: "translate(-50%,-130%)",
       pointerEvents: "none",
       zIndex: "9999",
-      background: "#8f7a9e",
+      background: "#a29bfe",
       border: "2px solid #fff",
       borderRadius: "8px",
       padding: "5px 12px",
@@ -9806,7 +9794,7 @@ function OverviewMonth({
       });
       if (td) {
         td.classList.add("ov-drag-over");
-        td.style.outline = "2px solid #8f7a9e";
+        td.style.outline = "2px solid #a29bfe";
       }
       return;
     }
@@ -10065,7 +10053,7 @@ function OverviewMonth({
       top: 12,
       left: "50%",
       transform: "translateX(-50%)",
-      background: toast.err ? "#bd6f56" : "#6fa183",
+      background: toast.err ? "#e94560" : "#00b894",
       color: "#fff",
       padding: "7px 18px",
       borderRadius: 20,
@@ -10125,9 +10113,9 @@ function OverviewMonth({
     style: {
       padding: "3px 10px",
       borderRadius: 16,
-      border: `1px solid ${ovMasters.includes(m.id) ? "#bd6f56" : "var(--border2)"}`,
-      background: ovMasters.includes(m.id) ? "#bd6f5622" : "transparent",
-      color: ovMasters.includes(m.id) ? "#bd6f56" : "var(--text-muted)",
+      border: `1px solid ${ovMasters.includes(m.id) ? "#e94560" : "var(--border2)"}`,
+      background: ovMasters.includes(m.id) ? "#e9456022" : "transparent",
+      color: ovMasters.includes(m.id) ? "#e94560" : "var(--text-muted)",
       fontSize: FS.s,
       cursor: "pointer"
     }
@@ -10150,8 +10138,8 @@ function OverviewMonth({
     className: "nb",
     title: `還原：${undoStack[0]?.desc || ""}`,
     style: {
-      color: "#8f7a9e",
-      borderColor: "#8f7a9e",
+      color: "#a29bfe",
+      borderColor: "#a29bfe",
       fontWeight: 700,
       marginRight: 4
     }
@@ -10176,8 +10164,8 @@ function OverviewMonth({
     },
     className: "nb",
     style: {
-      color: ovShowSlots ? "#6fa183" : "var(--nav-color)",
-      borderColor: ovShowSlots ? "#6fa183" : "var(--border2)"
+      color: ovShowSlots ? "#00b894" : "var(--nav-color)",
+      borderColor: ovShowSlots ? "#00b894" : "var(--border2)"
     }
   }, "⚡ 選日"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
@@ -10191,8 +10179,8 @@ function OverviewMonth({
     },
     className: "nb",
     style: {
-      color: ovShowSearch ? "#7f97a8" : "var(--nav-color)",
-      borderColor: ovShowSearch ? "#7f97a8" : "var(--border2)"
+      color: ovShowSearch ? "#74b9ff" : "var(--nav-color)",
+      borderColor: ovShowSearch ? "#74b9ff" : "var(--border2)"
     }
   }, "🔍 搜尋"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
@@ -10217,8 +10205,8 @@ function OverviewMonth({
     },
     className: "nb",
     style: {
-      color: "#6fa183",
-      borderColor: "#6fa183",
+      color: "#00b894",
+      borderColor: "#00b894",
       fontWeight: 700
     }
   }, "📍 當日"), /*#__PURE__*/React.createElement("button", {
@@ -10229,8 +10217,8 @@ function OverviewMonth({
     },
     className: "nb",
     style: {
-      color: ovDragMode ? "#bd6f56" : "var(--nav-color)",
-      borderColor: ovDragMode ? "#bd6f56" : "var(--border2)",
+      color: ovDragMode ? "#e94560" : "var(--nav-color)",
+      borderColor: ovDragMode ? "#e94560" : "var(--border2)",
       fontWeight: ovDragMode ? 700 : 400
     }
   }, "🔴 ", ovDragMode ? "退出" : "休假"), /*#__PURE__*/React.createElement("button", {
@@ -10240,8 +10228,8 @@ function OverviewMonth({
     },
     className: "nb",
     style: {
-      color: ovMoveMode ? "#8f7a9e" : "var(--nav-color)",
-      borderColor: ovMoveMode ? "#8f7a9e" : "var(--border2)",
+      color: ovMoveMode ? "#a29bfe" : "var(--nav-color)",
+      borderColor: ovMoveMode ? "#a29bfe" : "var(--border2)",
       fontWeight: ovMoveMode ? 700 : 400
     }
   }, "🔀 ", ovMoveMode ? "退出" : "移動"), /*#__PURE__*/React.createElement("button", {
@@ -10274,8 +10262,8 @@ function OverviewMonth({
     className: "nb",
     style: {
       color: "#fff",
-      background: "#bd6f56",
-      borderColor: "#bd6f56",
+      background: "#e94560",
+      borderColor: "#e94560",
       fontWeight: 700
     }
   }, "＋ 新增"), /*#__PURE__*/React.createElement("span", {
@@ -10292,12 +10280,12 @@ function OverviewMonth({
     style: {
       width: 50,
       cursor: "pointer",
-      accentColor: "#7f97a8"
+      accentColor: "#74b9ff"
     }
   }), /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 10,
-      color: "#7f97a8",
+      color: "#74b9ff",
       minWidth: 22,
       fontWeight: 700
     }
@@ -10316,12 +10304,12 @@ function OverviewMonth({
     style: {
       width: 42,
       cursor: "pointer",
-      accentColor: "#6fa183"
+      accentColor: "#00b894"
     }
   }), /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 10,
-      color: "#6fa183",
+      color: "#00b894",
       minWidth: 18,
       fontWeight: 700
     }
@@ -10359,7 +10347,7 @@ function OverviewMonth({
     onClick: () => ovDoSearch(ovSearchQ),
     style: {
       padding: "6px 14px",
-      background: "#7f97a8",
+      background: "#74b9ff",
       border: "none",
       borderRadius: 6,
       color: "#fff",
@@ -10401,7 +10389,7 @@ function OverviewMonth({
       justifyContent: "space-between",
       alignItems: "center"
     },
-    onMouseEnter: e => e.currentTarget.style.background = "rgba(127,151,168,0.08)",
+    onMouseEnter: e => e.currentTarget.style.background = "rgba(116,185,255,0.08)",
     onMouseLeave: e => e.currentTarget.style.background = "transparent"
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -10417,7 +10405,7 @@ function OverviewMonth({
     }
   }, b.customer_phone || parseInput(b.raw_input || b.customer_name || "").phone || "無電話", " · ", /*#__PURE__*/React.createElement("span", {
     style: {
-      color: "#8f7a9e"
+      color: "#a29bfe"
     }
   }, b._masterName || ""))), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -10426,7 +10414,7 @@ function OverviewMonth({
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12,
-      color: "#7f97a8",
+      color: "#74b9ff",
       fontWeight: 700
     }
   }, b.date), /*#__PURE__*/React.createElement("div", {
@@ -10493,7 +10481,7 @@ function OverviewMonth({
     }, /*#__PURE__*/React.createElement("span", {
       style: {
         fontSize: 11,
-        color: "#6fa183",
+        color: "#00b894",
         marginRight: 6,
         fontWeight: 700
       }
@@ -10530,9 +10518,9 @@ function OverviewMonth({
       },
       style: {
         padding: "2px 7px",
-        background: "#6fa18315",
-        border: "1px solid #6fa18340",
-        color: "#6fa183",
+        background: "#00b89415",
+        border: "1px solid #00b89440",
+        color: "#00b894",
         borderRadius: 4,
         fontSize: 10,
         cursor: "pointer"
@@ -10540,11 +10528,11 @@ function OverviewMonth({
     }, t))));
   })), ovDragMode && /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "rgba(189,111,86,0.12)",
-      borderBottom: "1px solid #bd6f56",
+      background: "rgba(233,69,96,0.12)",
+      borderBottom: "1px solid #e94560",
       padding: "6px 12px",
       fontSize: 11,
-      color: "#bd6f56",
+      color: "#e94560",
       display: "flex",
       justifyContent: "space-between",
       alignItems: "center",
@@ -10563,7 +10551,7 @@ function OverviewMonth({
     }
   }, "\u3000", ovDragCells.size > 0 && `新增 ${ovDragCells.size}`, ovDragCells.size > 0 && ovRemoveVacCells.size > 0 && "｜", ovRemoveVacCells.size > 0 && /*#__PURE__*/React.createElement("span", {
     style: {
-      color: "#cc9a56"
+      color: "#f5a623"
     }
   }, "取消 ", ovRemoveVacCells.size)) : "— 拖曳經過即加選/點時間整列/點日期整欄"), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -10617,7 +10605,7 @@ function OverviewMonth({
       padding: "3px 12px",
       borderRadius: 6,
       border: "none",
-      background: ovDragCells.size > 0 || ovRemoveVacCells.size > 0 ? "#bd6f56" : "#444",
+      background: ovDragCells.size > 0 || ovRemoveVacCells.size > 0 ? "#e94560" : "#444",
       color: "#fff",
       fontSize: 11,
       fontWeight: 700,
@@ -10626,11 +10614,11 @@ function OverviewMonth({
     }
   }, "✓ 確認"))), ovIsDraggingVac && !ovDragMode && /*#__PURE__*/React.createElement("div", {
     style: {
-      background: "rgba(189,111,86,0.12)",
-      borderBottom: "1px solid #bd6f56",
+      background: "rgba(233,69,96,0.12)",
+      borderBottom: "1px solid #e94560",
       padding: "4px 12px",
       fontSize: 11,
-      color: "#bd6f56",
+      color: "#e94560",
       display: "flex",
       justifyContent: "space-between",
       flexShrink: 0
@@ -10738,7 +10726,7 @@ function OverviewMonth({
       background: "var(--bg-header)",
       borderBottom: "1px solid var(--border)",
       borderRight: "1px solid var(--border)",
-      color: l === "日" ? "#bd6f56" : "var(--text-muted)",
+      color: l === "日" ? "#e94560" : "var(--text-muted)",
       fontSize: FS.t,
       fontWeight: 800,
       textAlign: "center",
@@ -10803,18 +10791,18 @@ function OverviewMonth({
           borderBottom: "1px solid var(--border)",
           borderRight: j === sel.length - 1 ? "2px solid var(--border2)" : "1px solid var(--border)",
           borderTop: "1px solid var(--border-week)",
-          background: isT ? "rgba(189,111,86,0.12)" : mt.bg
+          background: isT ? "rgba(233,69,96,0.12)" : mt.bg
         }
       }, d && j === 0 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: FS.s - 2,
-          color: isT ? "#bd6f56" : isSun ? "rgba(189,111,86,0.7)" : "var(--text-time)",
+          color: isT ? "#e94560" : isSun ? "rgba(233,69,96,0.7)" : "var(--text-time)",
           fontWeight: 700
         }
       }, "週", ALL_DAYS_OV[i]), /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: FS.s - 1,
-          color: isT ? "#bd6f56" : isSun ? "rgba(189,111,86,0.5)" : "var(--text-dim)"
+          color: isT ? "#e94560" : isSun ? "rgba(233,69,96,0.5)" : "var(--text-dim)"
         }
       }, mo + 1, "/", d)));
     }))), TIMES.map(t => /*#__PURE__*/React.createElement("tr", {
@@ -10916,8 +10904,8 @@ function OverviewMonth({
           height: orh,
           verticalAlign: "middle",
           overflow: "hidden",
-          background: b && b.status === "awaiting_customer" ? "rgba(204,154,86,0.22)" : b ? undefined : emptyBg,
-          outline: b && b.status === "awaiting_customer" ? "2px solid #cc9a56" : undefined,
+          background: b && b.status === "awaiting_customer" ? "rgba(245,166,35,0.22)" : b ? undefined : emptyBg,
+          outline: b && b.status === "awaiting_customer" ? "2px solid #f5a623" : undefined,
           outlineOffset: b && b.status === "awaiting_customer" ? -2 : 0,
           cursor: canAdd || b ? "pointer" : "default",
           touchAction: ovIsDragActive ? "none" : "auto"
@@ -10975,27 +10963,27 @@ function OverviewMonth({
         style: {
           fontSize: FS.s - 2,
           marginRight: 1,
-          color: "#bd6f56"
+          color: "#e94560"
         }
       }, "❌"), b.status === "awaiting_customer" && /*#__PURE__*/React.createElement("span", {
         title: "待客人確認",
         style: {
           fontSize: FS.s - 2,
           marginRight: 1,
-          color: "#cc9a56"
+          color: "#f5a623"
         }
       }, "⏳"), b.color_tag === "new_customer" && /*#__PURE__*/React.createElement("span", {
         style: {
           fontSize: FS.s - 2,
           marginRight: 1,
-          color: "#d4a666"
+          color: "#f5c842"
         }
       }, "★"), bookingDisplayName(b)), isVac && /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: FS.s,
           fontWeight: 800,
           textAlign: "center",
-          color: ovDragMode && ovRemoveVacCells.has(cellKey) ? "#cc9a56" : "#fff",
+          color: ovDragMode && ovRemoveVacCells.has(cellKey) ? "#f5a623" : "#fff",
           textDecoration: ovDragMode && ovRemoveVacCells.has(cellKey) ? "line-through" : "none"
         }
       }, ovDragMode && ovRemoveVacCells.has(cellKey) ? "取消" : "休"));
@@ -11034,7 +11022,7 @@ function OverviewMonth({
       }, t), n > 0 && /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: FS.s - 1,
-          color: "#d4a666",
+          color: "#f5c842",
           fontWeight: 900
         }
       }, "★", n)) : d ? /*#__PURE__*/React.createElement("div", {
@@ -11086,7 +11074,7 @@ function OverviewMonth({
       }, t || "—"), n > 0 && /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: FS.s - 2,
-          color: "#cc9a56"
+          color: "#f5a623"
         }
       }, "新", n));
     }))));
@@ -11185,7 +11173,7 @@ function OverviewMonth({
       flex: 1,
       padding: 10,
       borderRadius: 8,
-      background: "#bd6f56",
+      background: "#e94560",
       border: "none",
       color: "#fff",
       fontWeight: 700,
@@ -11256,8 +11244,8 @@ function OverviewMonth({
       value: t,
       disabled: !!taken,
       style: {
-        color: taken ? "#bd6f56" : "inherit",
-        background: taken ? "#bd6f5620" : "inherit"
+        color: taken ? "#e94560" : "inherit",
+        background: taken ? "#e9456020" : "inherit"
       }
     }, t, taken ? ` ✕已佔（${taken.customer_name || ''}）` : "");
   })), /*#__PURE__*/React.createElement("select", {
@@ -11299,7 +11287,7 @@ function OverviewMonth({
     },
     style: {
       fontSize: 11,
-      color: "#8f7a9e",
+      color: "#a29bfe",
       cursor: "pointer",
       userSelect: "none"
     }
@@ -11349,14 +11337,14 @@ function OverviewMonth({
     style: {
       width: "100%",
       background: COLOR_NO_INPUT.has(form.color) && !form.input.trim() ? {
-        "reserved": "rgba(111,168,163,0.10)",
-        "custom": "rgba(143,122,158,0.10)",
-        "vacation": "rgba(189,111,86,0.10)"
+        "reserved": "rgba(34,211,238,0.10)",
+        "custom": "rgba(162,155,254,0.10)",
+        "vacation": "rgba(233,69,96,0.10)"
       }[form.color] || "var(--input-bg)" : "var(--input-bg)",
       border: `1px solid ${COLOR_NO_INPUT.has(form.color) && !form.input.trim() ? {
-        "reserved": "#6fa8a388",
-        "custom": "#8f7a9e88",
-        "vacation": "#bd6f5688"
+        "reserved": "#22d3ee88",
+        "custom": "#a29bfe88",
+        "vacation": "#e9456088"
       }[form.color] || "var(--border2)" : "var(--border2)"}`,
       borderRadius: 8,
       padding: "8px 11px",
@@ -11403,9 +11391,9 @@ function OverviewMonth({
         justifyContent: "space-between",
         alignItems: "center",
         borderBottom: i < acSug.length - 1 ? "1px solid var(--border)" : "none",
-        borderLeft: `3px solid ${isOwn ? "#6fa183" : hasDiffMaster ? "#cc9a56" : "transparent"}`
+        borderLeft: `3px solid ${isOwn ? "#00b894" : hasDiffMaster ? "#f5a623" : "transparent"}`
       },
-      onMouseEnter: e => e.currentTarget.style.background = "rgba(127,151,168,0.1)",
+      onMouseEnter: e => e.currentTarget.style.background = "rgba(116,185,255,0.1)",
       onMouseLeave: e => e.currentTarget.style.background = "transparent"
     }, /*#__PURE__*/React.createElement("div", {
       style: {
@@ -11429,8 +11417,8 @@ function OverviewMonth({
       style: {
         fontSize: 11,
         fontWeight: 700,
-        color: isOwn ? "#6fa183" : "#cc9a56",
-        background: isOwn ? "rgba(111,161,131,0.15)" : "rgba(204,154,86,0.15)",
+        color: isOwn ? "#00b894" : "#f5a623",
+        background: isOwn ? "rgba(0,184,148,0.15)" : "rgba(245,166,35,0.15)",
         borderRadius: 5,
         padding: "1px 6px",
         display: "flex",
@@ -11440,7 +11428,7 @@ function OverviewMonth({
     }, isOwn ? "👤" : "🔁", c._masterName, "師傅"), hasDiffMaster && /*#__PURE__*/React.createElement("span", {
       style: {
         fontSize: 10,
-        color: "#cc9a56",
+        color: "#f5a623",
         opacity: 0.8
       }
     }, "→ 自動切換")), c.phone && /*#__PURE__*/React.createElement("span", {
@@ -11452,7 +11440,7 @@ function OverviewMonth({
     }, c.phone)), hasDiffMaster && /*#__PURE__*/React.createElement("span", {
       style: {
         fontSize: 10,
-        color: "#cc9a56",
+        color: "#f5a623",
         flexShrink: 0,
         marginLeft: 4
       }
@@ -11465,7 +11453,7 @@ function OverviewMonth({
     return phone ? /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 10,
-        color: "#6fa183",
+        color: "#00b894",
         marginTop: 3
       }
     }, "✓ ", name, "\u3000", phone) : null;
@@ -11473,9 +11461,9 @@ function OverviewMonth({
     style: {
       fontSize: 10,
       color: {
-        "reserved": "#6fa8a3",
-        "custom": "#8f7a9e",
-        "vacation": "#bd6f56"
+        "reserved": "#22d3ee",
+        "custom": "#a29bfe",
+        "vacation": "#e94560"
       }[form.color] || "var(--text-dim)",
       marginTop: 3
     }
@@ -11508,9 +11496,9 @@ function OverviewMonth({
       flex: 1,
       padding: 6,
       borderRadius: 6,
-      border: `1px solid ${form.guests === n ? "#7f97a8" : "var(--border2)"}`,
-      background: form.guests === n ? "#7f97a822" : "transparent",
-      color: form.guests === n ? "#7f97a8" : "var(--text-muted)",
+      border: `1px solid ${form.guests === n ? "#74b9ff" : "var(--border2)"}`,
+      background: form.guests === n ? "#74b9ff22" : "transparent",
+      color: form.guests === n ? "#74b9ff" : "var(--text-muted)",
       fontSize: 14,
       fontWeight: 700,
       cursor: "pointer"
@@ -11519,7 +11507,7 @@ function OverviewMonth({
     style: {
       marginBottom: 10,
       padding: 8,
-      background: "rgba(127,151,168,0.1)",
+      background: "rgba(116,185,255,0.1)",
       borderRadius: 8
     }
   }, /*#__PURE__*/React.createElement("label", {
@@ -11571,10 +11559,10 @@ function OverviewMonth({
     const isSel = form.color === cc.key || (cc.key === "custom" && form.color === "reserved");
     const colorMap = {
       "none": "#888",
-      "new_customer": "#cc9a56",
-      "cui": "#c07a94",
-      "vacation": "#bd6f56",
-      "custom": "#8f7a9e"
+      "new_customer": "#f5a623",
+      "cui": "#ff4d94",
+      "vacation": "#e94560",
+      "custom": "#a29bfe"
     };
     const col = colorMap[cc.key] || "#888";
     return /*#__PURE__*/React.createElement("button", {
@@ -11604,7 +11592,7 @@ function OverviewMonth({
       gap: 6,
       marginTop: 8,
       fontSize: 12,
-      color: form.isAftercare ? "#6fa88a" : "var(--text-muted)",
+      color: form.isAftercare ? "#00d09c" : "var(--text-muted)",
       fontWeight: form.isAftercare ? 700 : 400,
       cursor: "pointer"
     }
@@ -11616,14 +11604,14 @@ function OverviewMonth({
     style: {
       marginBottom: 10,
       padding: 10,
-      background: form.recurType !== "none" ? "rgba(143,122,158,0.08)" : "transparent",
-      border: `1px solid ${form.recurType !== "none" ? "rgba(143,122,158,0.3)" : "transparent"}`,
+      background: form.recurType !== "none" ? "rgba(162,155,254,0.08)" : "transparent",
+      border: `1px solid ${form.recurType !== "none" ? "rgba(162,155,254,0.3)" : "transparent"}`,
       borderRadius: 8
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 11,
-      color: form.recurType !== "none" ? "#8f7a9e" : "var(--text-muted)",
+      color: form.recurType !== "none" ? "#a29bfe" : "var(--text-muted)",
       marginBottom: 6,
       fontWeight: 700
     }
@@ -11662,9 +11650,9 @@ function OverviewMonth({
         flex: 1,
         padding: "6px 2px",
         borderRadius: 6,
-        border: `1px solid ${sel ? "#8f7a9e" : "var(--border2)"}`,
-        background: sel ? "rgba(143,122,158,0.2)" : "transparent",
-        color: sel ? "#8f7a9e" : "var(--text-muted)",
+        border: `1px solid ${sel ? "#a29bfe" : "var(--border2)"}`,
+        background: sel ? "rgba(162,155,254,0.2)" : "transparent",
+        color: sel ? "#a29bfe" : "var(--text-muted)",
         fontSize: 11,
         fontWeight: sel ? 800 : 500,
         cursor: "pointer"
@@ -11685,9 +11673,9 @@ function OverviewMonth({
       flex: 1,
       padding: "5px 2px",
       borderRadius: 6,
-      border: `1px solid ${form.recurEndType === "date" ? "#8f7a9e" : "var(--border2)"}`,
-      background: form.recurEndType === "date" ? "rgba(143,122,158,0.15)" : "transparent",
-      color: form.recurEndType === "date" ? "#8f7a9e" : "var(--text-muted)",
+      border: `1px solid ${form.recurEndType === "date" ? "#a29bfe" : "var(--border2)"}`,
+      background: form.recurEndType === "date" ? "rgba(162,155,254,0.15)" : "transparent",
+      color: form.recurEndType === "date" ? "#a29bfe" : "var(--text-muted)",
       fontSize: 11,
       fontWeight: form.recurEndType === "date" ? 700 : 400,
       cursor: "pointer"
@@ -11701,9 +11689,9 @@ function OverviewMonth({
       flex: 1,
       padding: "5px 2px",
       borderRadius: 6,
-      border: `1px solid ${form.recurEndType === "count" ? "#8f7a9e" : "var(--border2)"}`,
-      background: form.recurEndType === "count" ? "rgba(143,122,158,0.15)" : "transparent",
-      color: form.recurEndType === "count" ? "#8f7a9e" : "var(--text-muted)",
+      border: `1px solid ${form.recurEndType === "count" ? "#a29bfe" : "var(--border2)"}`,
+      background: form.recurEndType === "count" ? "rgba(162,155,254,0.15)" : "transparent",
+      color: form.recurEndType === "count" ? "#a29bfe" : "var(--text-muted)",
       fontSize: 11,
       fontWeight: form.recurEndType === "count" ? 700 : 400,
       cursor: "pointer"
@@ -11807,9 +11795,9 @@ function OverviewMonth({
       flex: 1.5,
       padding: 10,
       borderRadius: 8,
-      border: "1px solid #7f97a8",
+      border: "1px solid #74b9ff",
       background: "transparent",
-      color: "#7f97a8",
+      color: "#74b9ff",
       cursor: "pointer"
     }
   }, "儲存並繼續"), /*#__PURE__*/React.createElement("button", {
@@ -11819,7 +11807,7 @@ function OverviewMonth({
       flex: 1.5,
       padding: 10,
       borderRadius: 8,
-      background: (COLOR_NO_INPUT.has(form.color) || form.input.trim()) && !saving ? "#bd6f56" : "var(--border2)",
+      background: (COLOR_NO_INPUT.has(form.color) || form.input.trim()) && !saving ? "#e94560" : "var(--border2)",
       border: "none",
       color: (COLOR_NO_INPUT.has(form.color) || form.input.trim()) && !saving ? "#fff" : "var(--text-dim)",
       fontWeight: 700,
@@ -11920,9 +11908,9 @@ function OverviewMonth({
     style: {
       padding: "3px 8px",
       borderRadius: 7,
-      border: "1px solid #7f97a8",
-      background: "rgba(127,151,168,0.1)",
-      color: "#7f97a8",
+      border: "1px solid #74b9ff",
+      background: "rgba(116,185,255,0.1)",
+      color: "#74b9ff",
       cursor: "pointer",
       fontSize: 12,
       fontWeight: 700,
@@ -11957,7 +11945,7 @@ function OverviewMonth({
     }
   }, /*#__PURE__*/React.createElement("span", null, cpMode.booking.last_edited_by ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
     style: {
-      color: "#7f97a8",
+      color: "#74b9ff",
       fontWeight: 700
     }
   }, cpMode.booking.last_edited_by), " · ", cpMode.booking.last_edited_at ? new Date(cpMode.booking.last_edited_at).toLocaleString("zh-TW", {
@@ -11969,7 +11957,7 @@ function OverviewMonth({
   }) : "", "  編輯") : /*#__PURE__*/React.createElement("span", null, "尚未編輯過")), ovEditLogs.length > 0 && /*#__PURE__*/React.createElement("span", {
     onClick: () => setOvShowEditLogs(p => !p),
     style: {
-      color: "#8f7a9e",
+      color: "#a29bfe",
       cursor: "pointer",
       fontSize: 11,
       fontWeight: 700
@@ -11995,7 +11983,7 @@ function OverviewMonth({
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
-      color: "#7f97a8",
+      color: "#74b9ff",
       fontWeight: 700,
       flexShrink: 0
     }
@@ -12039,9 +12027,9 @@ function OverviewMonth({
       width: "100%",
       padding: "10px",
       borderRadius: 10,
-      border: "1px solid #8f7a9e",
-      background: "rgba(143,122,158,0.1)",
-      color: "#8f7a9e",
+      border: "1px solid #a29bfe",
+      background: "rgba(162,155,254,0.1)",
+      color: "#a29bfe",
       fontSize: 13,
       fontWeight: 700,
       cursor: "pointer"
@@ -12108,7 +12096,7 @@ function OverviewMonth({
       value: t,
       disabled: !!taken,
       style: {
-        color: taken ? "#bd6f56" : "inherit"
+        color: taken ? "#e94560" : "inherit"
       }
     }, t, taken ? ` ✕已佔（${taken.customer_name || ''}）` : "");
   }))), /*#__PURE__*/React.createElement("button", {
@@ -12118,7 +12106,7 @@ function OverviewMonth({
       width: "100%",
       padding: "10px 16px",
       borderRadius: 10,
-      background: cpTarget.date && cpTarget.time ? "#8f7a9e" : "var(--border2)",
+      background: cpTarget.date && cpTarget.time ? "#a29bfe" : "var(--border2)",
       border: "none",
       color: cpTarget.date && cpTarget.time ? "#fff" : "var(--text-dim)",
       fontWeight: 700,
@@ -12162,9 +12150,9 @@ function OverviewMonth({
     style: {
       padding: "13px 0",
       borderRadius: 12,
-      border: "1px solid #8f7a9e",
-      background: "rgba(143,122,158,0.1)",
-      color: "#8f7a9e",
+      border: "1px solid #a29bfe",
+      background: "rgba(162,155,254,0.1)",
+      color: "#a29bfe",
       cursor: "pointer",
       fontSize: 13,
       fontWeight: 700
@@ -12203,9 +12191,9 @@ function OverviewMonth({
     style: {
       padding: "13px 0",
       borderRadius: 12,
-      border: "1px solid #7f97a8",
-      background: "rgba(127,151,168,0.1)",
-      color: "#7f97a8",
+      border: "1px solid #74b9ff",
+      background: "rgba(116,185,255,0.1)",
+      color: "#74b9ff",
       cursor: "pointer",
       fontSize: 13,
       fontWeight: 700
@@ -12225,9 +12213,9 @@ function OverviewMonth({
     style: {
       padding: "14px 0",
       borderRadius: 12,
-      border: "2px solid #6fa183",
-      background: "rgba(111,161,131,0.12)",
-      color: "#6fa183",
+      border: "2px solid #00b894",
+      background: "rgba(0,184,148,0.12)",
+      color: "#00b894",
       cursor: "pointer",
       fontSize: 14,
       fontWeight: 800
@@ -12240,9 +12228,9 @@ function OverviewMonth({
     style: {
       padding: "14px 0",
       borderRadius: 12,
-      border: "1px solid #bd6f56",
-      background: "rgba(189,111,86,0.1)",
-      color: "#bd6f56",
+      border: "1px solid #e94560",
+      background: "rgba(233,69,96,0.1)",
+      color: "#e94560",
       cursor: "pointer",
       fontSize: 14,
       fontWeight: 700
@@ -12274,7 +12262,7 @@ function OverviewMonth({
       fontWeight: 700,
       fontSize: 15,
       marginBottom: 12,
-      color: "#7f97a8"
+      color: "#74b9ff"
     }
   }, "✏️ 編輯預約"), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -12380,9 +12368,9 @@ function OverviewMonth({
       flex: 1,
       padding: 6,
       borderRadius: 6,
-      border: `1px solid ${editForm.guest_count === n ? "#7f97a8" : "var(--border2)"}`,
-      background: editForm.guest_count === n ? "#7f97a822" : "transparent",
-      color: editForm.guest_count === n ? "#7f97a8" : "var(--text-muted)",
+      border: `1px solid ${editForm.guest_count === n ? "#74b9ff" : "var(--border2)"}`,
+      background: editForm.guest_count === n ? "#74b9ff22" : "transparent",
+      color: editForm.guest_count === n ? "#74b9ff" : "var(--text-muted)",
       fontSize: 14,
       fontWeight: 700,
       cursor: "pointer"
@@ -12406,10 +12394,10 @@ function OverviewMonth({
     const isSel = editForm.color_tag === cc.key || (cc.key === "custom" && editForm.color_tag === "reserved");
     const colorMap = {
       "none": "#888",
-      "new_customer": "#cc9a56",
-      "cui": "#c07a94",
-      "vacation": "#bd6f56",
-      "custom": "#8f7a9e"
+      "new_customer": "#f5a623",
+      "cui": "#ff4d94",
+      "vacation": "#e94560",
+      "custom": "#a29bfe"
     };
     const col = colorMap[cc.key] || "#888";
     return /*#__PURE__*/React.createElement("button", {
@@ -12439,7 +12427,7 @@ function OverviewMonth({
       gap: 6,
       marginTop: 8,
       fontSize: 12,
-      color: editForm.isAftercare ? "#6fa88a" : "var(--text-muted)",
+      color: editForm.isAftercare ? "#00d09c" : "var(--text-muted)",
       fontWeight: editForm.isAftercare ? 700 : 400,
       cursor: "pointer"
     }
@@ -12473,9 +12461,9 @@ function OverviewMonth({
       width: "100%",
       padding: 10,
       borderRadius: 8,
-      border: "1px solid #8f7a9e",
-      background: "rgba(143,122,158,0.1)",
-      color: "#8f7a9e",
+      border: "1px solid #a29bfe",
+      background: "rgba(162,155,254,0.1)",
+      color: "#a29bfe",
       fontSize: 13,
       fontWeight: 700,
       cursor: "pointer"
@@ -12539,7 +12527,7 @@ function OverviewMonth({
       flex: 2,
       padding: 10,
       borderRadius: 8,
-      background: "#7f97a8",
+      background: "#74b9ff",
       border: "none",
       color: "#fff",
       fontSize: 13,
@@ -12561,7 +12549,7 @@ function OverviewMonth({
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       background: "var(--bg-header)",
-      border: "1px solid #8f7a9e",
+      border: "1px solid #a29bfe",
       borderRadius: 16,
       padding: 18,
       width: "92%",
@@ -12576,7 +12564,7 @@ function OverviewMonth({
       fontWeight: 800,
       fontSize: 16,
       marginBottom: 14,
-      color: "#8f7a9e"
+      color: "#a29bfe"
     }
   }, "🔁 套用到未來重複"), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -12594,7 +12582,7 @@ function OverviewMonth({
     }
   }, extendRecur.booking.customer_name || "-"), " 在 ", /*#__PURE__*/React.createElement("span", {
     style: {
-      color: "#7f97a8"
+      color: "#74b9ff"
     }
   }, extendRecur.booking.date, " ", extendRecur.booking.start_time?.slice(0, 5)), " 為起點，建立未來重複預約（不影響原本這筆）"), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -12633,9 +12621,9 @@ function OverviewMonth({
         flex: 1,
         padding: "8px 4px",
         borderRadius: 6,
-        border: `1px solid ${sel ? "#8f7a9e" : "var(--border2)"}`,
-        background: sel ? "rgba(143,122,158,0.2)" : "transparent",
-        color: sel ? "#8f7a9e" : "var(--text-muted)",
+        border: `1px solid ${sel ? "#a29bfe" : "var(--border2)"}`,
+        background: sel ? "rgba(162,155,254,0.2)" : "transparent",
+        color: sel ? "#a29bfe" : "var(--text-muted)",
         fontSize: 13,
         fontWeight: sel ? 800 : 500,
         cursor: "pointer"
@@ -12644,7 +12632,7 @@ function OverviewMonth({
   })), extendRecur.recurType === "monthly" && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 10,
-      color: "#8f7a9e",
+      color: "#a29bfe",
       marginTop: 4
     }
   }, "📌 每月", describeMonthlyNth(extendRecur.booking.date))), /*#__PURE__*/React.createElement("div", {
@@ -12673,9 +12661,9 @@ function OverviewMonth({
       flex: 1,
       padding: "6px 2px",
       borderRadius: 6,
-      border: `1px solid ${extendRecur.recurEndType === "date" ? "#8f7a9e" : "var(--border2)"}`,
-      background: extendRecur.recurEndType === "date" ? "rgba(143,122,158,0.15)" : "transparent",
-      color: extendRecur.recurEndType === "date" ? "#8f7a9e" : "var(--text-muted)",
+      border: `1px solid ${extendRecur.recurEndType === "date" ? "#a29bfe" : "var(--border2)"}`,
+      background: extendRecur.recurEndType === "date" ? "rgba(162,155,254,0.15)" : "transparent",
+      color: extendRecur.recurEndType === "date" ? "#a29bfe" : "var(--text-muted)",
       fontSize: 12,
       fontWeight: extendRecur.recurEndType === "date" ? 700 : 400,
       cursor: "pointer"
@@ -12689,9 +12677,9 @@ function OverviewMonth({
       flex: 1,
       padding: "6px 2px",
       borderRadius: 6,
-      border: `1px solid ${extendRecur.recurEndType === "count" ? "#8f7a9e" : "var(--border2)"}`,
-      background: extendRecur.recurEndType === "count" ? "rgba(143,122,158,0.15)" : "transparent",
-      color: extendRecur.recurEndType === "count" ? "#8f7a9e" : "var(--text-muted)",
+      border: `1px solid ${extendRecur.recurEndType === "count" ? "#a29bfe" : "var(--border2)"}`,
+      background: extendRecur.recurEndType === "count" ? "rgba(162,155,254,0.15)" : "transparent",
+      color: extendRecur.recurEndType === "count" ? "#a29bfe" : "var(--text-muted)",
       fontSize: 12,
       fontWeight: extendRecur.recurEndType === "count" ? 700 : 400,
       cursor: "pointer"
@@ -12862,7 +12850,7 @@ function OverviewMonth({
       flex: 2,
       padding: 11,
       borderRadius: 8,
-      background: "#8f7a9e",
+      background: "#a29bfe",
       border: "none",
       color: "#fff",
       fontSize: 13,
@@ -13035,20 +13023,20 @@ function LineNameSearch({
     }, /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 12,
-        color: '#6fa8a3'
+        color: '#22d3ee'
       }
     }, "💬 LINE：", existingMatch.name), isDiff && /*#__PURE__*/React.createElement("div", {
       style: {
         marginTop: 6,
-        background: 'rgba(204,154,86,0.12)',
-        border: '1px solid rgba(204,154,86,0.35)',
+        background: 'rgba(245,166,35,0.12)',
+        border: '1px solid rgba(245,166,35,0.35)',
         borderRadius: 8,
         padding: '8px 10px'
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 11,
-        color: '#cc9a56',
+        color: '#f5a623',
         fontWeight: 700,
         marginBottom: 6
       }
@@ -13064,9 +13052,9 @@ function LineNameSearch({
         fontSize: 11,
         padding: '4px 10px',
         borderRadius: 7,
-        background: 'rgba(111,168,163,0.15)',
-        border: '1px solid rgba(111,168,163,0.4)',
-        color: '#6fa8a3',
+        background: 'rgba(34,211,238,0.15)',
+        border: '1px solid rgba(34,211,238,0.4)',
+        color: '#22d3ee',
         cursor: 'pointer'
       }
     }, "用 LINE 名稱「", existingMatch.name, "」"), /*#__PURE__*/React.createElement("button", {
@@ -13075,9 +13063,9 @@ function LineNameSearch({
         fontSize: 11,
         padding: '4px 10px',
         borderRadius: 7,
-        background: 'rgba(127,151,168,0.1)',
-        border: '1px solid rgba(127,151,168,0.3)',
-        color: '#7f97a8',
+        background: 'rgba(116,185,255,0.1)',
+        border: '1px solid rgba(116,185,255,0.3)',
+        color: '#74b9ff',
         cursor: 'pointer'
       }
     }, "✏️ 自訂名稱"))));
@@ -13089,7 +13077,7 @@ function LineNameSearch({
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 11,
-      color: '#9c8d7a',
+      color: '#8b949e',
       marginBottom: 5
     }
   }, "🔍 搜尋 LINE 名稱"), /*#__PURE__*/React.createElement("div", {
@@ -13116,16 +13104,16 @@ function LineNameSearch({
     style: {
       padding: '5px 10px',
       borderRadius: 6,
-      background: 'rgba(111,168,163,0.15)',
-      border: '1px solid rgba(111,168,163,0.4)',
-      color: '#6fa8a3',
+      background: 'rgba(34,211,238,0.15)',
+      border: '1px solid rgba(34,211,238,0.4)',
+      color: '#22d3ee',
       fontSize: 12,
       cursor: 'pointer'
     }
   }, searching ? '...' : '搜尋')), results && results.length === 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 11,
-      color: '#9c8d7a',
+      color: '#8b949e',
       marginTop: 4
     }
   }, "找不到符合的 LINE 名稱"), results && results.length > 0 && /*#__PURE__*/React.createElement("div", {
@@ -13153,12 +13141,12 @@ function LineNameSearch({
     style: {
       fontSize: 13,
       fontWeight: 700,
-      color: '#6fa8a3'
+      color: '#22d3ee'
     }
   }, r.display_name), r.phone && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 11,
-      color: '#9c8d7a'
+      color: '#8b949e'
     }
   }, "📞 ", r.phone)), /*#__PURE__*/React.createElement("button", {
     onClick: () => onMatch(r.display_name, r.line_user_id),
@@ -13166,9 +13154,9 @@ function LineNameSearch({
       fontSize: 11,
       padding: '3px 8px',
       borderRadius: 6,
-      background: 'rgba(111,168,163,0.15)',
-      border: '1px solid rgba(111,168,163,0.4)',
-      color: '#6fa8a3',
+      background: 'rgba(34,211,238,0.15)',
+      border: '1px solid rgba(34,211,238,0.4)',
+      color: '#22d3ee',
       cursor: 'pointer'
     }
   }, "選擇")))));
@@ -13968,7 +13956,7 @@ function CRMModule({
         top: 12,
         left: "50%",
         transform: "translateX(-50%)",
-        background: crmToast.err ? "#bd6f56" : "#6fa183",
+        background: crmToast.err ? "#e94560" : "#00b894",
         color: "#fff",
         padding: "8px 20px",
         borderRadius: 20,
@@ -13991,7 +13979,7 @@ function CRMModule({
       style: {
         background: "transparent",
         border: "none",
-        color: "#7f97a8",
+        color: "#74b9ff",
         cursor: "pointer",
         fontSize: 13
       }
@@ -14045,7 +14033,7 @@ function CRMModule({
         navigator.clipboard.writeText(sel.name).then(() => {
           const el = e.currentTarget;
           const orig = el.style.color;
-          el.style.color = "#6fa183";
+          el.style.color = "#00b894";
           setTimeout(() => el.style.color = orig, 800);
         });
       },
@@ -14054,7 +14042,7 @@ function CRMModule({
           navigator.clipboard.writeText(sel.name).then(() => {
             const el = e.currentTarget;
             const orig = el.style.color;
-            el.style.color = "#6fa183";
+            el.style.color = "#00b894";
             setTimeout(() => el.style.color = orig, 1000);
           });
         }, 600);
@@ -14080,10 +14068,10 @@ function CRMModule({
       },
       style: {
         padding: "3px 10px",
-        background: "rgba(127,151,168,0.15)",
-        border: "1px solid rgba(127,151,168,0.4)",
+        background: "rgba(116,185,255,0.15)",
+        border: "1px solid rgba(116,185,255,0.4)",
         borderRadius: 8,
-        color: "#7f97a8",
+        color: "#74b9ff",
         fontSize: 11,
         fontWeight: 700,
         cursor: "pointer",
@@ -14141,10 +14129,10 @@ function CRMModule({
         },
         style: {
           padding: "2px 9px",
-          background: "rgba(127,151,168,0.15)",
-          border: "1px solid rgba(127,151,168,0.4)",
+          background: "rgba(116,185,255,0.15)",
+          border: "1px solid rgba(116,185,255,0.4)",
           borderRadius: 7,
-          color: "#7f97a8",
+          color: "#74b9ff",
           fontSize: 11,
           fontWeight: 700,
           cursor: "pointer",
@@ -14178,7 +14166,7 @@ function CRMModule({
         }, /*#__PURE__*/React.createElement("div", {
           style: {
             fontSize: 12,
-            color: "#6fa8a3",
+            color: "#22d3ee",
             display: "flex",
             alignItems: "center",
             gap: 6
@@ -14186,15 +14174,15 @@ function CRMModule({
         }, "💬 LINE：", lineName || "已綁定（無名稱）"), isDiff && /*#__PURE__*/React.createElement("div", {
           style: {
             marginTop: 6,
-            background: "rgba(204,154,86,0.12)",
-            border: "1px solid rgba(204,154,86,0.35)",
+            background: "rgba(245,166,35,0.12)",
+            border: "1px solid rgba(245,166,35,0.35)",
             borderRadius: 8,
             padding: "8px 10px"
           }
         }, /*#__PURE__*/React.createElement("div", {
           style: {
             fontSize: 11,
-            color: "#cc9a56",
+            color: "#f5a623",
             fontWeight: 700,
             marginBottom: 6
           }
@@ -14237,9 +14225,9 @@ function CRMModule({
             fontSize: 11,
             padding: "4px 10px",
             borderRadius: 7,
-            background: "rgba(111,168,163,0.15)",
-            border: "1px solid rgba(111,168,163,0.4)",
-            color: "#6fa8a3",
+            background: "rgba(34,211,238,0.15)",
+            border: "1px solid rgba(34,211,238,0.4)",
+            color: "#22d3ee",
             cursor: "pointer"
           }
         }, "用 LINE 名稱「", lineName, "」"), /*#__PURE__*/React.createElement("button", {
@@ -14251,9 +14239,9 @@ function CRMModule({
             fontSize: 11,
             padding: "4px 10px",
             borderRadius: 7,
-            background: "rgba(127,151,168,0.1)",
-            border: "1px solid rgba(127,151,168,0.3)",
-            color: "#7f97a8",
+            background: "rgba(116,185,255,0.1)",
+            border: "1px solid rgba(116,185,255,0.3)",
+            color: "#74b9ff",
             cursor: "pointer"
           }
         }, "✏️ 自訂名稱"))));
@@ -14330,13 +14318,13 @@ function CRMModule({
     }, /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 13,
-        color: sel.daysSince > 90 ? "#bd6f56" : sel.daysSince > 30 ? "#cc9a56" : "#6fa183",
+        color: sel.daysSince > 90 ? "#e94560" : sel.daysSince > 30 ? "#f5a623" : "#00b894",
         fontWeight: 700
       }
     }, sel.daysSince, "天前來訪"), /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 12,
-        color: "#7f97a8",
+        color: "#74b9ff",
         fontWeight: 700,
         marginTop: 4
       }
@@ -14349,36 +14337,36 @@ function CRMModule({
     }, sel.isNew && /*#__PURE__*/React.createElement("span", {
       style: {
         padding: "2px 10px",
-        background: "rgba(204,154,86,0.2)",
+        background: "rgba(245,166,35,0.2)",
         borderRadius: 10,
         fontSize: 11,
-        color: "#cc9a56"
+        color: "#f5a623"
       }
     }, "新客"), sel.isCrispy && /*#__PURE__*/React.createElement("span", {
       style: {
         padding: "3px 12px",
-        background: "rgba(204,154,86,0.25)",
+        background: "rgba(245,166,35,0.25)",
         borderRadius: 10,
         fontSize: 12,
-        color: "#cc9a56",
-        border: "1px solid rgba(204,154,86,0.5)",
+        color: "#f5a623",
+        border: "1px solid rgba(245,166,35,0.5)",
         fontWeight: 700
       }
     }, "🫧 脆脆獨立處理"), sel.daysSince > 30 && /*#__PURE__*/React.createElement("span", {
       style: {
         padding: "2px 10px",
-        background: "rgba(189,111,86,0.15)",
+        background: "rgba(233,69,96,0.15)",
         borderRadius: 10,
         fontSize: 11,
-        color: "#bd6f56"
+        color: "#e94560"
       }
     }, "⚠ 流失風險"), sel.daysSince > 90 && /*#__PURE__*/React.createElement("span", {
       style: {
         padding: "2px 10px",
-        background: "rgba(204,154,86,0.15)",
+        background: "rgba(245,166,35,0.15)",
         borderRadius: 10,
         fontSize: 11,
-        color: "#cc9a56"
+        color: "#f5a623"
       }
     }, "⚠ 超過3個月"))), /*#__PURE__*/React.createElement("div", {
       style: {
@@ -14402,7 +14390,7 @@ function CRMModule({
         width: 3,
         minHeight: 36,
         borderRadius: 2,
-        background: b.color_tag === "new_customer" ? "#cc9a56" : "#7f97a8",
+        background: b.color_tag === "new_customer" ? "#f5a623" : "#74b9ff",
         flexShrink: 0
       }
     }), /*#__PURE__*/React.createElement("div", {
@@ -14433,9 +14421,9 @@ function CRMModule({
     }, b.guest_count > 1 && /*#__PURE__*/React.createElement("span", null, "×", b.guest_count, "人\u3000"), b.note && /*#__PURE__*/React.createElement("span", null, "📝 ", b.note))), b.color_tag === "new_customer" && /*#__PURE__*/React.createElement("span", {
       style: {
         fontSize: 10,
-        color: "#cc9a56",
+        color: "#f5a623",
         padding: "1px 6px",
-        border: "1px solid #cc9a56",
+        border: "1px solid #f5a623",
         borderRadius: 8
       }
     }, "新")))), renameModal && /*#__PURE__*/React.createElement("div", {
@@ -14471,7 +14459,7 @@ function CRMModule({
         fontWeight: 800,
         fontSize: 16,
         marginBottom: 4,
-        color: "#7f97a8"
+        color: "#74b9ff"
       }
     }, "✏️ 客戶改名"), /*#__PURE__*/React.createElement("div", {
       style: {
@@ -14521,7 +14509,7 @@ function CRMModule({
         width: "100%",
         padding: "10px 13px",
         background: "var(--input-bg)",
-        border: "2px solid #7f97a8",
+        border: "2px solid #74b9ff",
         borderRadius: 10,
         fontSize: 15,
         color: "var(--text-main)",
@@ -14549,23 +14537,23 @@ function CRMModule({
       onClick: () => setRenameNew(n),
       style: {
         padding: "4px 12px",
-        background: renameNew === n ? "rgba(127,151,168,0.25)" : "var(--bg-sub)",
-        border: `1px solid ${renameNew === n ? "#7f97a8" : "var(--border2)"}`,
+        background: renameNew === n ? "rgba(116,185,255,0.25)" : "var(--bg-sub)",
+        border: `1px solid ${renameNew === n ? "#74b9ff" : "var(--border2)"}`,
         borderRadius: 8,
-        color: renameNew === n ? "#7f97a8" : "var(--text-muted)",
+        color: renameNew === n ? "#74b9ff" : "var(--text-muted)",
         fontSize: 12,
         cursor: "pointer",
         fontWeight: renameNew === n ? 700 : 400
       }
     }, n)))), /*#__PURE__*/React.createElement("div", {
       style: {
-        background: "rgba(204,154,86,0.1)",
-        border: "1px solid rgba(204,154,86,0.3)",
+        background: "rgba(245,166,35,0.1)",
+        border: "1px solid rgba(245,166,35,0.3)",
         borderRadius: 8,
         padding: "8px 12px",
         marginBottom: 16,
         fontSize: 11,
-        color: "#cc9a56"
+        color: "#f5a623"
       }
     }, "⚠️ 此操作將直接修改資料庫中所有相關預約的姓名欄位，無法自動還原。"), /*#__PURE__*/React.createElement("div", {
       style: {
@@ -14596,7 +14584,7 @@ function CRMModule({
         flex: 2,
         padding: "11px",
         borderRadius: 10,
-        background: renameSaving || !renameNew.trim() || renameNew.trim() === sel.name ? "#333" : "#7f97a8",
+        background: renameSaving || !renameNew.trim() || renameNew.trim() === sel.name ? "#333" : "#74b9ff",
         border: "none",
         color: renameSaving || !renameNew.trim() || renameNew.trim() === sel.name ? "#666" : "#fff",
         fontSize: 13,
@@ -14637,7 +14625,7 @@ function CRMModule({
         fontWeight: 800,
         fontSize: 16,
         marginBottom: 4,
-        color: "#7f97a8"
+        color: "#74b9ff"
       }
     }, "📞 編輯電話"), /*#__PURE__*/React.createElement("div", {
       style: {
@@ -14668,7 +14656,7 @@ function CRMModule({
         width: "100%",
         padding: "10px 13px",
         background: "var(--input-bg)",
-        border: "2px solid #7f97a8",
+        border: "2px solid #74b9ff",
         borderRadius: 10,
         fontSize: 15,
         color: "var(--text-main)",
@@ -14712,7 +14700,7 @@ function CRMModule({
         flex: 2,
         padding: "11px",
         borderRadius: 10,
-        background: phoneSaving ? "#333" : "#7f97a8",
+        background: phoneSaving ? "#333" : "#74b9ff",
         border: "none",
         color: phoneSaving ? "#666" : "#fff",
         fontSize: 13,
@@ -14734,7 +14722,7 @@ function CRMModule({
       top: 12,
       left: "50%",
       transform: "translateX(-50%)",
-      background: crmToast.err ? "#bd6f56" : "#6fa183",
+      background: crmToast.err ? "#e94560" : "#00b894",
       color: "#fff",
       padding: "8px 20px",
       borderRadius: 20,
@@ -14850,22 +14838,22 @@ function CRMModule({
     onClick: () => setCrmTab(k),
     className: `tab-btn${crmTab === k ? " active" : ""}`,
     style: k === "crispy" ? {
-      color: crmTab === "crispy" ? "#cc9a56" : "#cc9a5688",
-      borderBottomColor: crmTab === "crispy" ? "#cc9a56" : "transparent"
+      color: crmTab === "crispy" ? "#f5a623" : "#f5a62388",
+      borderBottomColor: crmTab === "crispy" ? "#f5a623" : "transparent"
     } : {}
   }, l)), /*#__PURE__*/React.createElement("button", {
     onClick: () => setCrmTab("noshow"),
     className: `tab-btn${crmTab === "noshow" ? " active" : ""}`,
     style: {
-      color: crmTab === "noshow" ? "#bd6f56" : "#bd6f56aa",
-      borderBottomColor: crmTab === "noshow" ? "#bd6f56" : "transparent"
+      color: crmTab === "noshow" ? "#e94560" : "#e94560aa",
+      borderBottomColor: crmTab === "noshow" ? "#e94560" : "transparent"
     }
   }, "🐦 放鳥 ", noShowFiltered.length), /*#__PURE__*/React.createElement("button", {
     onClick: () => setCrmTab("merge"),
     className: `tab-btn${crmTab === "merge" ? " active" : ""}`,
     style: {
-      color: crmTab === "merge" ? "#8f7a9e" : "#8f7a9e99",
-      borderBottomColor: crmTab === "merge" ? "#8f7a9e" : "transparent"
+      color: crmTab === "merge" ? "#a29bfe" : "#a29bfe99",
+      borderBottomColor: crmTab === "merge" ? "#a29bfe" : "transparent"
     }
   }, "🔗 待合併", mergeSuggestions.length > 0 ? ` (${mergeSuggestions.length})` : "")), crmTab === "noshow" && /*#__PURE__*/React.createElement(React.Fragment, null, nsToast && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -14873,7 +14861,7 @@ function CRMModule({
       top: 12,
       left: "50%",
       transform: "translateX(-50%)",
-      background: nsToast.err ? "#bd6f56" : "#6fa183",
+      background: nsToast.err ? "#e94560" : "#00b894",
       color: "#fff",
       padding: "7px 18px",
       borderRadius: 20,
@@ -14884,10 +14872,10 @@ function CRMModule({
   }, nsToast.m), /*#__PURE__*/React.createElement("div", {
     style: {
       padding: 8,
-      background: "rgba(189,111,86,0.06)",
+      background: "rgba(233,69,96,0.06)",
       borderBottom: "1px solid var(--border)",
       fontSize: 11,
-      color: "#bd6f56"
+      color: "#e94560"
     }
   }, "⚠️ 放鳥名單 — 所有人皆可編輯和刪除"), noShowFiltered.length === 0 && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -14914,15 +14902,15 @@ function CRMModule({
       fontWeight: 700,
       fontSize: 13,
       marginBottom: 2,
-      color: "#bd6f56"
+      color: "#e94560"
     }
   }, bookingDisplayName(b), " ", /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 10,
-      background: "rgba(189,111,86,0.15)",
+      background: "rgba(233,69,96,0.15)",
       padding: "1px 6px",
       borderRadius: 6,
-      color: "#bd6f56"
+      color: "#e94560"
     }
   }, "放鳥")), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -14957,9 +14945,9 @@ function CRMModule({
     style: {
       padding: "4px 10px",
       borderRadius: 6,
-      border: "1px solid #7f97a8",
+      border: "1px solid #74b9ff",
       background: "transparent",
-      color: "#7f97a8",
+      color: "#74b9ff",
       fontSize: 11,
       cursor: "pointer",
       fontWeight: 700
@@ -14977,9 +14965,9 @@ function CRMModule({
     style: {
       padding: "4px 10px",
       borderRadius: 6,
-      border: "1px solid #6fa183",
+      border: "1px solid #00b894",
       background: "transparent",
-      color: "#6fa183",
+      color: "#00b894",
       fontSize: 11,
       cursor: "pointer"
     }
@@ -14994,9 +14982,9 @@ function CRMModule({
     style: {
       padding: "4px 10px",
       borderRadius: 6,
-      border: "1px solid #bd6f56",
+      border: "1px solid #e94560",
       background: "transparent",
-      color: "#bd6f56",
+      color: "#e94560",
       fontSize: 11,
       cursor: "pointer"
     }
@@ -15027,7 +15015,7 @@ function CRMModule({
       fontWeight: 700,
       fontSize: 15,
       marginBottom: 12,
-      color: "#bd6f56"
+      color: "#e94560"
     }
   }, "🐦 編輯放鳥記錄"), [["customer_name", "姓名"], ["customer_phone", "電話"], ["note", "備註"]].map(([k, l]) => /*#__PURE__*/React.createElement("div", {
     key: k,
@@ -15095,7 +15083,7 @@ function CRMModule({
       flex: 2,
       padding: 10,
       borderRadius: 8,
-      background: "#7f97a8",
+      background: "#74b9ff",
       border: "none",
       color: "#fff",
       fontWeight: 700,
@@ -15104,15 +15092,15 @@ function CRMModule({
   }, noShowSaving ? "儲存中..." : "儲存變更 ✓"))))), crmTab === "merge" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "10px 12px",
-      background: "rgba(143,122,158,0.08)",
+      background: "rgba(162,155,254,0.08)",
       borderBottom: "1px solid var(--border)",
       fontSize: 11,
-      color: "#8f7a9e",
+      color: "#a29bfe",
       lineHeight: 1.6
     }
   }, "🔗 系統偵測到下列「無電話」的客戶名稱與某位「有電話」的客戶相符，可能是同一個人。", /*#__PURE__*/React.createElement("br", null), "確認合併後，會把該客戶所有預約補上電話，下次就會自動歸入主檔。", !mergeIgnoredHasTable && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("span", {
     style: {
-      color: "#cc9a56"
+      color: "#f5a623"
     }
   }, "⚠ 偵測不到 merge_ignored 資料表，「忽略」狀態僅本次有效。建議建表：source_name(text), target_phone(text), created_at(timestamp default now())"))), mergeSuggestions.length === 0 && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -15127,7 +15115,7 @@ function CRMModule({
       style: {
         padding: "12px 14px",
         borderBottom: "1px solid var(--border)",
-        background: sug.conflict ? "rgba(204,154,86,0.04)" : "transparent"
+        background: sug.conflict ? "rgba(245,166,35,0.04)" : "transparent"
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
@@ -15142,18 +15130,18 @@ function CRMModule({
         fontSize: 11,
         padding: "2px 9px",
         borderRadius: 10,
-        background: "rgba(143,122,158,0.18)",
-        color: "#8f7a9e",
+        background: "rgba(162,155,254,0.18)",
+        color: "#a29bfe",
         fontWeight: 700,
-        border: "1px solid rgba(143,122,158,0.4)"
+        border: "1px solid rgba(162,155,254,0.4)"
       }
     }, "👤 ", src.masterName, " 師傅"), sug.conflict && /*#__PURE__*/React.createElement("span", {
       style: {
         fontSize: 10,
         padding: "1px 7px",
         borderRadius: 8,
-        background: "rgba(204,154,86,0.15)",
-        color: "#cc9a56",
+        background: "rgba(245,166,35,0.15)",
+        color: "#f5a623",
         fontWeight: 700
       }
     }, "⚠ 多重匹配"), /*#__PURE__*/React.createElement("span", {
@@ -15187,9 +15175,9 @@ function CRMModule({
       style: {
         padding: "3px 10px",
         borderRadius: 6,
-        border: "1px solid #cc9a56",
+        border: "1px solid #f5a623",
         background: "transparent",
-        color: "#cc9a56",
+        color: "#f5a623",
         fontSize: 11,
         fontWeight: 700,
         cursor: "pointer"
@@ -15240,8 +15228,8 @@ function CRMModule({
           fontSize: 10,
           padding: "1px 6px",
           borderRadius: 6,
-          background: "rgba(143,122,158,0.15)",
-          color: "#8f7a9e",
+          background: "rgba(162,155,254,0.15)",
+          color: "#a29bfe",
           fontWeight: 700
         }
       }, "👤 ", tgt.masterName, "師傅"), /*#__PURE__*/React.createElement("span", {
@@ -15249,8 +15237,8 @@ function CRMModule({
           fontSize: 10,
           padding: "1px 6px",
           borderRadius: 6,
-          background: "rgba(127,151,168,0.15)",
-          color: "#7f97a8"
+          background: "rgba(116,185,255,0.15)",
+          color: "#74b9ff"
         }
       }, c.reason)), /*#__PURE__*/React.createElement("div", {
         style: {
@@ -15293,8 +15281,8 @@ function CRMModule({
         style: {
           padding: "4px 12px",
           borderRadius: 6,
-          border: "1px solid #6fa183",
-          background: busy ? "#6fa18355" : "#6fa183",
+          border: "1px solid #00b894",
+          background: busy ? "#00b89455" : "#00b894",
           color: "#fff",
           fontSize: 11,
           fontWeight: 700,
@@ -15362,11 +15350,11 @@ function CRMModule({
     }, c.masterName), c.isCrispy && /*#__PURE__*/React.createElement("span", {
       style: {
         fontSize: 10,
-        background: "rgba(204,154,86,0.2)",
+        background: "rgba(245,166,35,0.2)",
         padding: "2px 6px",
         borderRadius: 6,
-        color: "#cc9a56",
-        border: "1px solid rgba(204,154,86,0.4)"
+        color: "#f5a623",
+        border: "1px solid rgba(245,166,35,0.4)"
       }
     }, "🫧 脆脆獨立")), /*#__PURE__*/React.createElement("div", {
       style: {
@@ -15393,7 +15381,7 @@ function CRMModule({
           field: "note",
           label: "備註",
           placeholder: "例如：客人偏好、習慣、聯絡注意事項…",
-          accent: "#7f97a8",
+          accent: "#74b9ff",
           icon: "📝",
           initValue: info.note || ""
         });
@@ -15403,9 +15391,9 @@ function CRMModule({
         width: 30,
         height: 30,
         borderRadius: 8,
-        border: `1px solid ${hasNote ? "#7f97a8" : "var(--border2)"}`,
-        background: hasNote ? "rgba(127,151,168,0.15)" : "transparent",
-        color: hasNote ? "#7f97a8" : "var(--text-dim)",
+        border: `1px solid ${hasNote ? "#74b9ff" : "var(--border2)"}`,
+        background: hasNote ? "rgba(116,185,255,0.15)" : "transparent",
+        color: hasNote ? "#74b9ff" : "var(--text-dim)",
         fontSize: 13,
         cursor: "pointer",
         display: "flex",
@@ -15421,7 +15409,7 @@ function CRMModule({
         right: -2,
         width: 7,
         height: 7,
-        background: "#7f97a8",
+        background: "#74b9ff",
         borderRadius: "50%"
       }
     })), /*#__PURE__*/React.createElement("button", {
@@ -15432,7 +15420,7 @@ function CRMModule({
           field: "symptoms",
           label: "症狀",
           placeholder: "例如：肩頸僵硬、腰痠、舊傷部位…",
-          accent: "#cc9a56",
+          accent: "#f5a623",
           icon: "💊",
           initValue: info.symptoms || ""
         });
@@ -15442,9 +15430,9 @@ function CRMModule({
         width: 30,
         height: 30,
         borderRadius: 8,
-        border: `1px solid ${hasSymp ? "#cc9a56" : "var(--border2)"}`,
-        background: hasSymp ? "rgba(204,154,86,0.15)" : "transparent",
-        color: hasSymp ? "#cc9a56" : "var(--text-dim)",
+        border: `1px solid ${hasSymp ? "#f5a623" : "var(--border2)"}`,
+        background: hasSymp ? "rgba(245,166,35,0.15)" : "transparent",
+        color: hasSymp ? "#f5a623" : "var(--text-dim)",
         fontSize: 13,
         cursor: "pointer",
         display: "flex",
@@ -15460,7 +15448,7 @@ function CRMModule({
         right: -2,
         width: 7,
         height: 7,
-        background: "#cc9a56",
+        background: "#f5a623",
         borderRadius: "50%"
       }
     }))), /*#__PURE__*/React.createElement("div", {
@@ -15468,7 +15456,7 @@ function CRMModule({
       style: {
         textAlign: "right",
         fontWeight: 700,
-        color: c.daysSince > 90 ? "#bd6f56" : c.daysSince > 30 ? "#cc9a56" : "#6fa183",
+        color: c.daysSince > 90 ? "#e94560" : c.daysSince > 30 ? "#f5a623" : "#00b894",
         cursor: "pointer",
         whiteSpace: "nowrap",
         fontSize: 13
@@ -15528,8 +15516,8 @@ function SettingsModule({
     name: "",
     username: "",
     role: "master",
-    display_color: "#7f97a8",
-    reserve_color: "#8f7a9e"
+    display_color: "#74b9ff",
+    reserve_color: "#a29bfe"
   });
   const [saving, setSaving] = useState(false);
   const [histLogs, setHistLogs] = useState([]);
@@ -15656,8 +15644,8 @@ function SettingsModule({
       name: m.name || "",
       username: m.username || "",
       role: m.role || "master",
-      display_color: m.display_color || "#7f97a8",
-      reserve_color: m.reserve_color || "#8f7a9e"
+      display_color: m.display_color || "#74b9ff",
+      reserve_color: m.reserve_color || "#a29bfe"
     });
   };
   const saveEdit = async () => {
@@ -15779,7 +15767,7 @@ function SettingsModule({
       width: 10,
       height: 10,
       borderRadius: "50%",
-      background: m.display_color || "#7f97a8",
+      background: m.display_color || "#74b9ff",
       flexShrink: 0
     }
   }), /*#__PURE__*/React.createElement("div", {
@@ -15813,7 +15801,7 @@ function SettingsModule({
       flexWrap: "wrap",
       justifyContent: "flex-end"
     }
-  }, [["全數據觀看", m.can_view_all_stats, "#8f7a9e", "can_view_all_stats"]].map(([label, active, color, field]) => /*#__PURE__*/React.createElement("button", {
+  }, [["全數據觀看", m.can_view_all_stats, "#a29bfe", "can_view_all_stats"]].map(([label, active, color, field]) => /*#__PURE__*/React.createElement("button", {
     key: label,
     onClick: () => togglePerm(m, field),
     style: {
@@ -15841,9 +15829,9 @@ function SettingsModule({
     style: {
       padding: "3px 8px",
       borderRadius: 6,
-      border: `1px solid ${m.is_active ? "#bd6f56" : "var(--border2)"}`,
-      background: m.is_active ? "#bd6f5620" : "transparent",
-      color: m.is_active ? "#bd6f56" : "var(--text-dim)",
+      border: `1px solid ${m.is_active ? "#e94560" : "var(--border2)"}`,
+      background: m.is_active ? "#e9456020" : "transparent",
+      color: m.is_active ? "#e94560" : "var(--text-dim)",
       fontSize: 10,
       cursor: "pointer"
     }
@@ -15945,9 +15933,9 @@ function SettingsModule({
       fontSize: 12,
       fontWeight: 700,
       cursor: "pointer",
-      border: `2px solid ${restSet.has(t) ? "#bd6f56" : "var(--border2)"}`,
-      background: restSet.has(t) ? "rgba(189,111,86,0.15)" : "transparent",
-      color: restSet.has(t) ? "#bd6f56" : "var(--text-muted)"
+      border: `2px solid ${restSet.has(t) ? "#e94560" : "var(--border2)"}`,
+      background: restSet.has(t) ? "rgba(233,69,96,0.15)" : "transparent",
+      color: restSet.has(t) ? "#e94560" : "var(--text-muted)"
     }
   }, t, restSet.has(t) ? " 休" : ""))))), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -15978,7 +15966,7 @@ function SettingsModule({
       width: "100%",
       padding: "10px",
       borderRadius: 8,
-      background: "#bd6f56",
+      background: "#e94560",
       border: "none",
       color: "#fff",
       fontWeight: 700,
@@ -16060,7 +16048,7 @@ function SettingsModule({
   }, "查詢中…"), delCount !== null && !delChecking && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12,
-      color: delCount > 0 ? "#cc9a56" : "var(--text-dim)",
+      color: delCount > 0 ? "#ffb300" : "var(--text-dim)",
       marginTop: 8
     }
   }, `這段範圍內現在有 ${delCount} 筆預約`), /*#__PURE__*/React.createElement("button", {
@@ -16072,7 +16060,7 @@ function SettingsModule({
       padding: "10px",
       borderRadius: 8,
       border: "none",
-      background: "#bd6f56",
+      background: "#e94560",
       color: "#fff",
       fontWeight: 700,
       fontSize: 13,
@@ -16121,7 +16109,7 @@ function SettingsModule({
         padding: "6px 12px",
         borderRadius: 6,
         border: "none",
-        background: enabled ? "#6fa183" : "#7d7166",
+        background: enabled ? "#00b894" : "#636e72",
         color: "#fff",
         fontWeight: 700,
         fontSize: 12,
@@ -16201,7 +16189,7 @@ function SettingsModule({
     onClick: loadHistory,
     style: {
       padding: "6px 16px",
-      background: "#7f97a8",
+      background: "#74b9ff",
       border: "none",
       borderRadius: 6,
       color: "#fff",
@@ -16242,7 +16230,7 @@ function SettingsModule({
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
-      color: "#7f97a8",
+      color: "#74b9ff",
       fontWeight: 700
     }
   }, "👤 ", l.editor_name), l.date && /*#__PURE__*/React.createElement("span", null, "📅 ", l.date, " ", l.start_time?.slice(0, 5)), /*#__PURE__*/React.createElement("span", {
@@ -16393,7 +16381,7 @@ function SettingsModule({
     }
   }, /*#__PURE__*/React.createElement("input", {
     type: "color",
-    value: form.reserve_color || "#8f7a9e",
+    value: form.reserve_color || "#a29bfe",
     onChange: e => setForm(f => ({
       ...f,
       reserve_color: e.target.value
@@ -16410,12 +16398,12 @@ function SettingsModule({
       fontSize: 12,
       color: "var(--text-muted)"
     }
-  }, form.reserve_color || "#8f7a9e"), /*#__PURE__*/React.createElement("div", {
+  }, form.reserve_color || "#a29bfe"), /*#__PURE__*/React.createElement("div", {
     style: {
       width: 32,
       height: 20,
       borderRadius: 4,
-      background: form.reserve_color || "#8f7a9e",
+      background: form.reserve_color || "#a29bfe",
       border: "2px solid rgba(255,255,255,0.2)"
     }
   }))), /*#__PURE__*/React.createElement("div", {
@@ -16441,7 +16429,7 @@ function SettingsModule({
       flex: 2,
       padding: 10,
       borderRadius: 8,
-      background: "#bd6f56",
+      background: "#e94560",
       border: "none",
       color: "#fff",
       fontWeight: 700,
@@ -16465,8 +16453,8 @@ class ErrorBoundary extends React.Component {
     if (this.state.err) return /*#__PURE__*/React.createElement("div", {
       style: {
         padding: 20,
-        color: "#bd6f56",
-        background: "#1c1815",
+        color: "#e94560",
+        background: "#0d1117",
         minHeight: "100vh"
       }
     }, /*#__PURE__*/React.createElement("div", {
@@ -16480,7 +16468,7 @@ class ErrorBoundary extends React.Component {
         fontFamily: "monospace",
         fontSize: 12,
         whiteSpace: "pre-wrap",
-        color: "#cc9a56"
+        color: "#f5a623"
       }
     }, String(this.state.err)), /*#__PURE__*/React.createElement("button", {
       onClick: () => this.setState({
@@ -16489,7 +16477,7 @@ class ErrorBoundary extends React.Component {
       style: {
         marginTop: 20,
         padding: "8px 16px",
-        background: "#bd6f56",
+        background: "#e94560",
         color: "#fff",
         border: "none",
         borderRadius: 6,
