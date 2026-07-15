@@ -6981,20 +6981,20 @@ function MainApp({
     executeUndo: executeUndo,
     onEditingChange: setOverviewEditing
   })), tab === "crm" && canViewCRM && /*#__PURE__*/React.createElement("div", {
-    style: { zoom: deskZoom }
+    style: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", zoom: deskZoom }
   }, /*#__PURE__*/React.createElement(CRMModule, {
     key: crmKey,
     masters: masters,
     FS: FS
   })), tab === "analytics" && /*#__PURE__*/React.createElement("div", {
-    style: { zoom: deskZoom }
+    style: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", zoom: deskZoom }
   }, /*#__PURE__*/React.createElement(LazyAnalyticsModule, {
     masters: masters,
     FS: FS,
     currentMaster: master,
     isAdmin: isAdmin
   })), tab === "settings" && isAdmin && /*#__PURE__*/React.createElement("div", {
-    style: { zoom: deskZoom }
+    style: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", zoom: deskZoom }
   }, /*#__PURE__*/React.createElement(SettingsModule, {
     masters: masters,
     setMasters: setMasters,
@@ -7002,7 +7002,7 @@ function MainApp({
     msg: msg,
     loginMaster: loginMaster || master
   })), tab === "pending" && /*#__PURE__*/React.createElement("div", {
-    style: { zoom: deskZoom }
+    style: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", zoom: deskZoom }
   }, /*#__PURE__*/React.createElement(PendingBookings, {
     masters: masters,
     currentMaster: loginMaster || master,
