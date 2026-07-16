@@ -866,6 +866,7 @@ function PresenceBar({
     key: p.masterId,
     onClick: () => onTapPerson && onTapPerson(p),
     title: `${p.name}：${p.activity?.summary || "在線上"}`,
+    "aria-label": `${p.name}：${p.activity?.summary || "在線上"}`,
     style: {
       width: 24,
       height: 24,
@@ -5601,6 +5602,14 @@ function MainApp({
         e.stopPropagation();
         delBk(b.id);
       },
+      onKeyDown: e => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          e.stopPropagation();
+          delBk(b.id);
+        }
+      },
+      tabIndex: 0,
       "aria-label": "刪除這筆預約",
       role: "button",
       style: {
@@ -5632,6 +5641,8 @@ function MainApp({
     onTouchMove: isDragActive ? handleGlobalTouchMove : undefined,
     onTouchEnd: handleGlobalTouchEnd
   }, toast && /*#__PURE__*/React.createElement("div", {
+    role: toast.err ? "alert" : "status",
+    "aria-live": toast.err ? "assertive" : "polite",
     style: {
       position: "fixed",
       top: 12,
@@ -10055,6 +10066,8 @@ function OverviewMonth({
     onTouchMove: ovIsDragActive ? ovHandleTouchMove : undefined,
     onTouchEnd: ovHandleTouchEnd
   }, toast && /*#__PURE__*/React.createElement("div", {
+    role: toast.err ? "alert" : "status",
+    "aria-live": toast.err ? "assertive" : "polite",
     style: {
       position: "fixed",
       top: 12,
@@ -15394,6 +15407,7 @@ function CRMModule({
         });
       },
       title: hasNote ? `備註：${info.note}` : "新增備註",
+      "aria-label": hasNote ? `備註：${info.note}` : "新增備註",
       style: {
         width: 30,
         height: 30,
@@ -15410,6 +15424,7 @@ function CRMModule({
         fontFamily: "inherit"
       }
     }, "📝", hasNote && /*#__PURE__*/React.createElement("span", {
+      "aria-hidden": "true",
       style: {
         position: "absolute",
         top: -2,
@@ -15433,6 +15448,7 @@ function CRMModule({
         });
       },
       title: hasSymp ? `症狀：${info.symptoms}` : "新增症狀",
+      "aria-label": hasSymp ? `症狀：${info.symptoms}` : "新增症狀",
       style: {
         width: 30,
         height: 30,
@@ -15449,6 +15465,7 @@ function CRMModule({
         fontFamily: "inherit"
       }
     }, "💊", hasSymp && /*#__PURE__*/React.createElement("span", {
+      "aria-hidden": "true",
       style: {
         position: "absolute",
         top: -2,
