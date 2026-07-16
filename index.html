@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -78,7 +78,7 @@ body.dark input[type="date"]::-webkit-calendar-picker-indicator {
 body.light input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(0) sepia(1) saturate(4) hue-rotate(295deg) brightness(0.85);
 }
-.scroll-container { flex:1; min-height:0; overflow:auto; width:100%; position:relative; -webkit-overflow-scrolling:touch; will-change:scroll-position; touch-action:pan-x pan-y; scroll-snap-type:x mandatory; scroll-padding-left:42px; padding-bottom:120px; }
+.scroll-container { flex:1; min-height:0; overflow:auto; width:100%; position:relative; -webkit-overflow-scrolling:touch; will-change:scroll-position; touch-action:pan-x pan-y; scroll-snap-type:x mandatory; scroll-padding-left:42px; padding-bottom:calc(120px + env(safe-area-inset-bottom, 0px)); }
 .cv-row { content-visibility: auto; contain-intrinsic-size: 0 28px; }
 .cv-cell { contain: layout style; }
 .draggable-card { cursor:grab; touch-action:pan-x pan-y; width:100%; height:100%; display:flex; align-items:center; transition:opacity 0.2s,transform 0.2s; }
@@ -3449,7 +3449,7 @@ function AvailabilityModule({
       style: { position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 999, display: "flex", alignItems: "flex-end", justifyContent: "center" },
       onClick: () => setEditDate(null)
     }, /*#__PURE__*/React.createElement("div", {
-      style: { background: "var(--bg-header)", borderRadius: "20px 20px 0 0", padding: "20px 18px 32px", width: "100%", maxWidth: 480, maxHeight: "80vh", overflowY: "auto" },
+      style: { background: "var(--bg-header)", borderRadius: "20px 20px 0 0", padding: "20px 18px calc(32px + env(safe-area-inset-bottom, 0px))", width: "100%", maxWidth: 480, maxHeight: "80vh", overflowY: "auto" },
       onClick: e => e.stopPropagation()
     },
       /*#__PURE__*/React.createElement("div", { style: { fontWeight: 900, fontSize: 16, marginBottom: 14 } }, `${editDate}　${targetName(targetId)}`),
@@ -5601,10 +5601,13 @@ function MainApp({
         e.stopPropagation();
         delBk(b.id);
       },
+      "aria-label": "刪除這筆預約",
+      role: "button",
       style: {
         fontSize: 9,
         color: "var(--text-muted)",
-        padding: "2px 4px",
+        padding: "6px 7px",
+        margin: "-4px -3px -4px 0",
         flexShrink: 0
       }
     }, "✕")), isVac && b && /*#__PURE__*/React.createElement("div", {
@@ -5664,7 +5667,7 @@ function MainApp({
     style: {
       position: "fixed",
       right: 10,
-      bottom: 10,
+      bottom: "calc(10px + env(safe-area-inset-bottom, 0px))",
       zIndex: 999999,
       width: 40,
       height: 40,
@@ -5685,6 +5688,7 @@ function MainApp({
       borderBottom: "1px solid var(--border2)",
       flexShrink: 0,
       position: "relative",
+      paddingTop: "env(safe-area-inset-top, 0px)",
       zoom: deskZoom
     }
   }, /*#__PURE__*/React.createElement("div", {
@@ -5750,6 +5754,7 @@ function MainApp({
   }), pushSupported && !pushSubscribed && /*#__PURE__*/React.createElement("button", {
     onClick: subscribeToPush,
     title: "開啟推播通知(跟LINE通知同步收到，需要允許通知權限)",
+    "aria-label": "開啟推播通知",
     style: {
       background: "var(--nav-bg)",
       border: "1px solid var(--border2)",
@@ -5767,6 +5772,7 @@ function MainApp({
   }, "🔔"), /*#__PURE__*/React.createElement("button", {
     onClick: () => setTheme(t => t === "dark" ? "light" : "dark"),
     title: "切換深淺色",
+    "aria-label": "切換深淺色主題",
     style: {
       background: "var(--nav-bg)",
       border: "1px solid var(--border2)",
@@ -5784,6 +5790,7 @@ function MainApp({
   }, theme === "dark" ? "☀️" : "🌙"), tab === "schedule" && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowDisplaySettings(v => !v),
     title: "顯示設定（字體、欄寬、列高）",
+    "aria-label": "顯示設定",
     style: {
       background: showDisplaySettings ? "#74b9ff22" : "var(--nav-bg)",
       border: `1px solid ${showDisplaySettings ? "#74b9ff" : "var(--border2)"}`,
@@ -7036,7 +7043,7 @@ function MainApp({
       background: "var(--bg-header)",
       border: "1px solid var(--border2)",
       borderRadius: "16px 16px 0 0",
-      padding: "16px 16px 32px",
+      padding: "16px 16px calc(32px + env(safe-area-inset-bottom, 0px))",
       width: "100%",
       maxWidth: 480,
       zoom: deskZoom
@@ -7134,7 +7141,7 @@ function MainApp({
       background: "var(--bg-header)",
       border: "1px solid var(--border2)",
       borderRadius: "16px 16px 0 0",
-      padding: 16,
+      padding: "16px 16px calc(16px + env(safe-area-inset-bottom, 0px))",
       width: "100%",
       maxWidth: 480
     },
@@ -7765,7 +7772,7 @@ function MainApp({
       background: "var(--bg-header)",
       border: "1px solid var(--border2)",
       borderRadius: "20px 20px 0 0",
-      padding: "20px 16px 36px",
+      padding: "20px 16px calc(36px + env(safe-area-inset-bottom, 0px))",
       width: "100%",
       maxWidth: 560,
       maxHeight: "85vh",
@@ -11095,7 +11102,7 @@ function OverviewMonth({
       background: "var(--bg-header)",
       border: "1px solid var(--border2)",
       borderRadius: "16px 16px 0 0",
-      padding: "16px 16px 32px",
+      padding: "16px 16px calc(32px + env(safe-area-inset-bottom, 0px))",
       width: "100%",
       maxWidth: 480
     },
@@ -11196,7 +11203,7 @@ function OverviewMonth({
       background: "var(--bg-header)",
       border: "1px solid var(--border2)",
       borderRadius: "16px 16px 0 0",
-      padding: 16,
+      padding: "16px 16px calc(16px + env(safe-area-inset-bottom, 0px))",
       width: "100%",
       maxWidth: 480
     },
@@ -11830,7 +11837,7 @@ function OverviewMonth({
       background: "var(--bg-header)",
       border: "1px solid var(--border2)",
       borderRadius: "20px 20px 0 0",
-      padding: "20px 16px 36px",
+      padding: "20px 16px calc(36px + env(safe-area-inset-bottom, 0px))",
       width: "100%",
       maxWidth: 560,
       maxHeight: "85vh",
@@ -12890,7 +12897,7 @@ function NoteEditModal({
     style: {
       background: "var(--bg-header)",
       borderRadius: "16px 16px 0 0",
-      padding: "18px 16px 30px",
+      padding: "18px 16px calc(30px + env(safe-area-inset-bottom, 0px))",
       width: "100%",
       maxWidth: 480,
       borderTop: `3px solid ${editor.accent}`
