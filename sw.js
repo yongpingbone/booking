@@ -14,7 +14,7 @@ self.addEventListener('push', e => {
     self.registration.showNotification(data.title, {
       body: data.body,
       icon: '/booking/icon-192.png',
-      badge: '/booking/icon-192.png',
+      badge: '/booking/notify-icon.png',
       tag: 'yongping-notify', // 同一個tag：新通知進來會取代舊的，不會疊一堆通知洗版
     })
   );
