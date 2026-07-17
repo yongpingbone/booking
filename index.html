@@ -15507,7 +15507,7 @@ function SettingsModule({
   msg,
   loginMaster
 }) {
-  const [settTab, setSettTab] = useState("masters");
+  const [settTab, setSettTab] = useState(null);
   const [editMaster, setEditMaster] = useState(null);
   const [form, setForm] = useState({
     name: "",
@@ -15727,23 +15727,74 @@ function SettingsModule({
   return /*#__PURE__*/React.createElement("div", {
     style: {
       flex: 1,
-      overflow: "auto"
+      overflow: "auto",
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang TC", "Microsoft JhengHei", "Noto Sans CJK TC", "Noto Sans TC", sans-serif'
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, settTab === null ? /*#__PURE__*/React.createElement("div", {
+    style: { padding: 16 }
+  },
+  // 2026-07-17：參考TimeTree「其他」頁面的卡片式九宮格版面，取代原本
+  // 純文字橫排tab——排班主表格完全沒動，只有設定頁這個入口畫面改版。
+  // 每張卡片的onClick/後續副作用(loadHistory/loadSyncStatus)跟原本
+  // 逐字一樣，只是外觀從文字tab換成icon+文字的卡片，不影響任何邏輯。
+  /*#__PURE__*/React.createElement("div", {
     style: {
-      display: "flex",
+      display: "grid",
+      gridTemplateColumns: "repeat(3, 1fr)",
       background: "var(--bg-header)",
-      borderBottom: "1px solid var(--border)"
+      borderRadius: 16,
+      overflow: "hidden",
+      border: "1px solid var(--border)"
     }
-  }, [["masters", "帳號管理"], ["rest", "休息時段"], ["export", "批次刪除"], ["history", "歷史紀錄"], ...(loginMaster?.can_view_all_stats ? [["sync", "資料同步"]] : [])].map(([k, l]) => /*#__PURE__*/React.createElement("button", {
+  }, [["masters", "帳號管理", "👤"], ["rest", "休息時段", "⏸️"], ["export", "批次刪除", "🗑️"], ["history", "歷史紀錄", "📜"], ...(loginMaster?.can_view_all_stats ? [["sync", "資料同步", "🔄"]] : [])].map(([k, l, icon], i) => /*#__PURE__*/React.createElement("button", {
     key: k,
-    className: `tab-btn${settTab === k ? " active" : ""}`,
     onClick: () => {
       setSettTab(k);
       if (k === "history") loadHistory();
       if (k === "sync") loadSyncStatus();
+    },
+    style: {
+      background: "transparent",
+      border: "none",
+      borderRight: i % 3 !== 2 ? "1px solid var(--border)" : "none",
+      borderBottom: "1px solid var(--border)",
+      padding: "20px 8px",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      gap: 8,
+      cursor: "pointer",
+      fontFamily: "inherit"
     }
-  }, l))), settTab === "masters" && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("span", {
+    style: { fontSize: 26 }
+  }, icon), /*#__PURE__*/React.createElement("span", {
+    style: { fontSize: 12, color: "var(--text-main)" }
+  }, l)))
+  )) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      background: "var(--bg-header)",
+      borderBottom: "1px solid var(--border)",
+      padding: "10px 12px"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setSettTab(null),
+    "aria-label": "返回設定首頁",
+    style: {
+      background: "none",
+      border: "none",
+      color: "var(--text-main)",
+      fontSize: 18,
+      cursor: "pointer",
+      padding: "4px 8px",
+      fontFamily: "inherit"
+    }
+  }, "←"), /*#__PURE__*/React.createElement("span", {
+    style: { fontSize: 14, fontWeight: 700, color: "var(--text-main)" }
+  }, { masters: "帳號管理", rest: "休息時段", export: "批次刪除", history: "歷史紀錄", sync: "資料同步" }[settTab])), settTab === "masters" && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: 12
     }
@@ -16432,7 +16483,7 @@ function SettingsModule({
       fontWeight: 700,
       cursor: "pointer"
     }
-  }, saving ? "儲存中..." : "儲存")))));
+  }, saving ? "儲存中..." : "儲存"))))));
 }
 class ErrorBoundary extends React.Component {
   constructor(p) {
