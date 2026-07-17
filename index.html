@@ -41,15 +41,6 @@ body.dark {
   --input-bg:#0d1117; --nav-bg:#21262d; --nav-color:#c9d1d9;
   --mt-0:#74b9ff; --mt-1:#2ed9c3; --mt-2:#ffa94d; --mt-3:#da77f2; --mt-4:#f783ac;
 }
-body.light {
-  --bg-main:#f6f8fa; --bg-header:#ffffff; --bg-sub:#f0f2f5;
-  --bg-week:#eaeef2; --bg-rest:rgba(0,0,0,0.10);
-  --border:#d0d7de; --border2:#d0d7de; --border-week:#b0bec5;
-  --text-main:#0d1117; --text-muted:#24292f; --text-dim:#888;
-  --text-time:#cf6b00; --text-week:#999;
-  --input-bg:#fff; --nav-bg:#fff; --nav-color:#24292f;
-  --mt-0:#1c7ed6; --mt-1:#0ca678; --mt-2:#d9480f; --mt-3:#7048e8; --mt-4:#c2255c;
-}
 .nb { background:var(--nav-bg); border:1px solid var(--border2); color:var(--nav-color); border-radius:5px; padding:4px 10px; cursor:pointer; font-size:12px; }
 .tab-btn { padding:8px 14px; background:transparent; border:none; border-bottom:2px solid transparent; color:var(--text-muted); font-size:12px; cursor:pointer; white-space:nowrap; }
 .tab-btn.active { border-bottom-color:#e94560; color:#e94560; font-weight:700; }
@@ -3500,7 +3491,7 @@ function AvailabilityModule({
 function App() {
   const today = getTaipeiNow();
   const isMobile = window.innerWidth <= 768;
-  const [theme, setTheme] = useLS("yp_theme", "dark");
+  const theme = "dark"; // 2026-07-17：拿掉淺色模式功能，固定深色，不用localStorage記憶(不管之前存過什麼值都一律深色)
   const [fontSize, setFs] = useLS("yp_fs", isMobile ? "sm" : "md");
   const [colW, setColW] = useLS("yp_cw", isMobile ? "52" : "85");
   const [rowH, setRowH] = useLS("yp_rh", isMobile ? "18" : "26");
@@ -3642,7 +3633,7 @@ function MainApp({
 }) {
   const today = getTaipeiNow();
   const isMobile = window.innerWidth <= 768;
-  const [theme, setTheme] = useLS("yp_theme", "dark");
+  const theme = "dark"; // 2026-07-17：拿掉淺色模式功能，固定深色，不用localStorage記憶(不管之前存過什麼值都一律深色)
   const [fontSize, setFs] = useLS("yp_fs", isMobile ? "sm" : "md");
   const [colW, setColW] = useLS("yp_cw", isMobile ? "52" : "85");
   const [rowH, setRowH] = useLS("yp_rh", isMobile ? "18" : "26");
@@ -5780,25 +5771,7 @@ function MainApp({
       flexShrink: 0,
       padding: 0
     }
-  }, "🔔"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setTheme(t => t === "dark" ? "light" : "dark"),
-    title: "切換深淺色",
-    "aria-label": "切換深淺色主題",
-    style: {
-      background: "var(--nav-bg)",
-      border: "1px solid var(--border2)",
-      borderRadius: 5,
-      width: 28,
-      height: 28,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      cursor: "pointer",
-      fontSize: 13,
-      flexShrink: 0,
-      padding: 0
-    }
-  }, theme === "dark" ? "☀️" : "🌙"), tab === "schedule" && /*#__PURE__*/React.createElement("button", {
+  }, "🔔"), tab === "schedule" && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowDisplaySettings(v => !v),
     title: "顯示設定（字體、欄寬、列高）",
     "aria-label": "顯示設定",
