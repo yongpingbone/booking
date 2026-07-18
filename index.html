@@ -1029,6 +1029,40 @@ function useCustomerSuggest(inputValue, enabled = true, masterId = null, masters
   };
 }
 
+// 2026-07-19：熟客自動偵測。Hanna要求「同一客人達3次以上自動標記，
+// 不用手動」——查過customers.total_visits這個欄位，發現這個數字完全
+// 跟bookings裡實際查得到的預約次數對不起來(比對過多筆，total_visits
+// 動輒破百甚至上千，但實際bookings用電話去查全部是0筆)，判斷這個欄位
+// 是舊資料匯入時代遺留、沒有持續維護，不能拿來用。改成直接對bookings
+// 下電話查詢、即時算出真正的到店次數，雖然多一次查詢，但數字才是對的。
+function useReturningCustomer(inputValue, enabled = true) {
+  const [visitCount, setVisitCount] = useState(0);
+  const timerRef = useRef(null);
+  useEffect(() => {
+    if (!enabled) {
+      setVisitCount(0);
+      return;
+    }
+    const phoneMatch = inputValue.match(/\d{7,}/);
+    if (!phoneMatch) {
+      setVisitCount(0);
+      return;
+    }
+    const phone = phoneMatch[0];
+    clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(async () => {
+      try {
+        const { count } = await sb.from("bookings").select("id", { count: "exact", head: true }).eq("customer_phone", phone).neq("status", "cancelled").neq("status", "no_show").neq("color_tag", "vacation");
+        setVisitCount(count || 0);
+      } catch (e) {
+        setVisitCount(0);
+      }
+    }, 300);
+    return () => clearTimeout(timerRef.current);
+  }, [inputValue, enabled]);
+  return visitCount;
+}
+
 // ═══════════════════════════════════════════
 // MAIN APP
 // ═══════════════════════════════════════════
@@ -3908,6 +3942,7 @@ function MainApp({
     showSug: acShow,
     dismiss: acDismiss
   } = useCustomerSuggest(form.input, !!dialog, dialog?.masterId || master?.id || null, masters);
+  const returningVisitCount = useReturningCustomer(form.input, !!dialog);
   const [showEditLogs, setShowEditLogs] = useState(false);
   const [cellHistory, setCellHistory] = useState(null); // {dateStr,time,masterId,logs}
   const [toast, setToast] = useState(null);
@@ -7207,9 +7242,21 @@ function MainApp({
     style: {
       fontSize: 11,
       color: "var(--text-muted)",
-      marginBottom: 4
+      marginBottom: 4,
+      display: "flex",
+      alignItems: "center",
+      gap: 6
     }
-  }, "姓名＋電話"), /*#__PURE__*/React.createElement("input", {
+  }, "姓名＋電話", returningVisitCount >= 3 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      background: "rgba(162,155,254,0.18)",
+      color: "#c4b5fd",
+      fontSize: 10,
+      fontWeight: 700,
+      padding: "1px 6px",
+      borderRadius: 4
+    }
+  }, "熟客 ", returningVisitCount, "次")), /*#__PURE__*/React.createElement("input", {
     autoFocus: true,
     value: form.input,
     onChange: e => {
@@ -9110,6 +9157,7 @@ function OverviewMonth({
     showSug: acShow,
     dismiss: acDismiss
   } = useCustomerSuggest(form.input, !!dialog, dialog?.masterId || null, masters);
+  const returningVisitCount = useReturningCustomer(form.input, !!dialog);
   const [ovShowEditLogs, setOvShowEditLogs] = useState(false);
   const [ovCellHistory, setOvCellHistory] = useState(null);
   const [ovDragMode, setOvDragMode] = useState(false);
@@ -11290,9 +11338,21 @@ function OverviewMonth({
     style: {
       fontSize: 11,
       color: "var(--text-muted)",
-      marginBottom: 4
+      marginBottom: 4,
+      display: "flex",
+      alignItems: "center",
+      gap: 6
     }
-  }, "姓名＋電話"), /*#__PURE__*/React.createElement("input", {
+  }, "姓名＋電話", returningVisitCount >= 3 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      background: "rgba(162,155,254,0.18)",
+      color: "#c4b5fd",
+      fontSize: 10,
+      fontWeight: 700,
+      padding: "1px 6px",
+      borderRadius: 4
+    }
+  }, "熟客 ", returningVisitCount, "次")), /*#__PURE__*/React.createElement("input", {
     autoFocus: true,
     value: form.input,
     onChange: e => {
