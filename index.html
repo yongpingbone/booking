@@ -10068,9 +10068,9 @@ function OverviewMonth({
     style: {
       padding: "3px 10px",
       borderRadius: 16,
-      border: `1px solid ${ovMasters.includes(m.id) ? "#e94560" : "var(--border2)"}`,
-      background: ovMasters.includes(m.id) ? "#e9456022" : "transparent",
-      color: ovMasters.includes(m.id) ? "#e94560" : "var(--text-muted)",
+      border: `1px solid ${ovMasters.includes(m.id) ? "#a29bfe" : "var(--border2)"}`,
+      background: ovMasters.includes(m.id) ? "rgba(162,155,254,0.15)" : "transparent",
+      color: ovMasters.includes(m.id) ? "#c4b5fd" : "var(--text-muted)",
       fontSize: FS.s,
       cursor: "pointer"
     }
@@ -10094,22 +10094,24 @@ function OverviewMonth({
     title: `還原：${undoStack[0]?.desc || ""}`,
     style: {
       color: "#a29bfe",
-      borderColor: "#a29bfe",
+      border: "none",
+      background: "none",
       fontWeight: 700,
       marginRight: 4
     }
-  }, "↩ 還原") : /*#__PURE__*/React.createElement("button", {
+  }, "還原") : /*#__PURE__*/React.createElement("button", {
     className: "nb",
     disabled: true,
     title: "目前沒有可還原的操作",
     style: {
       color: "var(--text-dim)",
-      borderColor: "var(--border2)",
+      border: "none",
+      background: "none",
       opacity: 0.5,
       cursor: "not-allowed",
       marginRight: 4
     }
-  }, "↩ 還原")), /*#__PURE__*/React.createElement("button", {
+  }, "還原")), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setOvShowSlots(s => {
         const next = !s;
@@ -10120,9 +10122,10 @@ function OverviewMonth({
     className: "nb",
     style: {
       color: ovShowSlots ? "#00b894" : "var(--nav-color)",
-      borderColor: ovShowSlots ? "#00b894" : "var(--border2)"
+      border: "none",
+      background: ovShowSlots ? "rgba(0,184,148,0.12)" : "none"
     }
-  }, "⚡ 選日"), /*#__PURE__*/React.createElement("button", {
+  }, "選日"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setOvShowSearch(s => {
         const next = !s;
@@ -10135,9 +10138,10 @@ function OverviewMonth({
     className: "nb",
     style: {
       color: ovShowSearch ? "#74b9ff" : "var(--nav-color)",
-      borderColor: ovShowSearch ? "#74b9ff" : "var(--border2)"
+      border: "none",
+      background: ovShowSearch ? "rgba(116,185,255,0.12)" : "none"
     }
-  }, "🔍 搜尋"), /*#__PURE__*/React.createElement("button", {
+  }, "搜尋"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setYr(today.getFullYear());
       setMo(today.getMonth());
@@ -10161,10 +10165,11 @@ function OverviewMonth({
     className: "nb",
     style: {
       color: "#00b894",
-      borderColor: "#00b894",
+      border: "none",
+      background: "none",
       fontWeight: 700
     }
-  }, "📍 當日"), /*#__PURE__*/React.createElement("button", {
+  }, "當日"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setOvDragMode(p => !p);
       setOvIsDraggingVac(false);
@@ -10173,10 +10178,11 @@ function OverviewMonth({
     className: "nb",
     style: {
       color: ovDragMode ? "#e94560" : "var(--nav-color)",
-      borderColor: ovDragMode ? "#e94560" : "var(--border2)",
+      border: "none",
+      background: ovDragMode ? "rgba(233,69,96,0.12)" : "none",
       fontWeight: ovDragMode ? 700 : 400
     }
-  }, "🔴 ", ovDragMode ? "退出" : "休假"), /*#__PURE__*/React.createElement("button", {
+  }, ovDragMode ? "退出" : "休假"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setOvMoveMode(p => !p);
       setOvIsDragActive(false);
@@ -10184,10 +10190,11 @@ function OverviewMonth({
     className: "nb",
     style: {
       color: ovMoveMode ? "#a29bfe" : "var(--nav-color)",
-      borderColor: ovMoveMode ? "#a29bfe" : "var(--border2)",
+      border: "none",
+      background: ovMoveMode ? "rgba(162,155,254,0.12)" : "none",
       fontWeight: ovMoveMode ? 700 : 400
     }
-  }, "🔀 ", ovMoveMode ? "退出" : "移動"), /*#__PURE__*/React.createElement("button", {
+  }, ovMoveMode ? "退出" : "移動"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       if (!sel.length) return;
       const m = sel[0];
