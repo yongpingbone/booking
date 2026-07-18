@@ -5647,41 +5647,7 @@ function MainApp({
       fontWeight: 700,
       zIndex: 9999
     }
-  }, toast.m), ((loginMaster || master)?.name === "Hanna" || (loginMaster || master)?.username === "hanna") && /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      const spots = [
-        { label: "左上(店名)", x: 20, y: 20 },
-        { label: "中間偏左(排班)", x: window.innerWidth * 0.15, y: 20 },
-        { label: "正中間", x: window.innerWidth * 0.5, y: 20 },
-        { label: "中間偏右(開放)", x: window.innerWidth * 0.75, y: 20 },
-        { label: "右上(設定)", x: window.innerWidth - 20, y: 20 }
-      ];
-      const report = spots.map(s => {
-        const el = document.elementFromPoint(s.x, s.y);
-        if (!el) return `${s.label}: (查無元素)`;
-        const tag = el.tagName;
-        const cls = (el.className && typeof el.className === "string") ? el.className.slice(0, 40) : "";
-        const txt = (el.textContent || "").trim().slice(0, 15);
-        return `${s.label}: <${tag}> class="${cls}" 內容="${txt}"`;
-      }).join("\n");
-      alert("頂部導覽列各位置實際偵測到的元素：\n\n" + report);
-    },
-    style: {
-      position: "fixed",
-      right: 10,
-      bottom: "calc(10px + env(safe-area-inset-bottom, 0px))",
-      zIndex: 999999,
-      width: 40,
-      height: 40,
-      borderRadius: "50%",
-      border: "2px solid #2ed9c3",
-      background: "rgba(0,0,0,.7)",
-      color: "#2ed9c3",
-      fontSize: 16,
-      cursor: "pointer"
-    },
-    title: "除錯：檢查頂部導覽列被什麼元素佔用"
-  }, "\uD83D\uDD0D"), /*#__PURE__*/React.createElement(MonthlyOpenReminder, {
+  }, toast.m), /*#__PURE__*/React.createElement(MonthlyOpenReminder, {
     authMaster: authMaster,
     msg: msg
   }), /*#__PURE__*/React.createElement("div", {
@@ -6956,7 +6922,8 @@ function MainApp({
     setMasters: setMasters,
     FS: FS,
     msg: msg,
-    loginMaster: loginMaster || master
+    loginMaster: loginMaster || master,
+    isAdmin: isAdmin
   })), tab === "pending" && /*#__PURE__*/React.createElement("div", {
     style: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", zoom: deskZoom }
   }, /*#__PURE__*/React.createElement(PendingBookings, {
@@ -6967,14 +6934,6 @@ function MainApp({
       loadBk();
       loadPendingCount();
     }
-  })), tab === "availability" && /*#__PURE__*/React.createElement("div", {
-    style: { flex: 1, minHeight: 0, overflow: "auto", zoom: deskZoom }
-  }, /*#__PURE__*/React.createElement(AvailabilityModule, {
-    masters: masters,
-    currentMaster: loginMaster || master,
-    isAdmin: isAdmin,
-    canSeeAll: isAdmin || (loginMaster || master)?.username === 'qi' || (loginMaster || master)?.name === '許老師',
-    msg: msg
   })), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -6985,7 +6944,7 @@ function MainApp({
       paddingBottom: "env(safe-area-inset-bottom, 0px)",
       zoom: deskZoom
     }
-  }, [["schedule", "📅 排班"], ["overview", "🗓 全覽"], ...(canViewCRM ? [["crm", "👥 客戶"]] : []), ["analytics", "📊 數據"], ["pending", "📋 待確認"], ["availability", "🟢 開放"], ...(isAdmin ? [["settings", "⚙️ 設定"]] : [])].map(([k, l]) => /*#__PURE__*/React.createElement("button", {
+  }, [["schedule", "📅 排班"], ["overview", "🗓 全覽"], ...(canViewCRM ? [["crm", "👥 客戶"]] : []), ["analytics", "📊 數據"], ["pending", "📋 待確認"], ...(isAdmin ? [["settings", "⚙️ 設定"]] : [])].map(([k, l]) => /*#__PURE__*/React.createElement("button", {
     key: k,
     className: `tab-btn${tab === k ? " active" : ""}`,
     style: { position: "relative" },
@@ -15506,7 +15465,8 @@ function SettingsModule({
   setMasters,
   FS,
   msg,
-  loginMaster
+  loginMaster,
+  isAdmin
 }) {
   const [settTab, setSettTab] = useState(null);
   const [editMaster, setEditMaster] = useState(null);
@@ -15747,7 +15707,7 @@ function SettingsModule({
       overflow: "hidden",
       border: "1px solid var(--border)"
     }
-  }, [["masters", "帳號管理", "👤"], ["rest", "休息時段", "⏸️"], ["export", "批次刪除", "🗑️"], ["history", "歷史紀錄", "📜"], ...(loginMaster?.can_view_all_stats ? [["sync", "資料同步", "🔄"]] : [])].map(([k, l, icon], i) => /*#__PURE__*/React.createElement("button", {
+  }, [["masters", "帳號管理", "👤"], ["rest", "休息時段", "⏸️"], ["export", "批次刪除", "🗑️"], ["history", "歷史紀錄", "📜"], ["availability", "開放", "🟢"], ...(loginMaster?.can_view_all_stats ? [["sync", "資料同步", "🔄"]] : [])].map(([k, l, icon], i) => /*#__PURE__*/React.createElement("button", {
     key: k,
     onClick: () => {
       setSettTab(k);
@@ -15795,7 +15755,7 @@ function SettingsModule({
     }
   }, "←"), /*#__PURE__*/React.createElement("span", {
     style: { fontSize: 14, fontWeight: 700, color: "var(--text-main)" }
-  }, { masters: "帳號管理", rest: "休息時段", export: "批次刪除", history: "歷史紀錄", sync: "資料同步" }[settTab])), settTab === "masters" && /*#__PURE__*/React.createElement("div", {
+  }, { masters: "帳號管理", rest: "休息時段", export: "批次刪除", history: "歷史紀錄", availability: "開放", sync: "資料同步" }[settTab])), settTab === "masters" && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: 16
     }
@@ -16303,7 +16263,15 @@ function SettingsModule({
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit"
-  }) : ""))))), editMaster && /*#__PURE__*/React.createElement("div", {
+  }) : ""))))), settTab === "availability" && /*#__PURE__*/React.createElement("div", {
+    style: { padding: 0 }
+  }, /*#__PURE__*/React.createElement(AvailabilityModule, {
+    masters: masters,
+    currentMaster: loginMaster,
+    isAdmin: isAdmin,
+    canSeeAll: isAdmin || loginMaster?.username === 'qi' || loginMaster?.name === '許老師',
+    msg: msg
+  })), editMaster && /*#__PURE__*/React.createElement("div", {
     "data-modal-backdrop": "true",
     style: {
       position: "fixed",
