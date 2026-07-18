@@ -6902,12 +6902,6 @@ function MainApp({
     pushUndo: pushUndo,
     executeUndo: executeUndo,
     onEditingChange: setOverviewEditing
-  })), tab === "crm" && canViewCRM && /*#__PURE__*/React.createElement("div", {
-    style: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", zoom: deskZoom }
-  }, /*#__PURE__*/React.createElement(CRMModule, {
-    key: crmKey,
-    masters: masters,
-    FS: FS
   })), tab === "analytics" && /*#__PURE__*/React.createElement("div", {
     style: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", zoom: deskZoom }
   }, /*#__PURE__*/React.createElement(LazyAnalyticsModule, {
@@ -6915,7 +6909,7 @@ function MainApp({
     FS: FS,
     currentMaster: master,
     isAdmin: isAdmin
-  })), tab === "settings" && isAdmin && /*#__PURE__*/React.createElement("div", {
+  })), tab === "settings" && (isAdmin || canViewCRM) && /*#__PURE__*/React.createElement("div", {
     style: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", zoom: deskZoom }
   }, /*#__PURE__*/React.createElement(SettingsModule, {
     masters: masters,
@@ -6923,7 +6917,8 @@ function MainApp({
     FS: FS,
     msg: msg,
     loginMaster: loginMaster || master,
-    isAdmin: isAdmin
+    isAdmin: isAdmin,
+    canViewCRM: canViewCRM
   })), tab === "pending" && /*#__PURE__*/React.createElement("div", {
     style: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", zoom: deskZoom }
   }, /*#__PURE__*/React.createElement(PendingBookings, {
@@ -6944,7 +6939,7 @@ function MainApp({
       paddingBottom: "env(safe-area-inset-bottom, 0px)",
       zoom: deskZoom
     }
-  }, [["schedule", "📅 排班"], ["overview", "🗓 全覽"], ...(canViewCRM ? [["crm", "👥 客戶"]] : []), ["analytics", "📊 數據"], ["pending", "📋 待確認"], ...(isAdmin ? [["settings", "⚙️ 設定"]] : [])].map(([k, l]) => /*#__PURE__*/React.createElement("button", {
+  }, [["schedule", "📅 排班"], ["overview", "🗓 全覽"], ["analytics", "📊 數據"], ["pending", "📋 待確認"], ...((isAdmin || canViewCRM) ? [["settings", "⚙️ 設定"]] : [])].map(([k, l]) => /*#__PURE__*/React.createElement("button", {
     key: k,
     className: `tab-btn${tab === k ? " active" : ""}`,
     style: { position: "relative" },
@@ -15512,9 +15507,17 @@ function SettingsModule({
   FS,
   msg,
   loginMaster,
-  isAdmin
+  isAdmin,
+  canViewCRM
 }) {
   const [settTab, setSettTab] = useState(null);
+  const [crmKey, setCrmKey] = useState(0);
+  // 非管理員、但有客戶查看權的師傅(哲瑋/治/泓文)，進到「設定」時只看得到
+  // 客戶這一項功能，直接跳過九宮格、顯示客戶內容，不用讓他們看一個
+  // 只有一張卡片可以點的九宮格畫面。
+  useEffect(() => {
+    if (!isAdmin && canViewCRM) setSettTab("crm");
+  }, [isAdmin, canViewCRM]);
   const [editMaster, setEditMaster] = useState(null);
   const [form, setForm] = useState({
     name: "",
@@ -15753,10 +15756,11 @@ function SettingsModule({
       overflow: "hidden",
       border: "1px solid var(--border)"
     }
-  }, [["masters", "帳號管理", "user"], ["rest", "休息時段", "pause"], ["export", "批次刪除", "trash"], ["history", "歷史紀錄", "history"], ["availability", "開放", "check"], ...(loginMaster?.can_view_all_stats ? [["sync", "資料同步", "sync"]] : [])].map(([k, l, iconKey], i) => /*#__PURE__*/React.createElement("button", {
+  }, [["crm", "客戶", "users"], ["masters", "帳號管理", "user"], ["rest", "休息時段", "pause"], ["export", "批次刪除", "trash"], ["history", "歷史紀錄", "history"], ["availability", "開放", "check"], ...(loginMaster?.can_view_all_stats ? [["sync", "資料同步", "sync"]] : [])].map(([k, l, iconKey], i) => /*#__PURE__*/React.createElement("button", {
     key: k,
     onClick: () => {
       setSettTab(k);
+      if (k === "crm") setCrmKey(p => p + 1);
       if (k === "history") loadHistory();
       if (k === "sync") loadSyncStatus();
     },
@@ -15793,13 +15797,15 @@ function SettingsModule({
       border: "none",
       color: "var(--text-main)",
       fontSize: 18,
-      cursor: "pointer",
+      cursor: isAdmin ? "pointer" : "default",
+      opacity: isAdmin ? 1 : 0,
+      pointerEvents: isAdmin ? "auto" : "none",
       padding: "4px 8px",
       fontFamily: "inherit"
     }
   }, "←"), /*#__PURE__*/React.createElement("span", {
     style: { fontSize: 14, fontWeight: 700, color: "var(--text-main)" }
-  }, { masters: "帳號管理", rest: "休息時段", export: "批次刪除", history: "歷史紀錄", availability: "開放", sync: "資料同步" }[settTab])), settTab === "masters" && /*#__PURE__*/React.createElement("div", {
+  }, { crm: "客戶", masters: "帳號管理", rest: "休息時段", export: "批次刪除", history: "歷史紀錄", availability: "開放", sync: "資料同步" }[settTab])), settTab === "masters" && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: 16
     }
@@ -16307,7 +16313,13 @@ function SettingsModule({
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit"
-  }) : ""))))), settTab === "availability" && /*#__PURE__*/React.createElement("div", {
+  }) : ""))))), settTab === "crm" && /*#__PURE__*/React.createElement("div", {
+    style: { padding: 0 }
+  }, /*#__PURE__*/React.createElement(CRMModule, {
+    key: crmKey,
+    masters: masters,
+    FS: FS
+  })), settTab === "availability" && /*#__PURE__*/React.createElement("div", {
     style: { padding: 0 }
   }, /*#__PURE__*/React.createElement(AvailabilityModule, {
     masters: masters,
