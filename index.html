@@ -6091,16 +6091,22 @@ function MainApp({
   }, /*#__PURE__*/React.createElement(SettingsIcon, { name: "shuffle", color: "currentColor", size: 14 }), moveMode ? "退出" : "移動"), /*#__PURE__*/React.createElement("button", {
     onClick: () => openDlg(),
     className: "nb",
+    "aria-label": "新增預約",
+    title: "新增預約",
     style: {
       color: "#fff",
       background: "#e94560",
       border: "none",
-      fontWeight: 700,
+      borderRadius: "50%",
+      width: 32,
+      height: 32,
+      padding: 0,
       display: "flex",
       alignItems: "center",
-      gap: 4
+      justifyContent: "center",
+      flexShrink: 0
     }
-  }, /*#__PURE__*/React.createElement(SettingsIcon, { name: "plus", color: "currentColor", size: 14 }), "新增"))), showSearch && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(SettingsIcon, { name: "plus", color: "currentColor", size: 18 })))), showSearch && /*#__PURE__*/React.createElement("div", {
     style: {
       background: "var(--bg-header)",
       borderBottom: "1px solid var(--border)",
