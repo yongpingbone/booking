@@ -15607,6 +15607,8 @@ function SettingsModule({
   const [showSelfEdit, setShowSelfEdit] = useState(false);
   const [selfForm, setSelfForm] = useState({ name: "", username: "" });
   const [selfSaving, setSelfSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef(null);
   const [editMaster, setEditMaster] = useState(null);
   const [form, setForm] = useState({
     name: "",
@@ -15790,6 +15792,47 @@ function SettingsModule({
       msg("已儲存");
     } else msg("儲存失敗", true);
   };
+  // 2026-07-18：頭貼上傳。檔案路徑固定用{自己的uid}/avatar.{副檔名}，
+  // 每次重傳都用upsert:true直接覆蓋同一個檔案，不會累積一堆舊照片佔空間。
+  // 存進masters.avatar_url的URL後面刻意加上?t=時間戳記，是因為檔案路徑
+  // 沒變、內容變了的情況下，瀏覽器/CDN很容易還顯示快取的舊照片，加時間戳記
+  // 讓每次換照片後的URL都是新的，才能保證換完馬上看到新照片。
+  const handleAvatarUpload = async file => {
+    if (!loginMaster || uploadingAvatar) return;
+    if (!file.type.startsWith("image/")) {
+      msg("請選擇圖片檔案", true);
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      msg("圖片大小請控制在5MB以內", true);
+      return;
+    }
+    setUploadingAvatar(true);
+    const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+    const path = `${loginMaster.id}/avatar.${ext}`;
+    const { error: uploadError } = await sb.storage.from("avatars").upload(path, file, {
+      upsert: true,
+      contentType: file.type
+    });
+    if (uploadError) {
+      setUploadingAvatar(false);
+      msg("上傳失敗：" + uploadError.message, true);
+      return;
+    }
+    const { data: urlData } = sb.storage.from("avatars").getPublicUrl(path);
+    const freshUrl = urlData.publicUrl + "?t=" + Date.now();
+    const { error: dbError } = await sb.from("masters").update({
+      avatar_url: freshUrl
+    }).eq("id", loginMaster.id);
+    setUploadingAvatar(false);
+    if (!dbError) {
+      setMasters(prev => prev.map(m => m.id === loginMaster.id ? {
+        ...m,
+        avatar_url: freshUrl
+      } : m));
+      msg("照片已更新");
+    } else msg("儲存失敗", true);
+  };
   const toggleActive = async m => {
     await sb.from("masters").update({
       is_active: !m.is_active
@@ -15844,6 +15887,111 @@ function SettingsModule({
     }
     setDelCount(0);
     msg(`已刪除 ${deletedCount ?? freshCount ?? "?"} 筆`);
+  };
+
+  // 2026-07-18：自我編輯彈窗獨立成一個函式、用有名字的中繼變數組出來，
+  // 不要塞進單一個深層巢狀表達式——這個彈窗上次就是因為手繪巢狀括號
+  // 算錯導致整個設定頁空白過一次，這次刻意用比較不容易出錯的寫法。
+  const renderSelfEditModal = () => {
+    const currentAvatar = loginMaster?.avatar_url;
+    const initial = (selfForm.name || loginMaster?.name || "?").slice(0, 1);
+    const avatarCircle = currentAvatar
+      ? /*#__PURE__*/React.createElement("img", {
+          src: currentAvatar,
+          alt: "大頭貼",
+          style: { width: 84, height: 84, borderRadius: "50%", objectFit: "cover", display: "block" }
+        })
+      : /*#__PURE__*/React.createElement("div", {
+          style: {
+            width: 84, height: 84, borderRadius: "50%",
+            background: "rgba(162,155,254,0.2)", color: "#c4b5fd",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 32, fontWeight: 700
+          }
+        }, initial);
+    const uploadBadge = /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: "absolute", bottom: 0, right: 0,
+        width: 26, height: 26, borderRadius: "50%",
+        background: "#a29bfe", border: "2px solid var(--bg-header)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 12, color: "#00171f"
+      }
+    }, uploadingAvatar ? "…" : "✎");
+    const avatarSection = /*#__PURE__*/React.createElement("div", {
+      style: { display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 16 }
+    },
+      /*#__PURE__*/React.createElement("div", {
+        style: { position: "relative", cursor: "pointer" },
+        onClick: () => avatarInputRef.current?.click()
+      }, avatarCircle, uploadBadge),
+      /*#__PURE__*/React.createElement("input", {
+        ref: avatarInputRef,
+        type: "file",
+        accept: "image/*",
+        style: { display: "none" },
+        onChange: e => {
+          const file = e.target.files?.[0];
+          if (file) handleAvatarUpload(file);
+          e.target.value = "";
+        }
+      }),
+      /*#__PURE__*/React.createElement("div", {
+        style: { fontSize: 11, color: "var(--text-muted)", marginTop: 6 }
+      }, "點頭貼可更換照片")
+    );
+    const titleRow = /*#__PURE__*/React.createElement("div", {
+      style: { fontWeight: 700, fontSize: 15, marginBottom: 14, textAlign: "center" }
+    }, "我的帳號");
+    const fieldRows = [["name", "顯示名稱"], ["username", "登入帳號"]].map(([k, l]) => /*#__PURE__*/React.createElement("div", {
+      key: k,
+      style: { marginBottom: 10 }
+    },
+      /*#__PURE__*/React.createElement("div", {
+        style: { fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }
+      }, l),
+      /*#__PURE__*/React.createElement("input", {
+        value: selfForm[k],
+        onChange: e => setSelfForm(f => ({ ...f, [k]: e.target.value })),
+        style: {
+          width: "100%", background: "var(--input-bg)", border: "1px solid var(--border2)",
+          borderRadius: 8, padding: "7px 10px", fontSize: 13, color: "var(--text-main)"
+        }
+      })
+    ));
+    const cancelBtn = /*#__PURE__*/React.createElement("button", {
+      onClick: () => setShowSelfEdit(false),
+      style: {
+        flex: 1, padding: 10, borderRadius: 8, background: "var(--bg-sub)",
+        border: "1px solid var(--border2)", color: "var(--text-main)", cursor: "pointer"
+      }
+    }, "取消");
+    const saveBtn = /*#__PURE__*/React.createElement("button", {
+      onClick: saveSelf,
+      disabled: selfSaving,
+      style: {
+        flex: 2, padding: 10, borderRadius: 8, background: "#a29bfe",
+        border: "none", color: "#00171f", fontWeight: 700, cursor: "pointer"
+      }
+    }, selfSaving ? "儲存中..." : "儲存");
+    const buttonRow = /*#__PURE__*/React.createElement("div", {
+      style: { display: "flex", gap: 8, marginTop: 16 }
+    }, cancelBtn, saveBtn);
+    const card = /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: "var(--bg-header)", border: "1px solid var(--border2)",
+        borderRadius: 16, padding: 20, width: "90%", maxWidth: 380
+      },
+      onClick: e => e.stopPropagation()
+    }, titleRow, avatarSection, fieldRows, buttonRow);
+    return /*#__PURE__*/React.createElement("div", {
+      "data-modal-backdrop": "true",
+      style: {
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)",
+        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200
+      },
+      onClick: () => setShowSelfEdit(false)
+    }, card);
   };
 
 
@@ -16657,91 +16805,7 @@ function SettingsModule({
       fontWeight: 700,
       cursor: "pointer"
     }
-  }, saving ? "儲存中..." : "儲存")))))), showSelfEdit && /*#__PURE__*/React.createElement("div", {
-    "data-modal-backdrop": "true",
-    style: {
-      position: "fixed",
-      inset: 0,
-      background: "rgba(0,0,0,0.8)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      zIndex: 200
-    },
-    onClick: () => setShowSelfEdit(false)
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: "var(--bg-header)",
-      border: "1px solid var(--border2)",
-      borderRadius: 16,
-      padding: 20,
-      width: "90%",
-      maxWidth: 380
-    },
-    onClick: e => e.stopPropagation()
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontWeight: 700,
-      fontSize: 15,
-      marginBottom: 14
-    }
-  }, "編輯我的帳號"), [["name", "顯示名稱"], ["username", "登入帳號"]].map(([k, l]) => /*#__PURE__*/React.createElement("div", {
-    key: k,
-    style: {
-      marginBottom: 10
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11,
-      color: "var(--text-muted)",
-      marginBottom: 4
-    }
-  }, l), /*#__PURE__*/React.createElement("input", {
-    value: selfForm[k],
-    onChange: e => setSelfForm(f => ({
-      ...f,
-      [k]: e.target.value
-    })),
-    style: {
-      width: "100%",
-      background: "var(--input-bg)",
-      border: "1px solid var(--border2)",
-      borderRadius: 8,
-      padding: "7px 10px",
-      fontSize: 13,
-      color: "var(--text-main)"
-    }
-  }))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 8,
-      marginTop: 16
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => setShowSelfEdit(false),
-    style: {
-      flex: 1,
-      padding: 10,
-      borderRadius: 8,
-      background: "var(--bg-sub)",
-      border: "1px solid var(--border2)",
-      color: "var(--text-main)",
-      cursor: "pointer"
-    }
-  }, "取消"), /*#__PURE__*/React.createElement("button", {
-    onClick: saveSelf,
-    disabled: selfSaving,
-    style: {
-      flex: 2,
-      padding: 10,
-      borderRadius: 8,
-      background: "#00d09c",
-      border: "none",
-      color: "#00171f",
-      fontWeight: 700,
-      cursor: "pointer"
-    }
-  }, selfSaving ? "儲存中..." : "儲存")))));
+  }, saving ? "儲存中..." : "儲存")))))), showSelfEdit && renderSelfEditModal());
 }
 class ErrorBoundary extends React.Component {
   constructor(p) {
