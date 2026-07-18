@@ -6887,7 +6887,7 @@ function MainApp({
       flexDirection: "column",
       zoom: deskZoom
     }
-  }, /*#__PURE__*/React.createElement(OverviewMonth, {
+  }, /*#__PURE__*/React.createElement(ErrorBoundary, null, /*#__PURE__*/React.createElement(OverviewMonth, {
     masters: masters,
     ovMasters: ovMasters,
     setOvMasters: setOvMasters,
@@ -6902,9 +6902,9 @@ function MainApp({
     pushUndo: pushUndo,
     executeUndo: executeUndo,
     onEditingChange: setOverviewEditing
-  })), tab === "settings" && (isAdmin || canViewCRM) && /*#__PURE__*/React.createElement("div", {
+  }))), tab === "settings" && (isAdmin || canViewCRM) && /*#__PURE__*/React.createElement("div", {
     style: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", zoom: deskZoom }
-  }, /*#__PURE__*/React.createElement(SettingsModule, {
+  }, /*#__PURE__*/React.createElement(ErrorBoundary, null, /*#__PURE__*/React.createElement(SettingsModule, {
     masters: masters,
     setMasters: setMasters,
     FS: FS,
@@ -6913,9 +6913,9 @@ function MainApp({
     scheduleMaster: master,
     isAdmin: isAdmin,
     canViewCRM: canViewCRM
-  })), tab === "pending" && /*#__PURE__*/React.createElement("div", {
+  }))), tab === "pending" && /*#__PURE__*/React.createElement("div", {
     style: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", zoom: deskZoom }
-  }, /*#__PURE__*/React.createElement(PendingBookings, {
+  }, /*#__PURE__*/React.createElement(ErrorBoundary, null, /*#__PURE__*/React.createElement(PendingBookings, {
     masters: masters,
     currentMaster: loginMaster || master,
     isAdmin: isAdmin,
@@ -6923,7 +6923,7 @@ function MainApp({
       loadBk();
       loadPendingCount();
     }
-  })), /*#__PURE__*/React.createElement("div", {
+  }))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       background: "var(--bg-header)",
