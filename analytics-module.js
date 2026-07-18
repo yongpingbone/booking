@@ -133,6 +133,12 @@ window.AnalyticsModule = function AnalyticsModule({
   const [yearB, setYearB] = useState(today.getFullYear());
   const [allData, setAllData] = useState([]);
   const [loading, setLoading] = useState(false);
+  // 2026-07-18：週間分析(週日~週六，全部歷史資料，不受年份選擇器影響，
+  // Hanna明確要求「完整數據需要保留」)——跟上面allData是分開的一份
+  // 資料，只在真的點進「週間分析」這個分頁時才抓一次(懶載入)，不會
+  // 每次開數據頁就抓一次全部歷史資料。
+  const [weekdayData, setWeekdayData] = useState(null); // null=還沒抓過，[]=抓過但沒資料
+  const [weekdayLoading, setWeekdayLoading] = useState(false);
   const [detailMonth, setDetailMonth] = useState(today.getMonth());
   // 2026-07-12新增：讓「每日明細」正在瀏覽的月份也能直接跑AI分析，不用
   // 只能對「本週/本月至今」這兩個寫死的區間——切到哪個月，分析哪個月。
@@ -197,6 +203,22 @@ window.AnalyticsModule = function AnalyticsModule({
       setLoading(false);
     });
   }, [yearsNeeded.join(",")]);
+  useEffect(() => {
+    if (anaTab !== "weekday" || weekdayData !== null || weekdayLoading) return;
+    setWeekdayLoading(true);
+    (async () => {
+      let all = [], from = 0;
+      while (true) {
+        const { data } = await sb.from("bookings").select("master_id,date,guest_count,color_tag,customer_phone,customer_name,status").neq("status", "cancelled").neq("status", "no_show").range(from, from + 999);
+        if (!data || data.length === 0) break;
+        all = [...all, ...data];
+        if (data.length < 1000) break;
+        from += 1000;
+      }
+      setWeekdayData(all);
+      setWeekdayLoading(false);
+    })();
+  }, [anaTab, weekdayData, weekdayLoading]);
   const calcStat = (masterId, y, m) => {
     const prefix = `${y}-${String(m + 1).padStart(2, "0")}`;
     const vacDates = new Set(allData.filter(b => b.master_id === masterId && b.date.startsWith(prefix) && b.color_tag === "vacation").map(b => b.date));
@@ -228,6 +250,21 @@ window.AnalyticsModule = function AnalyticsModule({
       old: total - newC,
       vac
     };
+  };
+  // 週日=0 ... 週六=6，用JS內建Date.getDay()的順序，跟排班表週日在最
+  // 左邊的欄位順序一致。用weekdayData(全部歷史、懶載入)不是allData
+  // (只有目前選到的幾個年份)，這樣才符合Hanna要求的「完整數據保留」。
+  const calcWeekdayStat = masterId => {
+    const buckets = Array.from({ length: 7 }, () => ({ total: 0, newC: 0, count: 0 }));
+    if (!weekdayData) return buckets;
+    weekdayData.filter(b => b.master_id === masterId && isCountable(b)).forEach(b => {
+      const dow = new Date(b.date + "T00:00:00").getDay();
+      const g = b.guest_count || 1;
+      buckets[dow].total += g;
+      buckets[dow].count += 1;
+      if (b.color_tag === "new_customer") buckets[dow].newC += g;
+    });
+    return buckets;
   };
   const getDayStats = (masterId, y, m) => {
     const days = new Date(y, m + 1, 0).getDate();
@@ -281,6 +318,76 @@ window.AnalyticsModule = function AnalyticsModule({
     color: "var(--text-muted)",
     fontSize: 10
   };
+  // 2026-07-18：週間分析(週日~週六)分頁的渲染邏輯，刻意獨立成一個函式、
+  // 用明確的中繼變數一步步組出畫面，而不是塞進單一個深層巢狀的
+  // React.createElement表達式——手繪這種多層巢狀的圖表結構，括號很
+  // 容易數錯(這次真的發生過)，拆成小段、每段有名字、可以個別驗證，
+  // 比較不容易出錯。
+  const renderWeekdayTab = () => {
+    if (weekdayLoading) {
+      return /*#__PURE__*/React.createElement("div", {
+        style: { textAlign: "center", padding: 30, color: "var(--text-muted)", fontSize: 13 }
+      }, "讀取全部歷史資料中…");
+    }
+    const weekLabels = ["日", "一", "二", "三", "四", "五", "六"];
+    const legend = /*#__PURE__*/React.createElement("div", {
+      style: { display: "flex", gap: 12, marginBottom: 14, fontSize: 11, color: "var(--text-muted)" }
+    },
+      /*#__PURE__*/React.createElement("span", { style: { display: "flex", alignItems: "center", gap: 4 } },
+        /*#__PURE__*/React.createElement("span", { style: { width: 10, height: 10, borderRadius: 2, background: "#74b9ff", display: "inline-block" } }),
+        "總預約人次"
+      ),
+      /*#__PURE__*/React.createElement("span", { style: { display: "flex", alignItems: "center", gap: 4 } },
+        /*#__PURE__*/React.createElement("span", { style: { width: 10, height: 10, borderRadius: 2, background: "#f5a623", display: "inline-block" } }),
+        "新客人次"
+      )
+    );
+    const masterCards = activeMasters.map(m => {
+      const stats = calcWeekdayStat(m.id);
+      const maxVal = Math.max(1, ...stats.map(s => s.total));
+      const grandTotal = stats.reduce((s, x) => s + x.total, 0);
+      const grandNew = stats.reduce((s, x) => s + x.newC, 0);
+      const dayColumns = stats.map((s, dow) => {
+        const totalBarPx = Math.max(2, s.total / maxVal * 70);
+        const newBarPx = Math.max(s.newC > 0 ? 2 : 0, s.newC / maxVal * 70);
+        const numberLabel = /*#__PURE__*/React.createElement("div", {
+          style: { fontSize: 9, color: "var(--text-dim)" }
+        }, s.total || "");
+        const totalBar = /*#__PURE__*/React.createElement("div", {
+          style: { width: 8, height: totalBarPx + "px", background: "#74b9ff", borderRadius: "2px 2px 0 0" }
+        });
+        const newBar = /*#__PURE__*/React.createElement("div", {
+          style: { width: 8, height: newBarPx + "px", background: "#f5a623", borderRadius: "2px 2px 0 0" }
+        });
+        const barPair = /*#__PURE__*/React.createElement("div", {
+          style: { display: "flex", gap: 2, alignItems: "flex-end", height: 70, width: "100%", justifyContent: "center" }
+        }, totalBar, newBar);
+        const dayLabel = /*#__PURE__*/React.createElement("div", {
+          style: { fontSize: 11, color: (dow === 0 || dow === 6) ? "#e94560" : "var(--text-muted)", fontWeight: 700 }
+        }, weekLabels[dow]);
+        return /*#__PURE__*/React.createElement("div", {
+          key: dow,
+          style: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, height: "100%", justifyContent: "flex-end" }
+        }, numberLabel, barPair, dayLabel);
+      });
+      const cardHeader = /*#__PURE__*/React.createElement("div", {
+        style: { display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }
+      },
+        /*#__PURE__*/React.createElement("span", { style: { fontWeight: 700, fontSize: 14 } }, m.name),
+        /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: "var(--text-muted)" } }, "總計 ", grandTotal, "（新客 ", grandNew, "）")
+      );
+      const barsRow = /*#__PURE__*/React.createElement("div", {
+        style: { display: "flex", alignItems: "flex-end", gap: 6, height: 110 }
+      }, ...dayColumns);
+      return /*#__PURE__*/React.createElement("div", {
+        key: m.id,
+        style: { background: "var(--bg-header)", borderRadius: 12, border: "1px solid var(--border2)", padding: "14px 12px", marginBottom: 12 }
+      }, cardHeader, barsRow);
+    });
+    return /*#__PURE__*/React.createElement("div", {
+      style: { padding: 12 }
+    }, legend, ...masterCards);
+  };
   return /*#__PURE__*/React.createElement("div", {
     style: {
       paddingBottom: 140,
@@ -294,7 +401,7 @@ window.AnalyticsModule = function AnalyticsModule({
       borderBottom: "1px solid var(--border2)",
       overflowX: "auto"
     }
-  }, [["master", "個人明細"], ["summary", "月度總表"], ["yearly", "全年對比"]].map(([k, l]) => /*#__PURE__*/React.createElement("button", {
+  }, [["master", "個人明細"], ["summary", "月度總表"], ["yearly", "全年對比"], ["weekday", "週間分析"]].map(([k, l]) => /*#__PURE__*/React.createElement("button", {
     key: k,
     className: `tab-btn${anaTab === k ? " active" : ""}`,
     onClick: () => setAnaTab(k)
@@ -1049,7 +1156,8 @@ window.AnalyticsModule = function AnalyticsModule({
         }
       }, yNew || "—"));
     })))));
-  })));
+  })), anaTab === "weekday" && renderWeekdayTab());
 }
+
 
 ;
