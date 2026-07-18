@@ -15786,7 +15786,7 @@ function SettingsModule({
   };
 
 
-  return /*#__PURE__*/React.createElement("div", {
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       flex: 1,
       overflow: "auto",
@@ -16680,7 +16680,7 @@ function SettingsModule({
       fontWeight: 700,
       cursor: "pointer"
     }
-  }, selfSaving ? "儲存中..." : "儲存"))));
+  }, selfSaving ? "儲存中..." : "儲存")))));
 }
 class ErrorBoundary extends React.Component {
   constructor(p) {
