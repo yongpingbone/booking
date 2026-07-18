@@ -7128,7 +7128,8 @@ function MainApp({
       color: "var(--text-main)",
       border: "1px solid var(--border2)",
       borderRadius: 5,
-      padding: 6
+      padding: 6,
+      fontSize: 13
     }
   }), /*#__PURE__*/React.createElement("select", {
     value: dialog.time,
@@ -7141,7 +7142,8 @@ function MainApp({
       color: "var(--text-main)",
       border: "1px solid var(--border2)",
       borderRadius: 5,
-      padding: 6
+      padding: 6,
+      fontSize: 13
     }
   }, TIMES.map(t => {
     const taken = bookings[`${dialog.dateStr}__${t}`];
@@ -7165,7 +7167,8 @@ function MainApp({
       color: "var(--text-main)",
       border: "1px solid var(--border2)",
       borderRadius: 5,
-      padding: 6
+      padding: 6,
+      fontSize: 13
     }
   }, masters.filter(m => m.role !== "editor").map(m => /*#__PURE__*/React.createElement("option", {
     key: m.id,
@@ -7253,6 +7256,7 @@ function MainApp({
       borderRadius: 8,
       padding: "8px 11px",
       color: "var(--text-main)",
+      fontSize: 14,
       transition: "all 0.2s"
     }
   }), acShow && acSug.length > 0 && /*#__PURE__*/React.createElement("div", {
@@ -7675,7 +7679,8 @@ function MainApp({
       border: "1px solid var(--border2)",
       borderRadius: 8,
       padding: "7px 11px",
-      color: "var(--text-main)"
+      color: "var(--text-main)",
+      fontSize: 14
     }
   })), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -7691,6 +7696,8 @@ function MainApp({
       border: "1px solid var(--border2)",
       background: "transparent",
       color: "var(--text-muted)",
+      fontSize: 14,
+      fontWeight: 700,
       cursor: "pointer"
     }
   }, "取消"), /*#__PURE__*/React.createElement("button", {
@@ -7703,6 +7710,8 @@ function MainApp({
       border: "1px solid #74b9ff",
       background: "transparent",
       color: "#74b9ff",
+      fontSize: 14,
+      fontWeight: 700,
       cursor: "pointer"
     }
   }, "儲存並繼續"), /*#__PURE__*/React.createElement("button", {
@@ -7715,6 +7724,7 @@ function MainApp({
       background: (COLOR_NO_INPUT.has(form.color) || form.input.trim()) && !saving ? "#e94560" : "var(--border2)",
       border: "none",
       color: (COLOR_NO_INPUT.has(form.color) || form.input.trim()) && !saving ? "#fff" : "var(--text-dim)",
+      fontSize: 14,
       fontWeight: 700,
       cursor: "pointer"
     }
@@ -11329,6 +11339,7 @@ function OverviewMonth({
       borderRadius: 8,
       padding: "8px 11px",
       color: "var(--text-main)",
+      fontSize: 14,
       transition: "all 0.2s"
     }
   }), acShow && acSug.length > 0 && /*#__PURE__*/React.createElement("div", {
@@ -11750,7 +11761,8 @@ function OverviewMonth({
       border: "1px solid var(--border2)",
       borderRadius: 8,
       padding: "7px 11px",
-      color: "var(--text-main)"
+      color: "var(--text-main)",
+      fontSize: 14
     }
   })), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -11766,6 +11778,8 @@ function OverviewMonth({
       border: "1px solid var(--border2)",
       background: "transparent",
       color: "var(--text-muted)",
+      fontSize: 14,
+      fontWeight: 700,
       cursor: "pointer"
     }
   }, "取消"), /*#__PURE__*/React.createElement("button", {
@@ -11778,6 +11792,8 @@ function OverviewMonth({
       border: "1px solid #74b9ff",
       background: "transparent",
       color: "#74b9ff",
+      fontSize: 14,
+      fontWeight: 700,
       cursor: "pointer"
     }
   }, "儲存並繼續"), /*#__PURE__*/React.createElement("button", {
@@ -11790,6 +11806,7 @@ function OverviewMonth({
       background: (COLOR_NO_INPUT.has(form.color) || form.input.trim()) && !saving ? "#e94560" : "var(--border2)",
       border: "none",
       color: (COLOR_NO_INPUT.has(form.color) || form.input.trim()) && !saving ? "#fff" : "var(--text-dim)",
+      fontSize: 14,
       fontWeight: 700,
       cursor: "pointer"
     }
