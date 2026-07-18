@@ -43,7 +43,7 @@ body.dark {
 }
 .nb { background:var(--nav-bg); border:1px solid var(--border2); color:var(--nav-color); border-radius:5px; padding:4px 10px; cursor:pointer; font-size:12px; }
 .tab-btn { padding:8px 14px; background:transparent; border:none; border-bottom:2px solid transparent; color:var(--text-muted); font-size:12px; cursor:pointer; white-space:nowrap; }
-.tab-btn.active { border-bottom-color:#e94560; color:#e94560; font-weight:700; }
+.tab-btn.active { border-bottom-color:#c4b5fd; color:#c4b5fd; font-weight:700; }
 .c-none { background:transparent !important; }
 .c-new_customer { background:rgba(245,166,35,0.35) !important; border-left:3px solid #f5a623 !important; }
 .c-cui { background:rgba(255,77,148,0.30) !important; border-left:3px solid #ff4d94 !important; }
@@ -6064,16 +6064,7 @@ function MainApp({
       background: moveMode ? "rgba(162,155,254,0.12)" : "none",
       fontWeight: moveMode ? 700 : 400
     }
-  }, moveMode ? "退出" : "移動"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => openDlg(),
-    className: "nb",
-    style: {
-      color: "#fff",
-      background: "#e94560",
-      border: "none",
-      fontWeight: 700
-    }
-  }, "＋ 新增"))), showSearch && /*#__PURE__*/React.createElement("div", {
+  }, moveMode ? "退出" : "移動"))), showSearch && /*#__PURE__*/React.createElement("div", {
     style: {
       background: "var(--bg-header)",
       borderBottom: "1px solid var(--border)",
@@ -6891,7 +6882,30 @@ function MainApp({
     month: month,
     FS: FS,
     onClose: () => setShowOwnerPanel(false)
-  }))), tab === "overview" && /*#__PURE__*/React.createElement("div", {
+  })), /*#__PURE__*/React.createElement("button", {
+    onClick: () => openDlg(),
+    "aria-label": "新增預約",
+    title: "新增預約",
+    style: {
+      position: "fixed",
+      right: 16,
+      bottom: "calc(76px + env(safe-area-inset-bottom, 0px))",
+      width: 52,
+      height: 52,
+      borderRadius: "50%",
+      background: "#e94560",
+      color: "#fff",
+      border: "none",
+      fontSize: 26,
+      fontWeight: 400,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      boxShadow: "0 4px 14px rgba(233,69,96,0.45)",
+      zIndex: 50,
+      cursor: "pointer"
+    }
+  }, "+")), tab === "overview" && /*#__PURE__*/React.createElement("div", {
     style: {
       flex: 1,
       minHeight: 0,
@@ -6955,7 +6969,9 @@ function MainApp({
       if (k === "crm") setCrmKey(p => p + 1);
       if (k === "pending") loadPendingCount();
     }
-  }, /*#__PURE__*/React.createElement(SettingsIcon, { name: iconName, color: tab === k ? "#c4b5fd" : "#8b7fd6", size: 20 }), l, k === "pending" && pendingCount > 0 && /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement(SettingsIcon, { name: iconName, color: tab === k ? "#c4b5fd" : "#8b7fd6", size: 20 }), /*#__PURE__*/React.createElement("span", {
+    style: { color: tab === k ? "#c4b5fd" : "#8b7fd6" }
+  }, l), k === "pending" && pendingCount > 0 && /*#__PURE__*/React.createElement("span", {
     style: {
       position: "absolute",
       top: 2,
@@ -16058,7 +16074,7 @@ function SettingsModule({
         fontSize: 12
       }
     }, "🔒"), /*#__PURE__*/React.createElement("span", {
-      style: { fontSize: 12, color: "var(--text-main)" }
+      style: { fontSize: 12, color: "#c4b5fd" }
     }, l));
   }))
   ) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
