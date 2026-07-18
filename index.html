@@ -5961,7 +5961,7 @@ function MainApp({
       alignItems: "center",
       gap: 4
     }
-  }, /*#__PURE__*/React.createElement(SettingsIcon, { name: "target", color: "currentColor", size: 14 }), "當日"), /*#__PURE__*/React.createElement("button", {
+  }, "當日"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setShowSlots(true);
       setSlotDate(slotDate === "pick" ? null : "pick");
@@ -5970,12 +5970,9 @@ function MainApp({
     style: {
       color: showSlots && slotDate === "pick" ? "#00b894" : "var(--nav-color)",
       border: "none",
-      background: showSlots && slotDate === "pick" ? "rgba(0,184,148,0.12)" : "none",
-      display: "flex",
-      alignItems: "center",
-      gap: 4
+      background: showSlots && slotDate === "pick" ? "rgba(0,184,148,0.12)" : "none"
     }
-  }, /*#__PURE__*/React.createElement(SettingsIcon, { name: "calpick", color: "currentColor", size: 14 }), "選日"), /*#__PURE__*/React.createElement("button", {
+  }, "選日"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setShowSearch(s => {
         const next = !s;
@@ -5989,12 +5986,9 @@ function MainApp({
     style: {
       color: showSearch ? "#74b9ff" : "var(--nav-color)",
       border: "none",
-      background: showSearch ? "rgba(116,185,255,0.12)" : "none",
-      display: "flex",
-      alignItems: "center",
-      gap: 4
+      background: showSearch ? "rgba(116,185,255,0.12)" : "none"
     }
-  }, /*#__PURE__*/React.createElement(SettingsIcon, { name: "search", color: "currentColor", size: 14 }), "搜尋"), /*#__PURE__*/React.createElement("button", {
+  }, "搜尋"), /*#__PURE__*/React.createElement("button", {
     onClick: findNearestOpenSlot,
     disabled: findingSlot,
     className: "nb",
@@ -6003,12 +5997,9 @@ function MainApp({
       color: "#2ed9c3",
       border: "none",
       background: "none",
-      fontWeight: 700,
-      display: "flex",
-      alignItems: "center",
-      gap: 4
+      fontWeight: 700
     }
-  }, /*#__PURE__*/React.createElement(SettingsIcon, { name: "spark", color: "currentColor", size: 14 }), findingSlot ? "查詢中" : "空檔"), undoStack.length > 0 ? /*#__PURE__*/React.createElement("button", {
+  }, findingSlot ? "查詢中" : "空檔"), undoStack.length > 0 ? /*#__PURE__*/React.createElement("button", {
     onClick: executeUndo,
     className: "nb",
     title: `還原：${undoStack[0]?.desc || ""}`,
@@ -6017,12 +6008,9 @@ function MainApp({
       border: "none",
       background: "none",
       fontWeight: 700,
-      fontSize: 12,
-      display: "flex",
-      alignItems: "center",
-      gap: 4
+      fontSize: 12
     }
-  }, /*#__PURE__*/React.createElement(SettingsIcon, { name: "undo", color: "currentColor", size: 14 }), "還原") : /*#__PURE__*/React.createElement("button", {
+  }, "還原") : /*#__PURE__*/React.createElement("button", {
     className: "nb",
     disabled: true,
     title: "目前沒有可還原的操作",
@@ -6032,12 +6020,9 @@ function MainApp({
       background: "none",
       opacity: 0.5,
       cursor: "not-allowed",
-      fontSize: 12,
-      display: "flex",
-      alignItems: "center",
-      gap: 4
+      fontSize: 12
     }
-  }, /*#__PURE__*/React.createElement(SettingsIcon, { name: "undo", color: "currentColor", size: 14 }), "還原"), /*#__PURE__*/React.createElement("button", {
+  }, "還原"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       const next = showSun === "1" ? "0" : "1";
       setShowSun(next);
@@ -6052,12 +6037,9 @@ function MainApp({
     style: {
       color: showSun === "1" ? "#a29bfe" : "var(--nav-color)",
       border: "none",
-      background: showSun === "1" ? "rgba(162,155,254,0.12)" : "none",
-      display: "flex",
-      alignItems: "center",
-      gap: 4
+      background: showSun === "1" ? "rgba(162,155,254,0.12)" : "none"
     }
-  }, /*#__PURE__*/React.createElement(SettingsIcon, { name: showSun === "1" ? "eyeoff" : "eye", color: "currentColor", size: 14 }), "週日"), /*#__PURE__*/React.createElement("button", {
+  }, showSun === "1" ? "隱藏週日" : "週日"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setDragMode(p => !p);
       setIsDragging(false);
@@ -6068,12 +6050,9 @@ function MainApp({
       color: dragMode ? "#e94560" : "var(--nav-color)",
       border: "none",
       background: dragMode ? "rgba(233,69,96,0.12)" : "none",
-      fontWeight: dragMode ? 700 : 400,
-      display: "flex",
-      alignItems: "center",
-      gap: 4
+      fontWeight: dragMode ? 700 : 400
     }
-  }, /*#__PURE__*/React.createElement(SettingsIcon, { name: "pause", color: "currentColor", size: 14 }), dragMode ? "退出" : "休假"), /*#__PURE__*/React.createElement("button", {
+  }, dragMode ? "退出" : "休假"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setMoveMode(p => !p);
       setIsDragActive(false);
@@ -6083,30 +6062,18 @@ function MainApp({
       color: moveMode ? "#a29bfe" : "var(--nav-color)",
       border: "none",
       background: moveMode ? "rgba(162,155,254,0.12)" : "none",
-      fontWeight: moveMode ? 700 : 400,
-      display: "flex",
-      alignItems: "center",
-      gap: 4
+      fontWeight: moveMode ? 700 : 400
     }
-  }, /*#__PURE__*/React.createElement(SettingsIcon, { name: "shuffle", color: "currentColor", size: 14 }), moveMode ? "退出" : "移動"), /*#__PURE__*/React.createElement("button", {
+  }, moveMode ? "退出" : "移動"), /*#__PURE__*/React.createElement("button", {
     onClick: () => openDlg(),
     className: "nb",
-    "aria-label": "新增預約",
-    title: "新增預約",
     style: {
       color: "#fff",
       background: "#e94560",
       border: "none",
-      borderRadius: "50%",
-      width: 32,
-      height: 32,
-      padding: 0,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      flexShrink: 0
+      fontWeight: 700
     }
-  }, /*#__PURE__*/React.createElement(SettingsIcon, { name: "plus", color: "currentColor", size: 18 })))), showSearch && /*#__PURE__*/React.createElement("div", {
+  }, "＋ 新增"))), showSearch && /*#__PURE__*/React.createElement("div", {
     style: {
       background: "var(--bg-header)",
       borderBottom: "1px solid var(--border)",
@@ -6971,6 +6938,7 @@ function MainApp({
   }))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
+      justifyContent: "space-around",
       background: "var(--bg-header)",
       borderBottom: "1px solid var(--border2)",
       overflowX: "auto",
@@ -6981,13 +6949,13 @@ function MainApp({
   }, [["schedule", "排班", "schedule"], ["overview", "全覽", "grid"], ["pending", "待確認", "clipboard"], ...((isAdmin || canViewCRM) ? [["settings", "更多", "sliders"]] : [])].map(([k, l, iconName]) => /*#__PURE__*/React.createElement("button", {
     key: k,
     className: `tab-btn${tab === k ? " active" : ""}`,
-    style: { position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 3 },
+    style: { position: "relative", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 5, flex: 1, padding: "10px 4px 8px" },
     onClick: () => {
       goTab(k);
       if (k === "crm") setCrmKey(p => p + 1);
       if (k === "pending") loadPendingCount();
     }
-  }, /*#__PURE__*/React.createElement(SettingsIcon, { name: iconName, color: "currentColor", size: 20 }), l, k === "pending" && pendingCount > 0 && /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement(SettingsIcon, { name: iconName, color: tab === k ? "#c4b5fd" : "#8b7fd6", size: 20 }), l, k === "pending" && pendingCount > 0 && /*#__PURE__*/React.createElement("span", {
     style: {
       position: "absolute",
       top: 2,
@@ -15498,7 +15466,7 @@ function LazyAnalyticsModule(props) {
 // emoji)——手繪幾個簡單的outline SVG，統一用同一個強調色(鼠尾草綠，
 // 跟品牌整體偏暖色調搭)，比emoji在不同裝置/系統上顯示更一致、更有質感。
 function SettingsIcon({ name, color, size }) {
-  const stroke = color || "#00d09c";
+  const stroke = color || "#c4b5fd";
   const common = { width: size || 26, height: size || 26, viewBox: "0 0 24 24", fill: "none", stroke, strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" };
   const paths = {
     user: [
