@@ -15543,6 +15543,9 @@ function SettingsModule({
 }) {
   const [settTab, setSettTab] = useState(null);
   const [crmKey, setCrmKey] = useState(0);
+  const [showSelfEdit, setShowSelfEdit] = useState(false);
+  const [selfForm, setSelfForm] = useState({ name: "", username: "" });
+  const [selfSaving, setSelfSaving] = useState(false);
   const [editMaster, setEditMaster] = useState(null);
   const [form, setForm] = useState({
     name: "",
@@ -15702,6 +15705,30 @@ function SettingsModule({
       msg("已儲存");
     } else msg("儲存失敗", true);
   };
+  // 2026-07-18：非管理員也能編輯「自己」的名字/登入帳號，但刻意跟上面
+  // saveEdit(管理員編輯任何師傅、包含role/顏色)分開寫成獨立函式——這裡
+  // 寫死只送name/username兩個欄位給Supabase，不管selfForm裡有沒有被
+  // 塞進其他東西，都不會更新到role，避免有人從前端竄改把自己的role
+  // 改成admin這種權限提升風險。id也是寫死用loginMaster.id，不接受
+  // 外部指定，確保永遠只能改自己的紀錄。
+  const saveSelf = async () => {
+    if (!loginMaster || selfSaving) return;
+    setSelfSaving(true);
+    const { error } = await sb.from("masters").update({
+      name: selfForm.name,
+      username: selfForm.username
+    }).eq("id", loginMaster.id);
+    setSelfSaving(false);
+    if (!error) {
+      setMasters(prev => prev.map(m => m.id === loginMaster.id ? {
+        ...m,
+        name: selfForm.name,
+        username: selfForm.username
+      } : m));
+      setShowSelfEdit(false);
+      msg("已儲存");
+    } else msg("儲存失敗", true);
+  };
   const toggleActive = async m => {
     await sb.from("masters").update({
       is_active: !m.is_active
@@ -15781,13 +15808,18 @@ function SettingsModule({
       overflow: "hidden",
       border: "1px solid var(--border)"
     }
-  }, [["crm", "客戶", "users"], ["analytics", "數據", "chart"], ["masters", "帳號管理", "user"], ["rest", "休息時段", "pause"], ["export", "批次刪除", "trash"], ["history", "歷史紀錄", "history"], ["availability", "開放", "check"], ["sync", "資料同步", "sync"]].map(([k, l, iconKey], i) => {
+  }, [["self", "我的帳號", "user"], ["crm", "客戶", "users"], ["analytics", "數據", "chart"], ["masters", "帳號管理", "user"], ["rest", "休息時段", "pause"], ["export", "批次刪除", "trash"], ["history", "歷史紀錄", "history"], ["availability", "開放", "check"], ["sync", "資料同步", "sync"]].map(([k, l, iconKey], i) => {
     const locked = !isAdmin && ["masters", "export", "sync"].includes(k);
     return /*#__PURE__*/React.createElement("button", {
       key: k,
       disabled: locked,
       onClick: () => {
         if (locked) return;
+        if (k === "self") {
+          setSelfForm({ name: loginMaster?.name || "", username: loginMaster?.username || "" });
+          setShowSelfEdit(true);
+          return;
+        }
         setSettTab(k);
         if (k === "crm") setCrmKey(p => p + 1);
         if (k === "history") loadHistory();
@@ -16564,7 +16596,91 @@ function SettingsModule({
       fontWeight: 700,
       cursor: "pointer"
     }
-  }, saving ? "儲存中..." : "儲存"))))));
+  }, saving ? "儲存中..." : "儲存")))))), showSelfEdit && /*#__PURE__*/React.createElement("div", {
+    "data-modal-backdrop": "true",
+    style: {
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.8)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 200
+    },
+    onClick: () => setShowSelfEdit(false)
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "var(--bg-header)",
+      border: "1px solid var(--border2)",
+      borderRadius: 16,
+      padding: 20,
+      width: "90%",
+      maxWidth: 380
+    },
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 700,
+      fontSize: 15,
+      marginBottom: 14
+    }
+  }, "編輯我的帳號"), [["name", "顯示名稱"], ["username", "登入帳號"]].map(([k, l]) => /*#__PURE__*/React.createElement("div", {
+    key: k,
+    style: {
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: "var(--text-muted)",
+      marginBottom: 4
+    }
+  }, l), /*#__PURE__*/React.createElement("input", {
+    value: selfForm[k],
+    onChange: e => setSelfForm(f => ({
+      ...f,
+      [k]: e.target.value
+    })),
+    style: {
+      width: "100%",
+      background: "var(--input-bg)",
+      border: "1px solid var(--border2)",
+      borderRadius: 8,
+      padding: "7px 10px",
+      fontSize: 13,
+      color: "var(--text-main)"
+    }
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginTop: 16
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowSelfEdit(false),
+    style: {
+      flex: 1,
+      padding: 10,
+      borderRadius: 8,
+      background: "var(--bg-sub)",
+      border: "1px solid var(--border2)",
+      color: "var(--text-main)",
+      cursor: "pointer"
+    }
+  }, "取消"), /*#__PURE__*/React.createElement("button", {
+    onClick: saveSelf,
+    disabled: selfSaving,
+    style: {
+      flex: 2,
+      padding: 10,
+      borderRadius: 8,
+      background: "#00d09c",
+      border: "none",
+      color: "#00171f",
+      fontWeight: 700,
+      cursor: "pointer"
+    }
+  }, selfSaving ? "儲存中..." : "儲存"))));
 }
 class ErrorBoundary extends React.Component {
   constructor(p) {
