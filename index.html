@@ -15512,12 +15512,6 @@ function SettingsModule({
 }) {
   const [settTab, setSettTab] = useState(null);
   const [crmKey, setCrmKey] = useState(0);
-  // 非管理員、但有客戶查看權的師傅(哲瑋/治/泓文)，進到「設定」時只看得到
-  // 客戶這一項功能，直接跳過九宮格、顯示客戶內容，不用讓他們看一個
-  // 只有一張卡片可以點的九宮格畫面。
-  useEffect(() => {
-    if (!isAdmin && canViewCRM) setSettTab("crm");
-  }, [isAdmin, canViewCRM]);
   const [editMaster, setEditMaster] = useState(null);
   const [form, setForm] = useState({
     name: "",
@@ -15756,31 +15750,46 @@ function SettingsModule({
       overflow: "hidden",
       border: "1px solid var(--border)"
     }
-  }, [["crm", "客戶", "users"], ["masters", "帳號管理", "user"], ["rest", "休息時段", "pause"], ["export", "批次刪除", "trash"], ["history", "歷史紀錄", "history"], ["availability", "開放", "check"], ...(loginMaster?.can_view_all_stats ? [["sync", "資料同步", "sync"]] : [])].map(([k, l, iconKey], i) => /*#__PURE__*/React.createElement("button", {
-    key: k,
-    onClick: () => {
-      setSettTab(k);
-      if (k === "crm") setCrmKey(p => p + 1);
-      if (k === "history") loadHistory();
-      if (k === "sync") loadSyncStatus();
-    },
-    style: {
-      background: "transparent",
-      border: "none",
-      borderRight: i % 3 !== 2 ? "1px solid var(--border)" : "none",
-      borderBottom: "1px solid var(--border)",
-      padding: "20px 8px",
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      gap: 8,
-      cursor: "pointer",
-      fontFamily: "inherit"
-    }
-  }, /*#__PURE__*/React.createElement(SettingsIcon, { name: iconKey }), /*#__PURE__*/React.createElement("span", {
-    style: { fontSize: 12, color: "var(--text-main)" }
-  }, l)))
-  )) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, [["crm", "客戶", "users"], ["masters", "帳號管理", "user"], ["rest", "休息時段", "pause"], ["export", "批次刪除", "trash"], ["history", "歷史紀錄", "history"], ["availability", "開放", "check"], ["sync", "資料同步", "sync"]].map(([k, l, iconKey], i) => {
+    const locked = !isAdmin && ["masters", "export", "sync"].includes(k);
+    return /*#__PURE__*/React.createElement("button", {
+      key: k,
+      disabled: locked,
+      onClick: () => {
+        if (locked) return;
+        setSettTab(k);
+        if (k === "crm") setCrmKey(p => p + 1);
+        if (k === "history") loadHistory();
+        if (k === "sync") loadSyncStatus();
+      },
+      style: {
+        background: "transparent",
+        border: "none",
+        borderRight: i % 3 !== 2 ? "1px solid var(--border)" : "none",
+        borderBottom: "1px solid var(--border)",
+        padding: "20px 8px",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 8,
+        cursor: locked ? "not-allowed" : "pointer",
+        opacity: locked ? 0.4 : 1,
+        position: "relative",
+        fontFamily: "inherit"
+      }
+    }, /*#__PURE__*/React.createElement(SettingsIcon, { name: iconKey }), locked && /*#__PURE__*/React.createElement("span", {
+      "aria-hidden": "true",
+      style: {
+        position: "absolute",
+        top: 14,
+        right: "28%",
+        fontSize: 12
+      }
+    }, "🔒"), /*#__PURE__*/React.createElement("span", {
+      style: { fontSize: 12, color: "var(--text-main)" }
+    }, l));
+  }))
+  ) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -15797,9 +15806,7 @@ function SettingsModule({
       border: "none",
       color: "var(--text-main)",
       fontSize: 18,
-      cursor: isAdmin ? "pointer" : "default",
-      opacity: isAdmin ? 1 : 0,
-      pointerEvents: isAdmin ? "auto" : "none",
+      cursor: "pointer",
       padding: "4px 8px",
       fontFamily: "inherit"
     }
