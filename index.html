@@ -15489,49 +15489,12 @@ function LazyAnalyticsModule(props) {
 // emoji)——手繪幾個簡單的outline SVG，統一用同一個強調色(鼠尾草綠，
 // 跟品牌整體偏暖色調搭)，比emoji在不同裝置/系統上顯示更一致、更有質感。
 // 2026-07-18：更多頁面首頁直接顯示的「我的週間統計」小卡——邏輯上
-// 跟AnalyticsModule裡的週間分析同一套(抓全部歷史、按星期幾分類)，但
-// 只抓目前登入的這個人、不用像那邊要iterate全部師傅，也不用外層那些
-// 分頁切換，獨立成一個自己抓資料的小元件，直接放進九宮格下面。
-function MyWeeklyWidget({ loginMaster }) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  useEffect(() => {
-    if (!loginMaster?.id || data !== null || loading) return;
-    setLoading(true);
-    (async () => {
-      let all = [], from = 0;
-      while (true) {
-        const { data: rows } = await sb.from("bookings").select("date,guest_count,color_tag,status").eq("master_id", loginMaster.id).neq("status", "cancelled").neq("status", "no_show").range(from, from + 999);
-        if (!rows || rows.length === 0) break;
-        all = [...all, ...rows];
-        if (rows.length < 1000) break;
-        from += 1000;
-      }
-      setData(all);
-      setLoading(false);
-    })();
-  }, [loginMaster?.id, data, loading]);
-
-  const stats = useMemo(() => {
-    const buckets = Array.from({ length: 7 }, () => ({ total: 0, newC: 0 }));
-    if (!data) return buckets;
-    data.filter(isCountable).forEach(b => {
-      const dow = new Date(b.date + "T00:00:00").getDay();
-      const g = b.guest_count || 1;
-      buckets[dow].total += g;
-      if (b.color_tag === "new_customer") buckets[dow].newC += g;
-    });
-    return buckets;
-  }, [data]);
-
-  const cardStyle = { background: "var(--bg-header)", borderRadius: 12, border: "1px solid var(--border2)", padding: "14px 12px" };
-
-  if (data === null || loading) {
-    return /*#__PURE__*/React.createElement("div", { style: cardStyle }, /*#__PURE__*/React.createElement("div", {
-      style: { textAlign: "center", padding: 16, color: "var(--text-muted)", fontSize: 12 }
-    }, "讀取週間統計中…"));
-  }
-
+// 跟AnalyticsModule裡的週間分析同一套(抓全部歷史、按星期幾分類)。
+// Hanna要求：涵/麒(can_view_all_stats=true)看全部4位師傅各自一張卡片
+// 對比；其他人(治/泓文/哲瑋)只看自己一張卡片——不用像那邊要進到
+// 完整的AnalyticsModule才看得到，獨立成一個自己抓資料的小元件，
+// 直接放進九宮格下面。
+function renderOneWeeklyCard(master, stats) {
   const weekLabels = ["日", "一", "二", "三", "四", "五", "六"];
   const maxVal = Math.max(1, ...stats.map(s => s.total));
   const grandTotal = stats.reduce((s, x) => s + x.total, 0);
@@ -15540,7 +15503,7 @@ function MyWeeklyWidget({ loginMaster }) {
   const header = /*#__PURE__*/React.createElement("div", {
     style: { display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }
   },
-    /*#__PURE__*/React.createElement("span", { style: { fontWeight: 700, fontSize: 14 } }, loginMaster?.name || ""),
+    /*#__PURE__*/React.createElement("span", { style: { fontWeight: 700, fontSize: 14 } }, master?.name || ""),
     /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: "var(--text-muted)" } }, "總計 ", grandTotal, "（新客 ", grandNew, "）")
   );
 
@@ -15570,7 +15533,61 @@ function MyWeeklyWidget({ loginMaster }) {
     style: { display: "flex", alignItems: "flex-end", gap: 6, height: 96 }
   }, ...dayColumns);
 
-  return /*#__PURE__*/React.createElement("div", { style: cardStyle }, header, barsRow);
+  return /*#__PURE__*/React.createElement("div", {
+    key: master?.id,
+    style: { background: "var(--bg-header)", borderRadius: 12, border: "1px solid var(--border2)", padding: "14px 12px", marginBottom: 12 }
+  }, header, barsRow);
+}
+function MyWeeklyWidget({ masters, loginMaster }) {
+  const showAll = !!loginMaster?.can_view_all_stats;
+  const targetMasters = useMemo(() => {
+    if (showAll) {
+      return (masters || []).filter(m => m.role !== "editor" && m.username !== "hanna" && m.is_active !== false);
+    }
+    return loginMaster ? [loginMaster] : [];
+  }, [showAll, masters, loginMaster]);
+  const targetIdsKey = targetMasters.map(m => m.id).join(",");
+
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (!targetIdsKey || data !== null || loading) return;
+    setLoading(true);
+    (async () => {
+      let all = [], from = 0;
+      while (true) {
+        const { data: rows } = await sb.from("bookings").select("master_id,date,guest_count,color_tag,status").in("master_id", targetIdsKey.split(",")).neq("status", "cancelled").neq("status", "no_show").range(from, from + 999);
+        if (!rows || rows.length === 0) break;
+        all = [...all, ...rows];
+        if (rows.length < 1000) break;
+        from += 1000;
+      }
+      setData(all);
+      setLoading(false);
+    })();
+  }, [targetIdsKey, data, loading]);
+
+  const cardStyle = { background: "var(--bg-header)", borderRadius: 12, border: "1px solid var(--border2)", padding: "14px 12px" };
+
+  if (data === null || loading) {
+    return /*#__PURE__*/React.createElement("div", { style: cardStyle }, /*#__PURE__*/React.createElement("div", {
+      style: { textAlign: "center", padding: 16, color: "var(--text-muted)", fontSize: 12 }
+    }, "讀取週間統計中…"));
+  }
+
+  const calcStatsFor = masterId => {
+    const buckets = Array.from({ length: 7 }, () => ({ total: 0, newC: 0 }));
+    data.filter(b => b.master_id === masterId && isCountable(b)).forEach(b => {
+      const dow = new Date(b.date + "T00:00:00").getDay();
+      const g = b.guest_count || 1;
+      buckets[dow].total += g;
+      if (b.color_tag === "new_customer") buckets[dow].newC += g;
+    });
+    return buckets;
+  };
+
+  const cards = targetMasters.map(m => renderOneWeeklyCard(m, calcStatsFor(m.id)));
+  return /*#__PURE__*/React.createElement(React.Fragment, null, ...cards);
 }
 function SettingsIcon({ name, color, size }) {
   const stroke = color || "#c4b5fd";
@@ -16041,7 +16058,7 @@ function SettingsModule({
     );
     const weeklySection = /*#__PURE__*/React.createElement("div", {
       style: { marginTop: 16 }
-    }, /*#__PURE__*/React.createElement(MyWeeklyWidget, { loginMaster: loginMaster }));
+    }, /*#__PURE__*/React.createElement(MyWeeklyWidget, { masters: masters, loginMaster: loginMaster }));
     return /*#__PURE__*/React.createElement(React.Fragment, null, accountSection, weeklySection);
   };
   const renderSelfEditModal = () => {
