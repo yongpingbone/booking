@@ -16091,6 +16091,75 @@ function SettingsModule({
   // 2026-07-18：更多頁面首頁(還沒點進任何卡片時)，九宮格下面直接接著
   // 顯示帳號小卡+我的週間統計，不用再點進「我的帳號」或「數據」才看
   // 得到——Hanna明確要求「不用點進去，點更多就是這個畫面」。
+  // 2026-07-19：更多頁面改成分類區塊版面(參考截圖裡「客人相關/加值
+  // 服務/平台設定/小工具」那種有標題分組的樣式)，取代原本單一個
+  // 3x3九宮格。用renderGridItem這個共用函式產生每一顆按鈕(跟原本
+  // 九宮格逐字一樣的onClick/lock邏輯，只是外觀從『一大格3x3』改成
+  // 『分類卡片內橫向排列』)，renderSection包一層標題+卡片，四個分類
+  // 各自呼叫一次組出來，不是重寫整個九宮格的互動邏輯。
+  const renderGridItem = ([k, l, iconKey]) => {
+    const locked = !isAdmin && ["masters", "export", "sync"].includes(k);
+    return /*#__PURE__*/React.createElement("button", {
+      key: k,
+      disabled: locked,
+      onClick: () => {
+        if (locked) return;
+        if (k === "self") {
+          setSelfForm({ name: loginMaster?.name || "", username: loginMaster?.username || "" });
+          setShowSelfEdit(true);
+          return;
+        }
+        setSettTab(k);
+        if (k === "crm") setCrmKey(p => p + 1);
+        if (k === "history") loadHistory();
+        if (k === "sync") loadSyncStatus();
+      },
+      style: {
+        background: "transparent",
+        border: "none",
+        flex: 1,
+        padding: "14px 4px",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 8,
+        cursor: locked ? "not-allowed" : "pointer",
+        opacity: locked ? 0.4 : 1,
+        position: "relative",
+        fontFamily: "inherit"
+      }
+    }, /*#__PURE__*/React.createElement(SettingsIcon, { name: iconKey, size: 22 }), locked && /*#__PURE__*/React.createElement("span", {
+      "aria-hidden": "true",
+      style: { position: "absolute", top: 8, right: "22%", fontSize: 11 }
+    }, "🔒"), /*#__PURE__*/React.createElement("span", {
+      style: { fontSize: 11, color: "#c4b5fd" }
+    }, l));
+  };
+  const renderSection = (title, items) => /*#__PURE__*/React.createElement("div", {
+    key: title,
+    style: { marginBottom: 16 }
+  },
+    /*#__PURE__*/React.createElement("div", {
+      style: { fontSize: 11, color: "var(--text-muted)", marginBottom: 6, paddingLeft: 2 }
+    }, title),
+    /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        background: "var(--bg-header)",
+        borderRadius: 14,
+        border: "1px solid var(--border)"
+      }
+    }, ...items.map(renderGridItem))
+  );
+  const renderCategorizedGrid = () => {
+    const sections = [
+      ["帳號", [["self", "我的帳號", "user"], ["masters", "帳號管理", "user"]]],
+      ["業務", [["crm", "客戶", "users"], ["analytics", "數據", "chart"]]],
+      ["排班設定", [["rest", "休息時段", "pause"], ["availability", "開放", "check"]]],
+      ["系統", [["export", "批次刪除", "trash"], ["history", "歷史紀錄", "history"], ["sync", "資料同步", "sync"]]]
+    ];
+    return /*#__PURE__*/React.createElement(React.Fragment, null, ...sections.map(([title, items]) => renderSection(title, items)));
+  };
   const renderLandingExtras = () => {
     const avatarSmall = loginMaster?.avatar_url
       ? /*#__PURE__*/React.createElement("img", {
@@ -16251,64 +16320,7 @@ function SettingsModule({
     }
   }, settTab === null ? /*#__PURE__*/React.createElement("div", {
     style: { padding: 16 }
-  },
-  // 2026-07-17：參考TimeTree「其他」頁面的卡片式九宮格版面，取代原本
-  // 純文字橫排tab——排班主表格完全沒動，只有設定頁這個入口畫面改版。
-  // 每張卡片的onClick/後續副作用(loadHistory/loadSyncStatus)跟原本
-  // 逐字一樣，只是外觀從文字tab換成icon+文字的卡片，不影響任何邏輯。
-  /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "grid",
-      gridTemplateColumns: "repeat(3, 1fr)",
-      background: "var(--bg-header)",
-      borderRadius: 16,
-      overflow: "hidden",
-      border: "1px solid var(--border)"
-    }
-  }, [["self", "我的帳號", "user"], ["crm", "客戶", "users"], ["analytics", "數據", "chart"], ["masters", "帳號管理", "user"], ["rest", "休息時段", "pause"], ["export", "批次刪除", "trash"], ["history", "歷史紀錄", "history"], ["availability", "開放", "check"], ["sync", "資料同步", "sync"]].map(([k, l, iconKey], i) => {
-    const locked = !isAdmin && ["masters", "export", "sync"].includes(k);
-    return /*#__PURE__*/React.createElement("button", {
-      key: k,
-      disabled: locked,
-      onClick: () => {
-        if (locked) return;
-        if (k === "self") {
-          setSelfForm({ name: loginMaster?.name || "", username: loginMaster?.username || "" });
-          setShowSelfEdit(true);
-          return;
-        }
-        setSettTab(k);
-        if (k === "crm") setCrmKey(p => p + 1);
-        if (k === "history") loadHistory();
-        if (k === "sync") loadSyncStatus();
-      },
-      style: {
-        background: "transparent",
-        border: "none",
-        borderRight: i % 3 !== 2 ? "1px solid var(--border)" : "none",
-        borderBottom: "1px solid var(--border)",
-        padding: "20px 8px",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 8,
-        cursor: locked ? "not-allowed" : "pointer",
-        opacity: locked ? 0.4 : 1,
-        position: "relative",
-        fontFamily: "inherit"
-      }
-    }, /*#__PURE__*/React.createElement(SettingsIcon, { name: iconKey }), locked && /*#__PURE__*/React.createElement("span", {
-      "aria-hidden": "true",
-      style: {
-        position: "absolute",
-        top: 14,
-        right: "28%",
-        fontSize: 12
-      }
-    }, "🔒"), /*#__PURE__*/React.createElement("span", {
-      style: { fontSize: 12, color: "#c4b5fd" }
-    }, l));
-  })), renderLandingExtras()
+  }, renderCategorizedGrid(), renderLandingExtras()
   ) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
