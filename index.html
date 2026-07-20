@@ -40,18 +40,19 @@ body.dark {
   --text-time:#f5a623; --text-week:#4a5568;
   --input-bg:#0d1117; --nav-bg:#21262d; --nav-color:#c9d1d9;
   --mt-0:#74b9ff; --mt-1:#2ed9c3; --mt-2:#ffa94d; --mt-3:#da77f2; --mt-4:#f783ac;
+  --accent:#a29bfe; --accent-bright:#c4b5fd; --accent-rgb:162,155,254;
 }
 .nb { background:var(--nav-bg); border:1px solid var(--border2); color:var(--nav-color); border-radius:5px; padding:4px 10px; cursor:pointer; font-size:12px; }
 .tab-btn { padding:8px 14px; background:transparent; border:none; border-bottom:2px solid transparent; color:var(--text-muted); font-size:12px; cursor:pointer; white-space:nowrap; }
-.tab-btn.active { border-bottom-color:#c4b5fd; color:#c4b5fd; font-weight:700; }
+.tab-btn.active { border-bottom-color:var(--accent-bright); color:var(--accent-bright); font-weight:700; }
 .c-none { background:transparent !important; }
 .c-new_customer { background:rgba(245,166,35,0.35) !important; border-left:3px solid #f5a623 !important; }
 .c-cui { background:rgba(255,77,148,0.30) !important; border-left:3px solid #ff4d94 !important; }
 .c-vacation { background:rgba(220,38,38,0.45) !important; border-left:3px solid #e94560 !important; }
 .c-reserved { background:rgba(34,211,238,0.30) !important; border-left:3px solid #22d3ee !important; }
-.c-custom { background:rgba(162,155,254,0.30) !important; border-left:3px solid #a29bfe !important; }
+.c-custom { background:rgba(var(--accent-rgb),0.30) !important; border-left:3px solid var(--accent) !important; }
 .c-aftercare { background:rgba(0,208,156,0.20) !important; border-left:3px solid #00d09c !important; }
-.drag-select { background:rgba(162,155,254,0.4) !important; border:1px solid #a29bfe !important; }
+.drag-select { background:rgba(var(--accent-rgb),0.4) !important; border:1px solid var(--accent) !important; }
 .drag-over-cell { background:rgba(116,185,255,0.22) !important; outline:2px solid #74b9ff !important; outline-offset:-2px; }
 .search-hl { outline:2px solid #f5a623 !important; outline-offset:-2px; background:rgba(245,166,35,0.18) !important; }
 .search-hl-cur { outline:2px solid #f5a623 !important; outline-offset:-2px; background:rgba(245,166,35,0.45) !important; z-index:2; }
@@ -88,6 +89,31 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
 </style>
 </head>
 <body class="dark">
+<script>
+// 2026-07-20：主題色系統。5組預設色，存在localStorage(裝置本機記憶，
+// 不需要登入/網路)。這段刻意放在<div id="root">之前、React掛載前先
+// 執行，是為了避免畫面先閃一下預設紫色、React渲染完才變成使用者選的
+// 顏色——先同步套用CSS變數，React之後接手就已經是對的顏色了。
+window.ACCENT_THEMES = {
+  purple: { label: "紫色", accent: "#a29bfe", bright: "#c4b5fd", rgb: "162,155,254" },
+  blue: { label: "藍色", accent: "#4a9eff", bright: "#7dbbff", rgb: "74,158,255" },
+  green: { label: "綠色", accent: "#2ed9a8", bright: "#5ee8c4", rgb: "46,217,168" },
+  pink: { label: "粉色", accent: "#ff6b9d", bright: "#ff9cbe", rgb: "255,107,157" },
+  orange: { label: "橘色", accent: "#ff9248", bright: "#ffb578", rgb: "255,146,72" }
+};
+window.applyAccentTheme = function(key) {
+  const t = window.ACCENT_THEMES[key] || window.ACCENT_THEMES.purple;
+  document.documentElement.style.setProperty("--accent", t.accent);
+  document.documentElement.style.setProperty("--accent-bright", t.bright);
+  document.documentElement.style.setProperty("--accent-rgb", t.rgb);
+};
+(function() {
+  try {
+    const saved = localStorage.getItem("accentTheme");
+    if (saved && window.ACCENT_THEMES[saved]) window.applyAccentTheme(saved);
+  } catch (e) {}
+})();
+</script>
 <div id="root"></div>
 <script>
 const {
@@ -468,7 +494,7 @@ const COLORS = [{
 }, {
   key: "custom",
   label: "自訂",
-  text: "#a29bfe"
+  text: "var(--accent)"
 }];
 // 售後(aftercare)不再是互斥標記的一員，改成獨立勾選(is_aftercare)，可以跟上面任一標記並存
 
@@ -765,7 +791,7 @@ function useLS(k, def) {
 }
 // 依masterId算出一個固定色，同一個人不管誰的畫面看到都是同一個顏色，
 // 方便一眼認出來是誰(跟Google文件那種每人固定游標色是同樣的概念)。
-const PRESENCE_PALETTE = ["#e94560", "#00b894", "#74b9ff", "#fdcb6e", "#a29bfe", "#00cec9", "#fd79a8", "#55efc4"];
+const PRESENCE_PALETTE = ["#e94560", "#00b894", "#74b9ff", "#fdcb6e", "var(--accent)", "#00cec9", "#fd79a8", "#55efc4"];
 function presenceColor(masterId) {
   let h = 0;
   const s = String(masterId || "");
@@ -4070,7 +4096,7 @@ function MainApp({
       } else {
         if (cell.dataset.empty === "1") {
           dragBufferRef.current.add(k);
-          cell.style.background = "rgba(162,155,254,0.45)";
+          cell.style.background = "rgba(var(--accent-rgb),0.45)";
           dragDOMRef.current.push(cell);
         }
       }
@@ -4098,7 +4124,7 @@ function MainApp({
       };
       // 立刻處理第一格
       dragBufferRef.current.add(k);
-      cell.style.background = isRemoving ? "rgba(245,166,35,0.45)" : "rgba(162,155,254,0.45)";
+      cell.style.background = isRemoving ? "rgba(245,166,35,0.45)" : "rgba(var(--accent-rgb),0.45)";
       dragDOMRef.current.push(cell);
       e.preventDefault();
     };
@@ -4323,7 +4349,7 @@ function MainApp({
   const canDelete = isAdmin || master.can_delete;
   const canViewOthers = isAdmin || (loginMaster || master).can_view_others;
   const canViewCRM = isAdmin || (loginMaster || master).can_view_crm;
-  const reserveColor = master.reserve_color || "#a29bfe";
+  const reserveColor = master.reserve_color || "var(--accent)";
   const msg = (m, err) => {
     setToast({
       m,
@@ -5622,7 +5648,7 @@ function MainApp({
         width: cw,
         minWidth: cw,
         maxWidth: cw,
-        background: isDragSel ? "rgba(162,155,254,0.4)" : isR && !b ? "var(--bg-rest)" : "var(--bg-main)",
+        background: isDragSel ? "rgba(var(--accent-rgb),0.4)" : isR && !b ? "var(--bg-rest)" : "var(--bg-main)",
         cursor: !b && d || dragMode && isVac ? "pointer" : "default",
         verticalAlign: "middle",
         userSelect: "none",
@@ -6071,7 +6097,7 @@ function MainApp({
     },
     className: "nb",
     style: {
-      color: "#a29bfe",
+      color: "var(--accent)",
       border: "none",
       background: "none",
       fontWeight: 700,
@@ -6086,9 +6112,9 @@ function MainApp({
     },
     className: "nb",
     style: {
-      color: showSlots && slotDate === "pick" ? "#a29bfe" : "var(--nav-color)",
+      color: showSlots && slotDate === "pick" ? "var(--accent)" : "var(--nav-color)",
       border: "none",
-      background: showSlots && slotDate === "pick" ? "rgba(162,155,254,0.12)" : "none"
+      background: showSlots && slotDate === "pick" ? "rgba(var(--accent-rgb),0.12)" : "none"
     }
   }, "選日"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
@@ -6102,9 +6128,9 @@ function MainApp({
     },
     className: "nb",
     style: {
-      color: showSearch ? "#a29bfe" : "var(--nav-color)",
+      color: showSearch ? "var(--accent)" : "var(--nav-color)",
       border: "none",
-      background: showSearch ? "rgba(162,155,254,0.12)" : "none"
+      background: showSearch ? "rgba(var(--accent-rgb),0.12)" : "none"
     }
   }, "搜尋"), /*#__PURE__*/React.createElement("button", {
     onClick: findNearestOpenSlot,
@@ -6112,7 +6138,7 @@ function MainApp({
     className: "nb",
     title: "最近空檔",
     style: {
-      color: "#a29bfe",
+      color: "var(--accent)",
       border: "none",
       background: "none",
       fontWeight: 700
@@ -6122,7 +6148,7 @@ function MainApp({
     className: "nb",
     title: `還原：${undoStack[0]?.desc || ""}`,
     style: {
-      color: "#a29bfe",
+      color: "var(--accent)",
       border: "none",
       background: "none",
       fontWeight: 700,
@@ -6153,9 +6179,9 @@ function MainApp({
     className: "nb",
     title: showSun === "1" ? "點一下隱藏週日欄位" : "點一下顯示週日欄位",
     style: {
-      color: showSun === "1" ? "#a29bfe" : "var(--nav-color)",
+      color: showSun === "1" ? "var(--accent)" : "var(--nav-color)",
       border: "none",
-      background: showSun === "1" ? "rgba(162,155,254,0.12)" : "none"
+      background: showSun === "1" ? "rgba(var(--accent-rgb),0.12)" : "none"
     }
   }, showSun === "1" ? "隱藏週日" : "週日"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
@@ -6177,9 +6203,9 @@ function MainApp({
     },
     className: "nb",
     style: {
-      color: moveMode ? "#a29bfe" : "var(--nav-color)",
+      color: moveMode ? "var(--accent)" : "var(--nav-color)",
       border: "none",
-      background: moveMode ? "rgba(162,155,254,0.12)" : "none",
+      background: moveMode ? "rgba(var(--accent-rgb),0.12)" : "none",
       fontWeight: moveMode ? 700 : 400
     }
   }, moveMode ? "退出" : "移動"))), showSearch && /*#__PURE__*/React.createElement("div", {
@@ -7087,8 +7113,8 @@ function MainApp({
       if (k === "crm") setCrmKey(p => p + 1);
       if (k === "pending") loadPendingCount();
     }
-  }, /*#__PURE__*/React.createElement(SettingsIcon, { name: iconName, color: tab === k ? "#c4b5fd" : "#8b7fd6", size: 20 }), /*#__PURE__*/React.createElement("span", {
-    style: { color: tab === k ? "#c4b5fd" : "#8b7fd6" }
+  }, /*#__PURE__*/React.createElement(SettingsIcon, { name: iconName, color: tab === k ? "var(--accent-bright)" : "#8b7fd6", size: 20 }), /*#__PURE__*/React.createElement("span", {
+    style: { color: tab === k ? "var(--accent-bright)" : "#8b7fd6" }
   }, l), k === "pending" && pendingCount > 0 && /*#__PURE__*/React.createElement("span", {
     style: {
       position: "absolute",
@@ -7312,7 +7338,7 @@ function MainApp({
     },
     style: {
       fontSize: 11,
-      color: "#a29bfe",
+      color: "var(--accent)",
       cursor: "pointer",
       userSelect: "none"
     }
@@ -7332,8 +7358,8 @@ function MainApp({
     }
   }, "姓名＋電話", returningVisitCount >= 3 && /*#__PURE__*/React.createElement("span", {
     style: {
-      background: "rgba(162,155,254,0.18)",
-      color: "#c4b5fd",
+      background: "rgba(var(--accent-rgb),0.18)",
+      color: "var(--accent-bright)",
       fontSize: 10,
       fontWeight: 700,
       padding: "1px 6px",
@@ -7375,12 +7401,12 @@ function MainApp({
       width: "100%",
       background: COLOR_NO_INPUT.has(form.color) && !form.input.trim() ? `${{
         "reserved": "rgba(34,211,238,0.10)",
-        "custom": "rgba(162,155,254,0.10)",
+        "custom": "rgba(var(--accent-rgb),0.10)",
         "vacation": "rgba(233,69,96,0.10)"
       }[form.color] || "var(--input-bg)"}` : "var(--input-bg)",
       border: `1px solid ${COLOR_NO_INPUT.has(form.color) && !form.input.trim() ? {
         "reserved": "#22d3ee88",
-        "custom": "#a29bfe88",
+        "custom": "rgba(var(--accent-rgb),0.53)",
         "vacation": "#e9456088"
       }[form.color] || "var(--border2)" : "var(--border2)"}`,
       borderRadius: 8,
@@ -7501,7 +7527,7 @@ function MainApp({
       fontSize: 10,
       color: {
         "reserved": "#22d3ee",
-        "custom": "#a29bfe",
+        "custom": "var(--accent)",
         "vacation": "#e94560"
       }[form.color] || "var(--text-dim)",
       marginTop: 3
@@ -7601,7 +7627,7 @@ function MainApp({
       "new_customer": "#f5a623",
       "cui": "#ff4d94",
       "vacation": "#e94560",
-      "custom": "#a29bfe"
+      "custom": "var(--accent)"
     };
     const col = colorMap[cc.key] || "#888";
     return /*#__PURE__*/React.createElement("button", {
@@ -7643,14 +7669,14 @@ function MainApp({
     style: {
       marginBottom: 10,
       padding: 10,
-      background: form.recurType !== "none" ? "rgba(162,155,254,0.08)" : "transparent",
-      border: `1px solid ${form.recurType !== "none" ? "rgba(162,155,254,0.3)" : "transparent"}`,
+      background: form.recurType !== "none" ? "rgba(var(--accent-rgb),0.08)" : "transparent",
+      border: `1px solid ${form.recurType !== "none" ? "rgba(var(--accent-rgb),0.3)" : "transparent"}`,
       borderRadius: 8
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 11,
-      color: form.recurType !== "none" ? "#a29bfe" : "var(--text-muted)",
+      color: form.recurType !== "none" ? "var(--accent)" : "var(--text-muted)",
       marginBottom: 6,
       fontWeight: 700
     }
@@ -7689,9 +7715,9 @@ function MainApp({
         flex: 1,
         padding: "6px 2px",
         borderRadius: 6,
-        border: `1px solid ${sel ? "#a29bfe" : "var(--border2)"}`,
-        background: sel ? "rgba(162,155,254,0.2)" : "transparent",
-        color: sel ? "#a29bfe" : "var(--text-muted)",
+        border: `1px solid ${sel ? "var(--accent)" : "var(--border2)"}`,
+        background: sel ? "rgba(var(--accent-rgb),0.2)" : "transparent",
+        color: sel ? "var(--accent)" : "var(--text-muted)",
         fontSize: 11,
         fontWeight: sel ? 800 : 500,
         cursor: "pointer"
@@ -7712,9 +7738,9 @@ function MainApp({
       flex: 1,
       padding: "5px 2px",
       borderRadius: 6,
-      border: `1px solid ${form.recurEndType === "date" ? "#a29bfe" : "var(--border2)"}`,
-      background: form.recurEndType === "date" ? "rgba(162,155,254,0.15)" : "transparent",
-      color: form.recurEndType === "date" ? "#a29bfe" : "var(--text-muted)",
+      border: `1px solid ${form.recurEndType === "date" ? "var(--accent)" : "var(--border2)"}`,
+      background: form.recurEndType === "date" ? "rgba(var(--accent-rgb),0.15)" : "transparent",
+      color: form.recurEndType === "date" ? "var(--accent)" : "var(--text-muted)",
       fontSize: 11,
       fontWeight: form.recurEndType === "date" ? 700 : 400,
       cursor: "pointer"
@@ -7728,9 +7754,9 @@ function MainApp({
       flex: 1,
       padding: "5px 2px",
       borderRadius: 6,
-      border: `1px solid ${form.recurEndType === "count" ? "#a29bfe" : "var(--border2)"}`,
-      background: form.recurEndType === "count" ? "rgba(162,155,254,0.15)" : "transparent",
-      color: form.recurEndType === "count" ? "#a29bfe" : "var(--text-muted)",
+      border: `1px solid ${form.recurEndType === "count" ? "var(--accent)" : "var(--border2)"}`,
+      background: form.recurEndType === "count" ? "rgba(var(--accent-rgb),0.15)" : "transparent",
+      color: form.recurEndType === "count" ? "var(--accent)" : "var(--text-muted)",
       fontSize: 11,
       fontWeight: form.recurEndType === "count" ? 700 : 400,
       cursor: "pointer"
@@ -8002,7 +8028,7 @@ function MainApp({
   }) : "", "  編輯") : /*#__PURE__*/React.createElement("span", null, "尚未編輯過")), editLogs.length > 0 && /*#__PURE__*/React.createElement("span", {
     onClick: () => setShowEditLogs(p => !p),
     style: {
-      color: "#a29bfe",
+      color: "var(--accent)",
       cursor: "pointer",
       fontSize: 11,
       fontWeight: 700
@@ -8072,9 +8098,9 @@ function MainApp({
       width: "100%",
       padding: "10px",
       borderRadius: 10,
-      border: "1px solid #a29bfe",
-      background: "rgba(162,155,254,0.1)",
-      color: "#a29bfe",
+      border: "1px solid var(--accent)",
+      background: "rgba(var(--accent-rgb),0.1)",
+      color: "var(--accent)",
       fontSize: 13,
       fontWeight: 700,
       cursor: "pointer"
@@ -8151,7 +8177,7 @@ function MainApp({
       width: "100%",
       padding: "10px 16px",
       borderRadius: 10,
-      background: cpTarget.date && cpTarget.time ? "#a29bfe" : "var(--border2)",
+      background: cpTarget.date && cpTarget.time ? "var(--accent)" : "var(--border2)",
       border: "none",
       color: cpTarget.date && cpTarget.time ? "#fff" : "var(--text-dim)",
       fontWeight: 700,
@@ -8194,9 +8220,9 @@ function MainApp({
     style: {
       padding: "13px 0",
       borderRadius: 12,
-      border: "1px solid #a29bfe",
-      background: "rgba(162,155,254,0.1)",
-      color: "#a29bfe",
+      border: "1px solid var(--accent)",
+      background: "rgba(var(--accent-rgb),0.1)",
+      color: "var(--accent)",
       cursor: "pointer",
       fontSize: 13,
       fontWeight: 700
@@ -8441,7 +8467,7 @@ function MainApp({
       "new_customer": "#f5a623",
       "cui": "#ff4d94",
       "vacation": "#e94560",
-      "custom": "#a29bfe"
+      "custom": "var(--accent)"
     };
     const col = colorMap[cc.key] || "#888";
     return /*#__PURE__*/React.createElement("button", {
@@ -8505,9 +8531,9 @@ function MainApp({
       width: "100%",
       padding: 10,
       borderRadius: 8,
-      border: "1px solid #a29bfe",
-      background: "rgba(162,155,254,0.1)",
-      color: "#a29bfe",
+      border: "1px solid var(--accent)",
+      background: "rgba(var(--accent-rgb),0.1)",
+      color: "var(--accent)",
       fontSize: 13,
       fontWeight: 700,
       cursor: "pointer"
@@ -8592,7 +8618,7 @@ function MainApp({
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       background: "var(--bg-header)",
-      border: "1px solid #a29bfe",
+      border: "1px solid var(--accent)",
       borderRadius: 16,
       padding: 18,
       width: "92%",
@@ -8607,7 +8633,7 @@ function MainApp({
       fontWeight: 800,
       fontSize: 16,
       marginBottom: 14,
-      color: "#a29bfe"
+      color: "var(--accent)"
     }
   }, "🔁 套用到未來重複"), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -8664,9 +8690,9 @@ function MainApp({
         flex: 1,
         padding: "8px 4px",
         borderRadius: 6,
-        border: `1px solid ${sel ? "#a29bfe" : "var(--border2)"}`,
-        background: sel ? "rgba(162,155,254,0.2)" : "transparent",
-        color: sel ? "#a29bfe" : "var(--text-muted)",
+        border: `1px solid ${sel ? "var(--accent)" : "var(--border2)"}`,
+        background: sel ? "rgba(var(--accent-rgb),0.2)" : "transparent",
+        color: sel ? "var(--accent)" : "var(--text-muted)",
         fontSize: 13,
         fontWeight: sel ? 800 : 500,
         cursor: "pointer"
@@ -8675,7 +8701,7 @@ function MainApp({
   })), extendRecur.recurType === "monthly" && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 10,
-      color: "#a29bfe",
+      color: "var(--accent)",
       marginTop: 4
     }
   }, "📌 每月", describeMonthlyNth(extendRecur.booking.date))), /*#__PURE__*/React.createElement("div", {
@@ -8704,9 +8730,9 @@ function MainApp({
       flex: 1,
       padding: "6px 2px",
       borderRadius: 6,
-      border: `1px solid ${extendRecur.recurEndType === "date" ? "#a29bfe" : "var(--border2)"}`,
-      background: extendRecur.recurEndType === "date" ? "rgba(162,155,254,0.15)" : "transparent",
-      color: extendRecur.recurEndType === "date" ? "#a29bfe" : "var(--text-muted)",
+      border: `1px solid ${extendRecur.recurEndType === "date" ? "var(--accent)" : "var(--border2)"}`,
+      background: extendRecur.recurEndType === "date" ? "rgba(var(--accent-rgb),0.15)" : "transparent",
+      color: extendRecur.recurEndType === "date" ? "var(--accent)" : "var(--text-muted)",
       fontSize: 12,
       fontWeight: extendRecur.recurEndType === "date" ? 700 : 400,
       cursor: "pointer"
@@ -8720,9 +8746,9 @@ function MainApp({
       flex: 1,
       padding: "6px 2px",
       borderRadius: 6,
-      border: `1px solid ${extendRecur.recurEndType === "count" ? "#a29bfe" : "var(--border2)"}`,
-      background: extendRecur.recurEndType === "count" ? "rgba(162,155,254,0.15)" : "transparent",
-      color: extendRecur.recurEndType === "count" ? "#a29bfe" : "var(--text-muted)",
+      border: `1px solid ${extendRecur.recurEndType === "count" ? "var(--accent)" : "var(--border2)"}`,
+      background: extendRecur.recurEndType === "count" ? "rgba(var(--accent-rgb),0.15)" : "transparent",
+      color: extendRecur.recurEndType === "count" ? "var(--accent)" : "var(--text-muted)",
       fontSize: 12,
       fontWeight: extendRecur.recurEndType === "count" ? 700 : 400,
       cursor: "pointer"
@@ -8893,7 +8919,7 @@ function MainApp({
       flex: 2,
       padding: 11,
       borderRadius: 8,
-      background: "#a29bfe",
+      background: "var(--accent)",
       border: "none",
       color: "#fff",
       fontSize: 13,
@@ -9931,7 +9957,7 @@ function OverviewMonth({
       transform: "translate(-50%,-130%)",
       pointerEvents: "none",
       zIndex: "9999",
-      background: "#a29bfe",
+      background: "var(--accent)",
       border: "2px solid #fff",
       borderRadius: "8px",
       padding: "5px 12px",
@@ -9985,7 +10011,7 @@ function OverviewMonth({
       });
       if (td) {
         td.classList.add("ov-drag-over");
-        td.style.outline = "2px solid #a29bfe";
+        td.style.outline = "2px solid var(--accent)";
       }
       return;
     }
@@ -10306,9 +10332,9 @@ function OverviewMonth({
     style: {
       padding: "3px 10px",
       borderRadius: 16,
-      border: `1px solid ${ovMasters.includes(m.id) ? "#a29bfe" : "var(--border2)"}`,
-      background: ovMasters.includes(m.id) ? "rgba(162,155,254,0.15)" : "transparent",
-      color: ovMasters.includes(m.id) ? "#c4b5fd" : "var(--text-muted)",
+      border: `1px solid ${ovMasters.includes(m.id) ? "var(--accent)" : "var(--border2)"}`,
+      background: ovMasters.includes(m.id) ? "rgba(var(--accent-rgb),0.15)" : "transparent",
+      color: ovMasters.includes(m.id) ? "var(--accent-bright)" : "var(--text-muted)",
       fontSize: FS.s,
       cursor: "pointer"
     }
@@ -10331,7 +10357,7 @@ function OverviewMonth({
     className: "nb",
     title: `還原：${undoStack[0]?.desc || ""}`,
     style: {
-      color: "#a29bfe",
+      color: "var(--accent)",
       border: "none",
       background: "none",
       fontWeight: 700,
@@ -10359,9 +10385,9 @@ function OverviewMonth({
     },
     className: "nb",
     style: {
-      color: ovShowSlots ? "#a29bfe" : "var(--nav-color)",
+      color: ovShowSlots ? "var(--accent)" : "var(--nav-color)",
       border: "none",
-      background: ovShowSlots ? "rgba(162,155,254,0.12)" : "none"
+      background: ovShowSlots ? "rgba(var(--accent-rgb),0.12)" : "none"
     }
   }, "選日"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
@@ -10375,9 +10401,9 @@ function OverviewMonth({
     },
     className: "nb",
     style: {
-      color: ovShowSearch ? "#a29bfe" : "var(--nav-color)",
+      color: ovShowSearch ? "var(--accent)" : "var(--nav-color)",
       border: "none",
-      background: ovShowSearch ? "rgba(162,155,254,0.12)" : "none"
+      background: ovShowSearch ? "rgba(var(--accent-rgb),0.12)" : "none"
     }
   }, "搜尋"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
@@ -10402,7 +10428,7 @@ function OverviewMonth({
     },
     className: "nb",
     style: {
-      color: "#a29bfe",
+      color: "var(--accent)",
       border: "none",
       background: "none",
       fontWeight: 700
@@ -10427,9 +10453,9 @@ function OverviewMonth({
     },
     className: "nb",
     style: {
-      color: ovMoveMode ? "#a29bfe" : "var(--nav-color)",
+      color: ovMoveMode ? "var(--accent)" : "var(--nav-color)",
       border: "none",
-      background: ovMoveMode ? "rgba(162,155,254,0.12)" : "none",
+      background: ovMoveMode ? "rgba(var(--accent-rgb),0.12)" : "none",
       fontWeight: ovMoveMode ? 700 : 400
     }
   }, ovMoveMode ? "退出" : "移動"), /*#__PURE__*/React.createElement("button", {
@@ -10605,7 +10631,7 @@ function OverviewMonth({
     }
   }, b.customer_phone || parseInput(b.raw_input || b.customer_name || "").phone || "無電話", " · ", /*#__PURE__*/React.createElement("span", {
     style: {
-      color: "#a29bfe"
+      color: "var(--accent)"
     }
   }, b._masterName || ""))), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -11488,7 +11514,7 @@ function OverviewMonth({
     },
     style: {
       fontSize: 11,
-      color: "#a29bfe",
+      color: "var(--accent)",
       cursor: "pointer",
       userSelect: "none"
     }
@@ -11508,8 +11534,8 @@ function OverviewMonth({
     }
   }, "姓名＋電話", returningVisitCount >= 3 && /*#__PURE__*/React.createElement("span", {
     style: {
-      background: "rgba(162,155,254,0.18)",
-      color: "#c4b5fd",
+      background: "rgba(var(--accent-rgb),0.18)",
+      color: "var(--accent-bright)",
       fontSize: 10,
       fontWeight: 700,
       padding: "1px 6px",
@@ -11551,12 +11577,12 @@ function OverviewMonth({
       width: "100%",
       background: COLOR_NO_INPUT.has(form.color) && !form.input.trim() ? {
         "reserved": "rgba(34,211,238,0.10)",
-        "custom": "rgba(162,155,254,0.10)",
+        "custom": "rgba(var(--accent-rgb),0.10)",
         "vacation": "rgba(233,69,96,0.10)"
       }[form.color] || "var(--input-bg)" : "var(--input-bg)",
       border: `1px solid ${COLOR_NO_INPUT.has(form.color) && !form.input.trim() ? {
         "reserved": "#22d3ee88",
-        "custom": "#a29bfe88",
+        "custom": "rgba(var(--accent-rgb),0.53)",
         "vacation": "#e9456088"
       }[form.color] || "var(--border2)" : "var(--border2)"}`,
       borderRadius: 8,
@@ -11676,7 +11702,7 @@ function OverviewMonth({
       fontSize: 10,
       color: {
         "reserved": "#22d3ee",
-        "custom": "#a29bfe",
+        "custom": "var(--accent)",
         "vacation": "#e94560"
       }[form.color] || "var(--text-dim)",
       marginTop: 3
@@ -11776,7 +11802,7 @@ function OverviewMonth({
       "new_customer": "#f5a623",
       "cui": "#ff4d94",
       "vacation": "#e94560",
-      "custom": "#a29bfe"
+      "custom": "var(--accent)"
     };
     const col = colorMap[cc.key] || "#888";
     return /*#__PURE__*/React.createElement("button", {
@@ -11818,14 +11844,14 @@ function OverviewMonth({
     style: {
       marginBottom: 10,
       padding: 10,
-      background: form.recurType !== "none" ? "rgba(162,155,254,0.08)" : "transparent",
-      border: `1px solid ${form.recurType !== "none" ? "rgba(162,155,254,0.3)" : "transparent"}`,
+      background: form.recurType !== "none" ? "rgba(var(--accent-rgb),0.08)" : "transparent",
+      border: `1px solid ${form.recurType !== "none" ? "rgba(var(--accent-rgb),0.3)" : "transparent"}`,
       borderRadius: 8
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 11,
-      color: form.recurType !== "none" ? "#a29bfe" : "var(--text-muted)",
+      color: form.recurType !== "none" ? "var(--accent)" : "var(--text-muted)",
       marginBottom: 6,
       fontWeight: 700
     }
@@ -11864,9 +11890,9 @@ function OverviewMonth({
         flex: 1,
         padding: "6px 2px",
         borderRadius: 6,
-        border: `1px solid ${sel ? "#a29bfe" : "var(--border2)"}`,
-        background: sel ? "rgba(162,155,254,0.2)" : "transparent",
-        color: sel ? "#a29bfe" : "var(--text-muted)",
+        border: `1px solid ${sel ? "var(--accent)" : "var(--border2)"}`,
+        background: sel ? "rgba(var(--accent-rgb),0.2)" : "transparent",
+        color: sel ? "var(--accent)" : "var(--text-muted)",
         fontSize: 11,
         fontWeight: sel ? 800 : 500,
         cursor: "pointer"
@@ -11887,9 +11913,9 @@ function OverviewMonth({
       flex: 1,
       padding: "5px 2px",
       borderRadius: 6,
-      border: `1px solid ${form.recurEndType === "date" ? "#a29bfe" : "var(--border2)"}`,
-      background: form.recurEndType === "date" ? "rgba(162,155,254,0.15)" : "transparent",
-      color: form.recurEndType === "date" ? "#a29bfe" : "var(--text-muted)",
+      border: `1px solid ${form.recurEndType === "date" ? "var(--accent)" : "var(--border2)"}`,
+      background: form.recurEndType === "date" ? "rgba(var(--accent-rgb),0.15)" : "transparent",
+      color: form.recurEndType === "date" ? "var(--accent)" : "var(--text-muted)",
       fontSize: 11,
       fontWeight: form.recurEndType === "date" ? 700 : 400,
       cursor: "pointer"
@@ -11903,9 +11929,9 @@ function OverviewMonth({
       flex: 1,
       padding: "5px 2px",
       borderRadius: 6,
-      border: `1px solid ${form.recurEndType === "count" ? "#a29bfe" : "var(--border2)"}`,
-      background: form.recurEndType === "count" ? "rgba(162,155,254,0.15)" : "transparent",
-      color: form.recurEndType === "count" ? "#a29bfe" : "var(--text-muted)",
+      border: `1px solid ${form.recurEndType === "count" ? "var(--accent)" : "var(--border2)"}`,
+      background: form.recurEndType === "count" ? "rgba(var(--accent-rgb),0.15)" : "transparent",
+      color: form.recurEndType === "count" ? "var(--accent)" : "var(--text-muted)",
       fontSize: 11,
       fontWeight: form.recurEndType === "count" ? 700 : 400,
       cursor: "pointer"
@@ -12177,7 +12203,7 @@ function OverviewMonth({
   }) : "", "  編輯") : /*#__PURE__*/React.createElement("span", null, "尚未編輯過")), ovEditLogs.length > 0 && /*#__PURE__*/React.createElement("span", {
     onClick: () => setOvShowEditLogs(p => !p),
     style: {
-      color: "#a29bfe",
+      color: "var(--accent)",
       cursor: "pointer",
       fontSize: 11,
       fontWeight: 700
@@ -12247,9 +12273,9 @@ function OverviewMonth({
       width: "100%",
       padding: "10px",
       borderRadius: 10,
-      border: "1px solid #a29bfe",
-      background: "rgba(162,155,254,0.1)",
-      color: "#a29bfe",
+      border: "1px solid var(--accent)",
+      background: "rgba(var(--accent-rgb),0.1)",
+      color: "var(--accent)",
       fontSize: 13,
       fontWeight: 700,
       cursor: "pointer"
@@ -12326,7 +12352,7 @@ function OverviewMonth({
       width: "100%",
       padding: "10px 16px",
       borderRadius: 10,
-      background: cpTarget.date && cpTarget.time ? "#a29bfe" : "var(--border2)",
+      background: cpTarget.date && cpTarget.time ? "var(--accent)" : "var(--border2)",
       border: "none",
       color: cpTarget.date && cpTarget.time ? "#fff" : "var(--text-dim)",
       fontWeight: 700,
@@ -12370,9 +12396,9 @@ function OverviewMonth({
     style: {
       padding: "13px 0",
       borderRadius: 12,
-      border: "1px solid #a29bfe",
-      background: "rgba(162,155,254,0.1)",
-      color: "#a29bfe",
+      border: "1px solid var(--accent)",
+      background: "rgba(var(--accent-rgb),0.1)",
+      color: "var(--accent)",
       cursor: "pointer",
       fontSize: 13,
       fontWeight: 700
@@ -12617,7 +12643,7 @@ function OverviewMonth({
       "new_customer": "#f5a623",
       "cui": "#ff4d94",
       "vacation": "#e94560",
-      "custom": "#a29bfe"
+      "custom": "var(--accent)"
     };
     const col = colorMap[cc.key] || "#888";
     return /*#__PURE__*/React.createElement("button", {
@@ -12681,9 +12707,9 @@ function OverviewMonth({
       width: "100%",
       padding: 10,
       borderRadius: 8,
-      border: "1px solid #a29bfe",
-      background: "rgba(162,155,254,0.1)",
-      color: "#a29bfe",
+      border: "1px solid var(--accent)",
+      background: "rgba(var(--accent-rgb),0.1)",
+      color: "var(--accent)",
       fontSize: 13,
       fontWeight: 700,
       cursor: "pointer"
@@ -12769,7 +12795,7 @@ function OverviewMonth({
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       background: "var(--bg-header)",
-      border: "1px solid #a29bfe",
+      border: "1px solid var(--accent)",
       borderRadius: 16,
       padding: 18,
       width: "92%",
@@ -12784,7 +12810,7 @@ function OverviewMonth({
       fontWeight: 800,
       fontSize: 16,
       marginBottom: 14,
-      color: "#a29bfe"
+      color: "var(--accent)"
     }
   }, "🔁 套用到未來重複"), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -12841,9 +12867,9 @@ function OverviewMonth({
         flex: 1,
         padding: "8px 4px",
         borderRadius: 6,
-        border: `1px solid ${sel ? "#a29bfe" : "var(--border2)"}`,
-        background: sel ? "rgba(162,155,254,0.2)" : "transparent",
-        color: sel ? "#a29bfe" : "var(--text-muted)",
+        border: `1px solid ${sel ? "var(--accent)" : "var(--border2)"}`,
+        background: sel ? "rgba(var(--accent-rgb),0.2)" : "transparent",
+        color: sel ? "var(--accent)" : "var(--text-muted)",
         fontSize: 13,
         fontWeight: sel ? 800 : 500,
         cursor: "pointer"
@@ -12852,7 +12878,7 @@ function OverviewMonth({
   })), extendRecur.recurType === "monthly" && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 10,
-      color: "#a29bfe",
+      color: "var(--accent)",
       marginTop: 4
     }
   }, "📌 每月", describeMonthlyNth(extendRecur.booking.date))), /*#__PURE__*/React.createElement("div", {
@@ -12881,9 +12907,9 @@ function OverviewMonth({
       flex: 1,
       padding: "6px 2px",
       borderRadius: 6,
-      border: `1px solid ${extendRecur.recurEndType === "date" ? "#a29bfe" : "var(--border2)"}`,
-      background: extendRecur.recurEndType === "date" ? "rgba(162,155,254,0.15)" : "transparent",
-      color: extendRecur.recurEndType === "date" ? "#a29bfe" : "var(--text-muted)",
+      border: `1px solid ${extendRecur.recurEndType === "date" ? "var(--accent)" : "var(--border2)"}`,
+      background: extendRecur.recurEndType === "date" ? "rgba(var(--accent-rgb),0.15)" : "transparent",
+      color: extendRecur.recurEndType === "date" ? "var(--accent)" : "var(--text-muted)",
       fontSize: 12,
       fontWeight: extendRecur.recurEndType === "date" ? 700 : 400,
       cursor: "pointer"
@@ -12897,9 +12923,9 @@ function OverviewMonth({
       flex: 1,
       padding: "6px 2px",
       borderRadius: 6,
-      border: `1px solid ${extendRecur.recurEndType === "count" ? "#a29bfe" : "var(--border2)"}`,
-      background: extendRecur.recurEndType === "count" ? "rgba(162,155,254,0.15)" : "transparent",
-      color: extendRecur.recurEndType === "count" ? "#a29bfe" : "var(--text-muted)",
+      border: `1px solid ${extendRecur.recurEndType === "count" ? "var(--accent)" : "var(--border2)"}`,
+      background: extendRecur.recurEndType === "count" ? "rgba(var(--accent-rgb),0.15)" : "transparent",
+      color: extendRecur.recurEndType === "count" ? "var(--accent)" : "var(--text-muted)",
       fontSize: 12,
       fontWeight: extendRecur.recurEndType === "count" ? 700 : 400,
       cursor: "pointer"
@@ -13070,7 +13096,7 @@ function OverviewMonth({
       flex: 2,
       padding: 11,
       borderRadius: 8,
-      background: "#a29bfe",
+      background: "var(--accent)",
       border: "none",
       color: "#fff",
       fontSize: 13,
@@ -15072,8 +15098,8 @@ function CRMModule({
     onClick: () => setCrmTab("merge"),
     className: `tab-btn${crmTab === "merge" ? " active" : ""}`,
     style: {
-      color: crmTab === "merge" ? "#a29bfe" : "#a29bfe99",
-      borderBottomColor: crmTab === "merge" ? "#a29bfe" : "transparent"
+      color: crmTab === "merge" ? "var(--accent)" : "rgba(var(--accent-rgb),0.6)",
+      borderBottomColor: crmTab === "merge" ? "var(--accent)" : "transparent"
     }
   }, "🔗 待合併", mergeSuggestions.length > 0 ? ` (${mergeSuggestions.length})` : "")), crmTab === "noshow" && /*#__PURE__*/React.createElement(React.Fragment, null, nsToast && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -15312,10 +15338,10 @@ function CRMModule({
   }, noShowSaving ? "儲存中..." : "儲存變更 ✓"))))), crmTab === "merge" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "10px 12px",
-      background: "rgba(162,155,254,0.08)",
+      background: "rgba(var(--accent-rgb),0.08)",
       borderBottom: "1px solid var(--border)",
       fontSize: 11,
-      color: "#a29bfe",
+      color: "var(--accent)",
       lineHeight: 1.6
     }
   }, "🔗 系統偵測到下列「無電話」的客戶名稱與某位「有電話」的客戶相符，可能是同一個人。", /*#__PURE__*/React.createElement("br", null), "確認合併後，會把該客戶所有預約補上電話，下次就會自動歸入主檔。", !mergeIgnoredHasTable && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("br", null), /*#__PURE__*/React.createElement("span", {
@@ -15350,10 +15376,10 @@ function CRMModule({
         fontSize: 11,
         padding: "2px 9px",
         borderRadius: 10,
-        background: "rgba(162,155,254,0.18)",
-        color: "#a29bfe",
+        background: "rgba(var(--accent-rgb),0.18)",
+        color: "var(--accent)",
         fontWeight: 700,
-        border: "1px solid rgba(162,155,254,0.4)"
+        border: "1px solid rgba(var(--accent-rgb),0.4)"
       }
     }, "👤 ", src.masterName, " 師傅"), sug.conflict && /*#__PURE__*/React.createElement("span", {
       style: {
@@ -15448,8 +15474,8 @@ function CRMModule({
           fontSize: 10,
           padding: "1px 6px",
           borderRadius: 6,
-          background: "rgba(162,155,254,0.15)",
-          color: "#a29bfe",
+          background: "rgba(var(--accent-rgb),0.15)",
+          color: "var(--accent)",
           fontWeight: 700
         }
       }, "👤 ", tgt.masterName, "師傅"), /*#__PURE__*/React.createElement("span", {
@@ -15754,11 +15780,11 @@ function renderOneReconcileCard(master, todayTotal, monthTotal) {
     },
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: "var(--text-muted)" } }, "今日"),
-        /*#__PURE__*/React.createElement("div", { style: { fontSize: 20, fontWeight: 700, color: "#a29bfe" } }, "$", todayTotal.toLocaleString())
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 20, fontWeight: 700, color: "var(--accent)" } }, "$", todayTotal.toLocaleString())
       ),
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: "var(--text-muted)" } }, "本月"),
-        /*#__PURE__*/React.createElement("div", { style: { fontSize: 20, fontWeight: 700, color: "#c4b5fd" } }, "$", monthTotal.toLocaleString())
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 20, fontWeight: 700, color: "var(--accent-bright)" } }, "$", monthTotal.toLocaleString())
       )
     )
   );
@@ -15913,7 +15939,7 @@ function MyWeeklyWidget({ masters, loginMaster }) {
   return /*#__PURE__*/React.createElement(React.Fragment, null, ...cards);
 }
 function SettingsIcon({ name, color, size }) {
-  const stroke = color || "#c4b5fd";
+  const stroke = color || "var(--accent-bright)";
   const common = { width: size || 26, height: size || 26, viewBox: "0 0 24 24", fill: "none", stroke, strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" };
   const paths = {
     user: [
@@ -16054,13 +16080,16 @@ function SettingsModule({
   const [svcNewName, setSvcNewName] = useState("");
   const [svcNewPrice, setSvcNewPrice] = useState("");
   const [svcSaving, setSvcSaving] = useState(false);
+  const [currentTheme, setCurrentTheme] = useState(() => {
+    try { return localStorage.getItem("accentTheme") || "purple"; } catch (e) { return "purple"; }
+  });
   const [editMaster, setEditMaster] = useState(null);
   const [form, setForm] = useState({
     name: "",
     username: "",
     role: "master",
     display_color: "#74b9ff",
-    reserve_color: "#a29bfe"
+    reserve_color: "var(--accent)"
   });
   const [saving, setSaving] = useState(false);
   const [histLogs, setHistLogs] = useState([]);
@@ -16188,7 +16217,7 @@ function SettingsModule({
       username: m.username || "",
       role: m.role || "master",
       display_color: m.display_color || "#74b9ff",
-      reserve_color: m.reserve_color || "#a29bfe"
+      reserve_color: m.reserve_color || "var(--accent)"
     });
   };
   const saveEdit = async () => {
@@ -16417,7 +16446,7 @@ function SettingsModule({
       "aria-hidden": "true",
       style: { position: "absolute", top: 8, right: "22%", fontSize: 11 }
     }, "🔒"), /*#__PURE__*/React.createElement("span", {
-      style: { fontSize: 11, color: "#c4b5fd" }
+      style: { fontSize: 11, color: "var(--accent-bright)" }
     }, l));
   };
   const renderSection = (title, items) => /*#__PURE__*/React.createElement("div", {
@@ -16438,7 +16467,7 @@ function SettingsModule({
   );
   const renderCategorizedGrid = () => {
     const sections = [
-      ["帳號", [["self", "我的帳號", "user"], ["masters", "帳號管理", "user"]]],
+      ["帳號", [["self", "我的帳號", "user"], ["masters", "帳號管理", "user"], ["appearance", "外觀", "spark"]]],
       ["業務", [["crm", "客戶", "users"], ["analytics", "數據", "chart"], ["service_types", "服務項目", "sliders"], ["reconcile", "對帳", "chart"]]],
       ["排班設定", [["rest", "休息時段", "pause"], ["availability", "開放", "check"]]],
       ["系統", [["export", "批次刪除", "trash"], ["history", "歷史紀錄", "history"], ["sync", "資料同步", "sync"]]]
@@ -16455,7 +16484,7 @@ function SettingsModule({
       : /*#__PURE__*/React.createElement("div", {
           style: {
             width: 44, height: 44, borderRadius: "50%",
-            background: "rgba(162,155,254,0.2)", color: "#c4b5fd",
+            background: "rgba(var(--accent-rgb),0.2)", color: "var(--accent-bright)",
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 16, fontWeight: 700
           }
@@ -16493,6 +16522,44 @@ function SettingsModule({
       style: { marginTop: 16 }
     }, /*#__PURE__*/React.createElement(MyWeeklyWidget, { masters: masters, loginMaster: loginMaster }));
     return /*#__PURE__*/React.createElement(React.Fragment, null, accountSection, weeklySection);
+  };
+  const renderAppearanceTab = () => {
+    const swatches = Object.entries(window.ACCENT_THEMES || {}).map(([key, t]) => {
+      const isActive = currentTheme === key;
+      return /*#__PURE__*/React.createElement("button", {
+        key: key,
+        onClick: () => {
+          window.applyAccentTheme(key);
+          try { localStorage.setItem("accentTheme", key); } catch (e) {}
+          setCurrentTheme(key);
+        },
+        style: {
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+          background: "transparent", border: "none", cursor: "pointer", padding: "10px 6px"
+        }
+      },
+        /*#__PURE__*/React.createElement("div", {
+          style: {
+            width: 40, height: 40, borderRadius: "50%", background: t.accent,
+            border: isActive ? "3px solid var(--text-main)" : "3px solid transparent",
+            boxShadow: isActive ? "0 0 0 2px " + t.accent : "none"
+          }
+        }),
+        /*#__PURE__*/React.createElement("span", {
+          style: { fontSize: 11, color: isActive ? "var(--text-main)" : "var(--text-muted)", fontWeight: isActive ? 700 : 400 }
+        }, t.label)
+      );
+    });
+    return /*#__PURE__*/React.createElement("div", {
+      style: { padding: 16 }
+    },
+      /*#__PURE__*/React.createElement("div", {
+        style: { fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }
+      }, "選一個主題色，全站的重點色都會跟著換，設定會記在這台裝置上"),
+      /*#__PURE__*/React.createElement("div", {
+        style: { display: "flex", justifyContent: "space-around", flexWrap: "wrap" }
+      }, swatches)
+    );
   };
   const renderServiceTypesTab = () => {
     const rows = svcTypes.map(t => {
@@ -16544,7 +16611,7 @@ function SettingsModule({
         disabled: svcSaving,
         style: {
           padding: "6px 14px", borderRadius: 6, border: "none",
-          background: "#a29bfe", color: "#00171f", fontSize: 13, fontWeight: 700, cursor: "pointer"
+          background: "var(--accent)", color: "#00171f", fontSize: 13, fontWeight: 700, cursor: "pointer"
         }
       }, svcSaving ? "新增中" : "新增")
     );
@@ -16565,7 +16632,7 @@ function SettingsModule({
       : /*#__PURE__*/React.createElement("div", {
           style: {
             width: 84, height: 84, borderRadius: "50%",
-            background: "rgba(162,155,254,0.2)", color: "#c4b5fd",
+            background: "rgba(var(--accent-rgb),0.2)", color: "var(--accent-bright)",
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 32, fontWeight: 700
           }
@@ -16574,7 +16641,7 @@ function SettingsModule({
       style: {
         position: "absolute", bottom: 0, right: 0,
         width: 26, height: 26, borderRadius: "50%",
-        background: "#a29bfe", border: "2px solid var(--bg-header)",
+        background: "var(--accent)", border: "2px solid var(--bg-header)",
         display: "flex", alignItems: "center", justifyContent: "center",
         fontSize: 12, color: "#00171f"
       }
@@ -16631,7 +16698,7 @@ function SettingsModule({
       onClick: saveSelf,
       disabled: selfSaving,
       style: {
-        flex: 2, padding: 10, borderRadius: 8, background: "#a29bfe",
+        flex: 2, padding: 10, borderRadius: 8, background: "var(--accent)",
         border: "none", color: "#00171f", fontWeight: 700, cursor: "pointer"
       }
     }, selfSaving ? "儲存中..." : "儲存");
@@ -16688,7 +16755,7 @@ function SettingsModule({
     }
   }, "←"), /*#__PURE__*/React.createElement("span", {
     style: { fontSize: 14, fontWeight: 700, color: "var(--text-main)" }
-  }, { crm: "客戶", analytics: "數據", service_types: "服務項目", reconcile: "對帳", masters: "帳號管理", rest: "休息時段", export: "批次刪除", history: "歷史紀錄", availability: "開放", sync: "資料同步" }[settTab])), settTab === "masters" && /*#__PURE__*/React.createElement("div", {
+  }, { crm: "客戶", analytics: "數據", service_types: "服務項目", reconcile: "對帳", masters: "帳號管理", rest: "休息時段", export: "批次刪除", history: "歷史紀錄", availability: "開放", sync: "資料同步", appearance: "外觀" }[settTab])), settTab === "masters" && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: 16
     }
@@ -16754,7 +16821,7 @@ function SettingsModule({
       flexWrap: "wrap",
       justifyContent: "flex-end"
     }
-  }, [["全數據觀看", m.can_view_all_stats, "#a29bfe", "can_view_all_stats"]].map(([label, active, color, field]) => /*#__PURE__*/React.createElement("button", {
+  }, [["全數據觀看", m.can_view_all_stats, "var(--accent)", "can_view_all_stats"]].map(([label, active, color, field]) => /*#__PURE__*/React.createElement("button", {
     key: label,
     onClick: () => togglePerm(m, field),
     style: {
@@ -17196,7 +17263,7 @@ function SettingsModule({
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit"
-  }) : ""))))), settTab === "service_types" && renderServiceTypesTab(), settTab === "reconcile" && /*#__PURE__*/React.createElement("div", {
+  }) : ""))))), settTab === "appearance" && renderAppearanceTab(), settTab === "service_types" && renderServiceTypesTab(), settTab === "reconcile" && /*#__PURE__*/React.createElement("div", {
     style: { padding: 12 }
   }, /*#__PURE__*/React.createElement(ReconcileWidget, { masters: masters, loginMaster: loginMaster })), settTab === "crm" && /*#__PURE__*/React.createElement("div", {
     style: { padding: 0 }
@@ -17357,7 +17424,7 @@ function SettingsModule({
     }
   }, /*#__PURE__*/React.createElement("input", {
     type: "color",
-    value: form.reserve_color || "#a29bfe",
+    value: form.reserve_color || "var(--accent)",
     onChange: e => setForm(f => ({
       ...f,
       reserve_color: e.target.value
@@ -17374,12 +17441,12 @@ function SettingsModule({
       fontSize: 12,
       color: "var(--text-muted)"
     }
-  }, form.reserve_color || "#a29bfe"), /*#__PURE__*/React.createElement("div", {
+  }, form.reserve_color || "var(--accent)"), /*#__PURE__*/React.createElement("div", {
     style: {
       width: 32,
       height: 20,
       borderRadius: 4,
-      background: form.reserve_color || "#a29bfe",
+      background: form.reserve_color || "var(--accent)",
       border: "2px solid rgba(255,255,255,0.2)"
     }
   }))), /*#__PURE__*/React.createElement("div", {
