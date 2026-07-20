@@ -3925,8 +3925,16 @@ function MainApp({
     recurType: "none",
     recurEndType: "date",
     recurEndDate: "",
-    recurEndCount: 12
+    recurEndCount: 12,
+    serviceTypeId: "",
+    price: ""
   });
+  const [serviceTypes, setServiceTypes] = useState([]);
+  useEffect(() => {
+    sb.from("service_types").select("*").eq("is_active", true).order("sort_order").then(({ data }) => {
+      if (data) setServiceTypes(data);
+    });
+  }, []);
   const [saving, setSaving] = useState(false);
   const [cpMode, setCpMode] = useState(null);
   const [cpTarget, setCpTarget] = useState({
@@ -4437,6 +4445,66 @@ function MainApp({
     });
   };
   const COLOR_NO_INPUT = new Set(["reserved", "custom", "vacation"]);
+  const renderServiceTypeSection = () => {
+    const selected = serviceTypes.find(t => t.id === form.serviceTypeId);
+    const typeOptions = [
+      /*#__PURE__*/React.createElement("option", { key: "none", value: "" }, "不指定")
+    ].concat(serviceTypes.map(t => /*#__PURE__*/React.createElement("option", {
+      key: t.id,
+      value: t.id
+    }, t.name, "（$", t.default_price, "/人）")));
+    const typeSelect = /*#__PURE__*/React.createElement("select", {
+      value: form.serviceTypeId,
+      onChange: e => {
+        const tid = e.target.value;
+        const t = serviceTypes.find(x => x.id === tid);
+        setForm(f => ({
+          ...f,
+          serviceTypeId: tid,
+          price: t ? String(t.default_price * (parseInt(f.guests) || 1)) : f.price
+        }));
+      },
+      style: {
+        width: "100%",
+        background: "var(--input-bg)",
+        color: "var(--text-main)",
+        border: "1px solid var(--border2)",
+        borderRadius: 5,
+        padding: 6,
+        fontSize: 13
+      }
+    }, typeOptions);
+    const priceInput = /*#__PURE__*/React.createElement("input", {
+      type: "number",
+      value: form.price,
+      placeholder: "金額",
+      onChange: e => setForm(f => ({ ...f, price: e.target.value })),
+      style: {
+        width: "100%",
+        background: "var(--input-bg)",
+        color: "var(--text-main)",
+        border: "1px solid var(--border2)",
+        borderRadius: 5,
+        padding: 6,
+        fontSize: 13
+      }
+    });
+    const typeCol = /*#__PURE__*/React.createElement("div", { style: { flex: 1.4 } },
+      /*#__PURE__*/React.createElement("div", {
+        style: { fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }
+      }, "服務項目"),
+      typeSelect
+    );
+    const priceCol = /*#__PURE__*/React.createElement("div", { style: { flex: 1 } },
+      /*#__PURE__*/React.createElement("div", {
+        style: { fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }
+      }, "金額"),
+      priceInput
+    );
+    return /*#__PURE__*/React.createElement("div", {
+      style: { display: "flex", gap: 8, marginBottom: 10 }
+    }, typeCol, priceCol);
+  };
   const saveBk = async (isContinuous = false) => {
     const needInput = !COLOR_NO_INPUT.has(form.color);
     if (!dialog || needInput && !form.input.trim() || saving) return;
@@ -4506,7 +4574,9 @@ function MainApp({
         is_aftercare: !!form.isAftercare,
         note: form.note || null,
         booking_source: "internal",
-        status: "confirmed"
+        status: "confirmed",
+        service_type_id: form.serviceTypeId || null,
+        price: form.price ? parseFloat(form.price) : null
       }));
       if (_rowsToInsert.length === 0) {
         msg("所有日期都被跳過，未建立任何預約", true);
@@ -4610,6 +4680,8 @@ function MainApp({
       booking_source: "internal",
       status: "confirmed",
       reservation_type: reservationType,
+      service_type_id: form.serviceTypeId || null,
+      price: form.price ? parseFloat(form.price) : null,
       party_size: guestsNum || 1
     }];
     if (guestsNum > 1 && form.isSplit && form.splitMasterId) {
@@ -4638,6 +4710,8 @@ function MainApp({
           status: "confirmed",
           booking_group_id: groupAnchorId,
           reservation_type: reservationType,
+          service_type_id: form.serviceTypeId || null,
+          price: form.price ? parseFloat(form.price) : null,
           party_size: guestsNum
         });
       }
@@ -4669,6 +4743,8 @@ function MainApp({
             status: "confirmed",
             booking_group_id: groupAnchorId,
             reservation_type: reservationType,
+            service_type_id: form.serviceTypeId || null,
+            price: form.price ? parseFloat(form.price) : null,
             party_size: guestsNum
           });
         }
@@ -7459,7 +7535,7 @@ function MainApp({
       fontWeight: 700,
       cursor: "pointer"
     }
-  }, n)))), parseInt(form.guests) > 1 && /*#__PURE__*/React.createElement("div", {
+  }, n)))), renderServiceTypeSection(), parseInt(form.guests) > 1 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 10,
       padding: 8,
@@ -9130,8 +9206,16 @@ function OverviewMonth({
     input: "",
     guests: "1",
     note: "",
-    color: "none"
+    color: "none",
+    serviceTypeId: "",
+    price: ""
   });
+  const [serviceTypes, setServiceTypes] = useState([]);
+  useEffect(() => {
+    sb.from("service_types").select("*").eq("is_active", true).order("sort_order").then(({ data }) => {
+      if (data) setServiceTypes(data);
+    });
+  }, []);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
   const [cpMode, setCpMode] = useState(null);
@@ -9328,6 +9412,66 @@ function OverviewMonth({
     });
   };
   const COLOR_NO_INPUT = new Set(["reserved", "custom", "vacation"]);
+  const renderServiceTypeSection = () => {
+    const selected = serviceTypes.find(t => t.id === form.serviceTypeId);
+    const typeOptions = [
+      /*#__PURE__*/React.createElement("option", { key: "none", value: "" }, "不指定")
+    ].concat(serviceTypes.map(t => /*#__PURE__*/React.createElement("option", {
+      key: t.id,
+      value: t.id
+    }, t.name, "（$", t.default_price, "/人）")));
+    const typeSelect = /*#__PURE__*/React.createElement("select", {
+      value: form.serviceTypeId,
+      onChange: e => {
+        const tid = e.target.value;
+        const t = serviceTypes.find(x => x.id === tid);
+        setForm(f => ({
+          ...f,
+          serviceTypeId: tid,
+          price: t ? String(t.default_price * (parseInt(f.guests) || 1)) : f.price
+        }));
+      },
+      style: {
+        width: "100%",
+        background: "var(--input-bg)",
+        color: "var(--text-main)",
+        border: "1px solid var(--border2)",
+        borderRadius: 5,
+        padding: 6,
+        fontSize: 13
+      }
+    }, typeOptions);
+    const priceInput = /*#__PURE__*/React.createElement("input", {
+      type: "number",
+      value: form.price,
+      placeholder: "金額",
+      onChange: e => setForm(f => ({ ...f, price: e.target.value })),
+      style: {
+        width: "100%",
+        background: "var(--input-bg)",
+        color: "var(--text-main)",
+        border: "1px solid var(--border2)",
+        borderRadius: 5,
+        padding: 6,
+        fontSize: 13
+      }
+    });
+    const typeCol = /*#__PURE__*/React.createElement("div", { style: { flex: 1.4 } },
+      /*#__PURE__*/React.createElement("div", {
+        style: { fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }
+      }, "服務項目"),
+      typeSelect
+    );
+    const priceCol = /*#__PURE__*/React.createElement("div", { style: { flex: 1 } },
+      /*#__PURE__*/React.createElement("div", {
+        style: { fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }
+      }, "金額"),
+      priceInput
+    );
+    return /*#__PURE__*/React.createElement("div", {
+      style: { display: "flex", gap: 8, marginBottom: 10 }
+    }, typeCol, priceCol);
+  };
   const saveBk = async (isContinuous = false) => {
     const needInput = !COLOR_NO_INPUT.has(form.color);
     if (!dialog || needInput && !form.input.trim() || saving) return;
@@ -9397,7 +9541,9 @@ function OverviewMonth({
         is_aftercare: !!form.isAftercare,
         note: form.note || null,
         booking_source: "internal",
-        status: "confirmed"
+        status: "confirmed",
+        service_type_id: form.serviceTypeId || null,
+        price: form.price ? parseFloat(form.price) : null
       }));
       if (_rowsToInsert.length === 0) {
         msg("所有日期都被跳過，未建立任何預約", true);
@@ -9501,6 +9647,8 @@ function OverviewMonth({
       booking_source: "internal",
       status: "confirmed",
       reservation_type: reservationType,
+      service_type_id: form.serviceTypeId || null,
+      price: form.price ? parseFloat(form.price) : null,
       party_size: guestsNum || 1
     }];
     if (guestsNum > 1 && form.isSplit && form.splitMasterId) {
@@ -9529,6 +9677,8 @@ function OverviewMonth({
           status: "confirmed",
           booking_group_id: groupAnchorId,
           reservation_type: reservationType,
+          service_type_id: form.serviceTypeId || null,
+          price: form.price ? parseFloat(form.price) : null,
           party_size: guestsNum
         });
       }
@@ -9560,6 +9710,8 @@ function OverviewMonth({
             status: "confirmed",
             booking_group_id: groupAnchorId,
             reservation_type: reservationType,
+            service_type_id: form.serviceTypeId || null,
+            price: form.price ? parseFloat(form.price) : null,
             party_size: guestsNum
           });
         }
@@ -11554,7 +11706,7 @@ function OverviewMonth({
       fontWeight: 700,
       cursor: "pointer"
     }
-  }, n)))), parseInt(form.guests) > 1 && /*#__PURE__*/React.createElement("div", {
+  }, n)))), renderServiceTypeSection(), parseInt(form.guests) > 1 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 10,
       padding: 8,
