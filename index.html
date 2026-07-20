@@ -15957,6 +15957,11 @@ function SettingsModule({
   const [selfSaving, setSelfSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const avatarInputRef = useRef(null);
+  const [svcTypes, setSvcTypes] = useState([]);
+  const [svcLoaded, setSvcLoaded] = useState(false);
+  const [svcNewName, setSvcNewName] = useState("");
+  const [svcNewPrice, setSvcNewPrice] = useState("");
+  const [svcSaving, setSvcSaving] = useState(false);
   const [editMaster, setEditMaster] = useState(null);
   const [form, setForm] = useState({
     name: "",
@@ -16140,6 +16145,41 @@ function SettingsModule({
       msg("已儲存");
     } else msg("儲存失敗", true);
   };
+  // 2026-07-19：服務項目管理(定金/對帳功能的價目基礎)。停用用is_active
+  // 軟刪除、不是真的刪掉那一列，因為已經存在的舊預約可能還參照著這個
+  // service_type_id，硬刪除會讓歷史資料的外鍵斷掉。
+  const loadSvcTypes = async () => {
+    const { data } = await sb.from("service_types").select("*").order("sort_order");
+    setSvcTypes(data || []);
+    setSvcLoaded(true);
+  };
+  const addSvcType = async () => {
+    if (!svcNewName.trim() || svcSaving) return;
+    setSvcSaving(true);
+    const maxSort = svcTypes.reduce((m, t) => Math.max(m, t.sort_order || 0), 0);
+    const { error } = await sb.from("service_types").insert({
+      name: svcNewName.trim(),
+      default_price: parseFloat(svcNewPrice) || 0,
+      sort_order: maxSort + 1
+    });
+    setSvcSaving(false);
+    if (!error) {
+      setSvcNewName("");
+      setSvcNewPrice("");
+      loadSvcTypes();
+      msg("已新增");
+    } else msg("新增失敗", true);
+  };
+  const updateSvcPrice = async (id, newPrice) => {
+    const price = parseFloat(newPrice);
+    if (isNaN(price)) return;
+    setSvcTypes(prev => prev.map(t => t.id === id ? { ...t, default_price: price } : t));
+    await sb.from("service_types").update({ default_price: price }).eq("id", id);
+  };
+  const toggleSvcActive = async (id, current) => {
+    setSvcTypes(prev => prev.map(t => t.id === id ? { ...t, is_active: !current } : t));
+    await sb.from("service_types").update({ is_active: !current }).eq("id", id);
+  };
   // 2026-07-18：頭貼上傳。檔案路徑固定用{自己的uid}/avatar.{副檔名}，
   // 每次重傳都用upsert:true直接覆蓋同一個檔案，不會累積一堆舊照片佔空間。
   // 存進masters.avatar_url的URL後面刻意加上?t=時間戳記，是因為檔案路徑
@@ -16250,7 +16290,7 @@ function SettingsModule({
   // 『分類卡片內橫向排列』)，renderSection包一層標題+卡片，四個分類
   // 各自呼叫一次組出來，不是重寫整個九宮格的互動邏輯。
   const renderGridItem = ([k, l, iconKey]) => {
-    const locked = !isAdmin && ["masters", "export", "sync"].includes(k);
+    const locked = !isAdmin && ["masters", "export", "sync", "service_types"].includes(k);
     return /*#__PURE__*/React.createElement("button", {
       key: k,
       disabled: locked,
@@ -16265,6 +16305,7 @@ function SettingsModule({
         if (k === "crm") setCrmKey(p => p + 1);
         if (k === "history") loadHistory();
         if (k === "sync") loadSyncStatus();
+        if (k === "service_types") loadSvcTypes();
       },
       style: {
         background: "transparent",
@@ -16306,7 +16347,7 @@ function SettingsModule({
   const renderCategorizedGrid = () => {
     const sections = [
       ["帳號", [["self", "我的帳號", "user"], ["masters", "帳號管理", "user"]]],
-      ["業務", [["crm", "客戶", "users"], ["analytics", "數據", "chart"]]],
+      ["業務", [["crm", "客戶", "users"], ["analytics", "數據", "chart"], ["service_types", "服務項目", "sliders"], ["reconcile", "對帳", "chart"]]],
       ["排班設定", [["rest", "休息時段", "pause"], ["availability", "開放", "check"]]],
       ["系統", [["export", "批次刪除", "trash"], ["history", "歷史紀錄", "history"], ["sync", "資料同步", "sync"]]]
     ];
@@ -16360,6 +16401,65 @@ function SettingsModule({
       style: { marginTop: 16 }
     }, /*#__PURE__*/React.createElement(MyWeeklyWidget, { masters: masters, loginMaster: loginMaster }));
     return /*#__PURE__*/React.createElement(React.Fragment, null, accountSection, weeklySection);
+  };
+  const renderServiceTypesTab = () => {
+    const rows = svcTypes.map(t => {
+      const nameCell = /*#__PURE__*/React.createElement("span", {
+        style: { flex: 1, fontSize: 13, opacity: t.is_active ? 1 : 0.4, textDecoration: t.is_active ? "none" : "line-through" }
+      }, t.name);
+      const priceInput = /*#__PURE__*/React.createElement("input", {
+        type: "number",
+        defaultValue: t.default_price,
+        onBlur: e => updateSvcPrice(t.id, e.target.value),
+        style: {
+          width: 70, background: "var(--input-bg)", color: "var(--text-main)",
+          border: "1px solid var(--border2)", borderRadius: 5, padding: "4px 6px", fontSize: 13
+        }
+      });
+      const toggleBtn = /*#__PURE__*/React.createElement("button", {
+        onClick: () => toggleSvcActive(t.id, t.is_active),
+        style: {
+          padding: "4px 10px", borderRadius: 6, border: "1px solid var(--border2)",
+          background: "transparent", color: t.is_active ? "#e94560" : "#00b894", fontSize: 11, cursor: "pointer"
+        }
+      }, t.is_active ? "停用" : "啟用");
+      return /*#__PURE__*/React.createElement("div", {
+        key: t.id,
+        style: { display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderBottom: "1px solid var(--border)" }
+      }, nameCell, priceInput, toggleBtn);
+    });
+    const addRow = /*#__PURE__*/React.createElement("div", {
+      style: { display: "flex", gap: 8, padding: 12 }
+    },
+      /*#__PURE__*/React.createElement("input", {
+        placeholder: "新項目名稱", value: svcNewName,
+        onChange: e => setSvcNewName(e.target.value),
+        style: {
+          flex: 1, background: "var(--input-bg)", color: "var(--text-main)",
+          border: "1px solid var(--border2)", borderRadius: 5, padding: "6px 8px", fontSize: 13
+        }
+      }),
+      /*#__PURE__*/React.createElement("input", {
+        type: "number", placeholder: "金額", value: svcNewPrice,
+        onChange: e => setSvcNewPrice(e.target.value),
+        style: {
+          width: 80, background: "var(--input-bg)", color: "var(--text-main)",
+          border: "1px solid var(--border2)", borderRadius: 5, padding: "6px 8px", fontSize: 13
+        }
+      }),
+      /*#__PURE__*/React.createElement("button", {
+        onClick: addSvcType,
+        disabled: svcSaving,
+        style: {
+          padding: "6px 14px", borderRadius: 6, border: "none",
+          background: "#a29bfe", color: "#00171f", fontSize: 13, fontWeight: 700, cursor: "pointer"
+        }
+      }, svcSaving ? "新增中" : "新增")
+    );
+    const loadingMsg = !svcLoaded ? /*#__PURE__*/React.createElement("div", {
+      style: { padding: 16, textAlign: "center", color: "var(--text-muted)", fontSize: 12 }
+    }, "讀取中…") : null;
+    return /*#__PURE__*/React.createElement("div", { style: { padding: 0 } }, loadingMsg, ...rows, addRow);
   };
   const renderSelfEditModal = () => {
     const currentAvatar = loginMaster?.avatar_url;
@@ -16496,7 +16596,7 @@ function SettingsModule({
     }
   }, "←"), /*#__PURE__*/React.createElement("span", {
     style: { fontSize: 14, fontWeight: 700, color: "var(--text-main)" }
-  }, { crm: "客戶", analytics: "數據", masters: "帳號管理", rest: "休息時段", export: "批次刪除", history: "歷史紀錄", availability: "開放", sync: "資料同步" }[settTab])), settTab === "masters" && /*#__PURE__*/React.createElement("div", {
+  }, { crm: "客戶", analytics: "數據", service_types: "服務項目", reconcile: "對帳", masters: "帳號管理", rest: "休息時段", export: "批次刪除", history: "歷史紀錄", availability: "開放", sync: "資料同步" }[settTab])), settTab === "masters" && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: 16
     }
@@ -17004,7 +17104,7 @@ function SettingsModule({
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit"
-  }) : ""))))), settTab === "crm" && /*#__PURE__*/React.createElement("div", {
+  }) : ""))))), settTab === "service_types" && renderServiceTypesTab(), settTab === "crm" && /*#__PURE__*/React.createElement("div", {
     style: { padding: 0 }
   }, /*#__PURE__*/React.createElement(CRMModule, {
     key: crmKey,
