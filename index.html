@@ -4446,7 +4446,36 @@ function MainApp({
   };
   const COLOR_NO_INPUT = new Set(["reserved", "custom", "vacation"]);
   const renderServiceTypeSection = () => {
-    const selected = serviceTypes.find(t => t.id === form.serviceTypeId);
+    // 2026-07-20：Hanna確認「用卡」是老闆自己的老客人才有的選項，只有
+    // 老闆(role==="admin"，不含涵這個editor)可以選服務項目；其他人
+    // (治/泓文/哲瑋)一律用800，不顯示下拉選單，但金額欄位本身還是
+    // 讓大家都能手動調整(這是Hanna明確要求的)。
+    const isBoss = (loginMaster || master)?.role === "admin";
+    const priceInput = /*#__PURE__*/React.createElement("input", {
+      type: "number",
+      value: form.price,
+      placeholder: "金額",
+      onChange: e => setForm(f => ({ ...f, price: e.target.value })),
+      style: {
+        width: "100%",
+        background: "var(--input-bg)",
+        color: "var(--text-main)",
+        border: "1px solid var(--border2)",
+        borderRadius: 5,
+        padding: 6,
+        fontSize: 13
+      }
+    });
+    if (!isBoss) {
+      return /*#__PURE__*/React.createElement("div", {
+        style: { marginBottom: 10 }
+      },
+        /*#__PURE__*/React.createElement("div", {
+          style: { fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }
+        }, "金額"),
+        priceInput
+      );
+    }
     const typeOptions = [
       /*#__PURE__*/React.createElement("option", { key: "none", value: "" }, "不指定")
     ].concat(serviceTypes.map(t => /*#__PURE__*/React.createElement("option", {
@@ -4474,21 +4503,6 @@ function MainApp({
         fontSize: 13
       }
     }, typeOptions);
-    const priceInput = /*#__PURE__*/React.createElement("input", {
-      type: "number",
-      value: form.price,
-      placeholder: "金額",
-      onChange: e => setForm(f => ({ ...f, price: e.target.value })),
-      style: {
-        width: "100%",
-        background: "var(--input-bg)",
-        color: "var(--text-main)",
-        border: "1px solid var(--border2)",
-        borderRadius: 5,
-        padding: 6,
-        fontSize: 13
-      }
-    });
     const typeCol = /*#__PURE__*/React.createElement("div", { style: { flex: 1.4 } },
       /*#__PURE__*/React.createElement("div", {
         style: { fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }
@@ -9413,7 +9427,36 @@ function OverviewMonth({
   };
   const COLOR_NO_INPUT = new Set(["reserved", "custom", "vacation"]);
   const renderServiceTypeSection = () => {
-    const selected = serviceTypes.find(t => t.id === form.serviceTypeId);
+    // 2026-07-20：Hanna確認「用卡」是老闆自己的老客人才有的選項，只有
+    // 老闆(role==="admin"，不含涵這個editor)可以選服務項目；其他人
+    // (治/泓文/哲瑋)一律用800，不顯示下拉選單，但金額欄位本身還是
+    // 讓大家都能手動調整(這是Hanna明確要求的)。
+    const isBoss = loginMaster?.role === "admin";
+    const priceInput = /*#__PURE__*/React.createElement("input", {
+      type: "number",
+      value: form.price,
+      placeholder: "金額",
+      onChange: e => setForm(f => ({ ...f, price: e.target.value })),
+      style: {
+        width: "100%",
+        background: "var(--input-bg)",
+        color: "var(--text-main)",
+        border: "1px solid var(--border2)",
+        borderRadius: 5,
+        padding: 6,
+        fontSize: 13
+      }
+    });
+    if (!isBoss) {
+      return /*#__PURE__*/React.createElement("div", {
+        style: { marginBottom: 10 }
+      },
+        /*#__PURE__*/React.createElement("div", {
+          style: { fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }
+        }, "金額"),
+        priceInput
+      );
+    }
     const typeOptions = [
       /*#__PURE__*/React.createElement("option", { key: "none", value: "" }, "不指定")
     ].concat(serviceTypes.map(t => /*#__PURE__*/React.createElement("option", {
@@ -9441,21 +9484,6 @@ function OverviewMonth({
         fontSize: 13
       }
     }, typeOptions);
-    const priceInput = /*#__PURE__*/React.createElement("input", {
-      type: "number",
-      value: form.price,
-      placeholder: "金額",
-      onChange: e => setForm(f => ({ ...f, price: e.target.value })),
-      style: {
-        width: "100%",
-        background: "var(--input-bg)",
-        color: "var(--text-main)",
-        border: "1px solid var(--border2)",
-        borderRadius: 5,
-        padding: 6,
-        fontSize: 13
-      }
-    });
     const typeCol = /*#__PURE__*/React.createElement("div", { style: { flex: 1.4 } },
       /*#__PURE__*/React.createElement("div", {
         style: { fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }
