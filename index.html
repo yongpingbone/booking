@@ -15725,6 +15725,87 @@ function LazyAnalyticsModule(props) {
 // 對比；其他人(治/泓文/哲瑋)只看自己一張卡片——不用像那邊要進到
 // 完整的AnalyticsModule才看得到，獨立成一個自己抓資料的小元件，
 // 直接放進九宮格下面。
+// 2026-07-19：對帳小工具。Hanna要求：僅老闆(can_view_all_stats=true)
+// 看得到全部師傅各自的今日/本月金額，其他人只看自己——跟MyWeeklyWidget
+// 決定要抓誰的資料是同一套邏輯，這裡另外抓一次是因為欄位(price)、
+// 時間範圍(只到本月月初~今天，不是全部歷史)都不一樣，硬要共用同一次
+// fetch反而讓程式碼更難懂。
+function renderOneReconcileCard(master, todayTotal, monthTotal) {
+  return /*#__PURE__*/React.createElement("div", {
+    key: master?.id,
+    style: { background: "var(--bg-header)", borderRadius: 12, border: "1px solid var(--border2)", padding: "14px 12px", marginBottom: 12 }
+  },
+    /*#__PURE__*/React.createElement("div", {
+      style: { fontWeight: 700, fontSize: 14, marginBottom: 10 }
+    }, master?.name || ""),
+    /*#__PURE__*/React.createElement("div", {
+      style: { display: "flex", gap: 20 }
+    },
+      /*#__PURE__*/React.createElement("div", null,
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: "var(--text-muted)" } }, "今日"),
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 20, fontWeight: 700, color: "#a29bfe" } }, "$", todayTotal.toLocaleString())
+      ),
+      /*#__PURE__*/React.createElement("div", null,
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: "var(--text-muted)" } }, "本月"),
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 20, fontWeight: 700, color: "#c4b5fd" } }, "$", monthTotal.toLocaleString())
+      )
+    )
+  );
+}
+function ReconcileWidget({ masters, loginMaster }) {
+  const showAll = !!loginMaster?.can_view_all_stats;
+  const targetMasters = useMemo(() => {
+    if (showAll) {
+      return (masters || []).filter(m => m.role !== "editor" && m.username !== "hanna" && m.is_active !== false);
+    }
+    return loginMaster ? [loginMaster] : [];
+  }, [showAll, masters, loginMaster]);
+  const targetIdsKey = targetMasters.map(m => m.id).join(",");
+
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (!targetIdsKey || data !== null || loading) return;
+    setLoading(true);
+    (async () => {
+      const today = getTaipeiDateStr();
+      const monthStart = today.slice(0, 7) + "-01";
+      let all = [], from = 0;
+      while (true) {
+        const { data: rows } = await sb.from("bookings").select("master_id,date,price,status,color_tag").in("master_id", targetIdsKey.split(",")).gte("date", monthStart).lte("date", today).neq("status", "cancelled").neq("status", "no_show").range(from, from + 999);
+        if (!rows || rows.length === 0) break;
+        all = [...all, ...rows];
+        if (rows.length < 1000) break;
+        from += 1000;
+      }
+      setData(all);
+      setLoading(false);
+    })();
+  }, [targetIdsKey, data, loading]);
+
+  const cardStyle = { background: "var(--bg-header)", borderRadius: 12, border: "1px solid var(--border2)", padding: "14px 12px" };
+  if (data === null || loading) {
+    return /*#__PURE__*/React.createElement("div", { style: cardStyle }, /*#__PURE__*/React.createElement("div", {
+      style: { textAlign: "center", padding: 16, color: "var(--text-muted)", fontSize: 12 }
+    }, "讀取對帳資料中…"));
+  }
+
+  const today = getTaipeiDateStr();
+  const calcTotalsFor = masterId => {
+    let todayTotal = 0, monthTotal = 0;
+    data.filter(b => b.master_id === masterId && b.color_tag !== "vacation" && b.price).forEach(b => {
+      monthTotal += b.price;
+      if (b.date === today) todayTotal += b.price;
+    });
+    return { todayTotal, monthTotal };
+  };
+
+  const cards = targetMasters.map(m => {
+    const { todayTotal, monthTotal } = calcTotalsFor(m.id);
+    return renderOneReconcileCard(m, todayTotal, monthTotal);
+  });
+  return /*#__PURE__*/React.createElement(React.Fragment, null, ...cards);
+}
 function renderOneWeeklyCard(master, stats) {
   const weekLabels = ["日", "一", "二", "三", "四", "五", "六"];
   const maxVal = Math.max(1, ...stats.map(s => s.total));
@@ -17104,7 +17185,9 @@ function SettingsModule({
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit"
-  }) : ""))))), settTab === "service_types" && renderServiceTypesTab(), settTab === "crm" && /*#__PURE__*/React.createElement("div", {
+  }) : ""))))), settTab === "service_types" && renderServiceTypesTab(), settTab === "reconcile" && /*#__PURE__*/React.createElement("div", {
+    style: { padding: 12 }
+  }, /*#__PURE__*/React.createElement(ReconcileWidget, { masters: masters, loginMaster: loginMaster })), settTab === "crm" && /*#__PURE__*/React.createElement("div", {
     style: { padding: 0 }
   }, /*#__PURE__*/React.createElement(CRMModule, {
     key: crmKey,
