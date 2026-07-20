@@ -4446,39 +4446,17 @@ function MainApp({
   };
   const COLOR_NO_INPUT = new Set(["reserved", "custom", "vacation"]);
   const renderServiceTypeSection = () => {
-    // 2026-07-20：Hanna確認「用卡」是老闆自己的老客人才有的選項，只有
-    // 老闆(role==="admin"，不含涵這個editor)可以選服務項目；其他人
-    // (治/泓文/哲瑋)一律用800，不顯示下拉選單，但金額欄位本身還是
-    // 讓大家都能手動調整(這是Hanna明確要求的)。
+    // 2026-07-20：Hanna確認的業務邏輯：「用卡」是老闆自己的老客人才有的
+    // 選項，只有老闆(role==="admin"，不含涵這個editor)看得到這個選項；
+    // 但「售後」這個選項所有師傅都要能選(選了金額要自動變成售後的
+    // 預設價格，目前是0元)——所以不是『非老闆完全不顯示下拉選單』，
+    // 是『非老闆的下拉選單過濾掉用卡這個選項』。金額欄位不管是誰都能
+    // 手動再調整。
     const isBoss = (loginMaster || master)?.role === "admin";
-    const priceInput = /*#__PURE__*/React.createElement("input", {
-      type: "number",
-      value: form.price,
-      placeholder: "金額",
-      onChange: e => setForm(f => ({ ...f, price: e.target.value })),
-      style: {
-        width: "100%",
-        background: "var(--input-bg)",
-        color: "var(--text-main)",
-        border: "1px solid var(--border2)",
-        borderRadius: 5,
-        padding: 6,
-        fontSize: 13
-      }
-    });
-    if (!isBoss) {
-      return /*#__PURE__*/React.createElement("div", {
-        style: { marginBottom: 10 }
-      },
-        /*#__PURE__*/React.createElement("div", {
-          style: { fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }
-        }, "金額"),
-        priceInput
-      );
-    }
+    const visibleTypes = isBoss ? serviceTypes : serviceTypes.filter(t => t.name !== "用卡");
     const typeOptions = [
-      /*#__PURE__*/React.createElement("option", { key: "none", value: "" }, "不指定")
-    ].concat(serviceTypes.map(t => /*#__PURE__*/React.createElement("option", {
+      /*#__PURE__*/React.createElement("option", { key: "none", value: "" }, "一般預約")
+    ].concat(visibleTypes.map(t => /*#__PURE__*/React.createElement("option", {
       key: t.id,
       value: t.id
     }, t.name, "（$", t.default_price, "/人）")));
@@ -4486,7 +4464,7 @@ function MainApp({
       value: form.serviceTypeId,
       onChange: e => {
         const tid = e.target.value;
-        const t = serviceTypes.find(x => x.id === tid);
+        const t = visibleTypes.find(x => x.id === tid);
         setForm(f => ({
           ...f,
           serviceTypeId: tid,
@@ -4503,6 +4481,21 @@ function MainApp({
         fontSize: 13
       }
     }, typeOptions);
+    const priceInput = /*#__PURE__*/React.createElement("input", {
+      type: "number",
+      value: form.price,
+      placeholder: "金額",
+      onChange: e => setForm(f => ({ ...f, price: e.target.value })),
+      style: {
+        width: "100%",
+        background: "var(--input-bg)",
+        color: "var(--text-main)",
+        border: "1px solid var(--border2)",
+        borderRadius: 5,
+        padding: 6,
+        fontSize: 13
+      }
+    });
     const typeCol = /*#__PURE__*/React.createElement("div", { style: { flex: 1.4 } },
       /*#__PURE__*/React.createElement("div", {
         style: { fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }
@@ -9427,39 +9420,14 @@ function OverviewMonth({
   };
   const COLOR_NO_INPUT = new Set(["reserved", "custom", "vacation"]);
   const renderServiceTypeSection = () => {
-    // 2026-07-20：Hanna確認「用卡」是老闆自己的老客人才有的選項，只有
-    // 老闆(role==="admin"，不含涵這個editor)可以選服務項目；其他人
-    // (治/泓文/哲瑋)一律用800，不顯示下拉選單，但金額欄位本身還是
-    // 讓大家都能手動調整(這是Hanna明確要求的)。
+    // 2026-07-20：同排班頁那份的邏輯，非老闆的下拉選單過濾掉用卡這個
+    // 選項，但售後這個選項所有師傅都能選(選了金額自動變售後的預設
+    // 價格)。OverviewMonth這個元件沒有master這個變數，只能用loginMaster。
     const isBoss = loginMaster?.role === "admin";
-    const priceInput = /*#__PURE__*/React.createElement("input", {
-      type: "number",
-      value: form.price,
-      placeholder: "金額",
-      onChange: e => setForm(f => ({ ...f, price: e.target.value })),
-      style: {
-        width: "100%",
-        background: "var(--input-bg)",
-        color: "var(--text-main)",
-        border: "1px solid var(--border2)",
-        borderRadius: 5,
-        padding: 6,
-        fontSize: 13
-      }
-    });
-    if (!isBoss) {
-      return /*#__PURE__*/React.createElement("div", {
-        style: { marginBottom: 10 }
-      },
-        /*#__PURE__*/React.createElement("div", {
-          style: { fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }
-        }, "金額"),
-        priceInput
-      );
-    }
+    const visibleTypes = isBoss ? serviceTypes : serviceTypes.filter(t => t.name !== "用卡");
     const typeOptions = [
-      /*#__PURE__*/React.createElement("option", { key: "none", value: "" }, "不指定")
-    ].concat(serviceTypes.map(t => /*#__PURE__*/React.createElement("option", {
+      /*#__PURE__*/React.createElement("option", { key: "none", value: "" }, "一般預約")
+    ].concat(visibleTypes.map(t => /*#__PURE__*/React.createElement("option", {
       key: t.id,
       value: t.id
     }, t.name, "（$", t.default_price, "/人）")));
@@ -9467,7 +9435,7 @@ function OverviewMonth({
       value: form.serviceTypeId,
       onChange: e => {
         const tid = e.target.value;
-        const t = serviceTypes.find(x => x.id === tid);
+        const t = visibleTypes.find(x => x.id === tid);
         setForm(f => ({
           ...f,
           serviceTypeId: tid,
@@ -9484,6 +9452,21 @@ function OverviewMonth({
         fontSize: 13
       }
     }, typeOptions);
+    const priceInput = /*#__PURE__*/React.createElement("input", {
+      type: "number",
+      value: form.price,
+      placeholder: "金額",
+      onChange: e => setForm(f => ({ ...f, price: e.target.value })),
+      style: {
+        width: "100%",
+        background: "var(--input-bg)",
+        color: "var(--text-main)",
+        border: "1px solid var(--border2)",
+        borderRadius: 5,
+        padding: 6,
+        fontSize: 13
+      }
+    });
     const typeCol = /*#__PURE__*/React.createElement("div", { style: { flex: 1.4 } },
       /*#__PURE__*/React.createElement("div", {
         style: { fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }
