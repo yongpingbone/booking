@@ -16120,6 +16120,13 @@ function SettingsModule({
   const [svcNewName, setSvcNewName] = useState("");
   const [svcNewPrice, setSvcNewPrice] = useState("");
   const [svcSaving, setSvcSaving] = useState(false);
+  const [cardName, setCardName] = useState("");
+  const [cardPhone, setCardPhone] = useState("");
+  const [cardAmount, setCardAmount] = useState("8000");
+  const [cardVisits, setCardVisits] = useState("12");
+  const [cardDate, setCardDate] = useState(getTaipeiDateStr());
+  const [cardSaving, setCardSaving] = useState(false);
+  const [cardList, setCardList] = useState(null);
   const [currentTheme, setCurrentTheme] = useState(() => {
     try { return localStorage.getItem("accentTheme") || "purple"; } catch (e) { return "purple"; }
   });
@@ -16341,6 +16348,39 @@ function SettingsModule({
     setSvcTypes(prev => prev.map(t => t.id === id ? { ...t, is_active: !current } : t));
     await sb.from("service_types").update({ is_active: !current }).eq("id", id);
   };
+  // 2026-07-21：儲值卡購買紀錄——用卡是客人先一次付清(比如12次8000)，
+  // 這筆錢要算進購買當天的對帳，之後每次來店用卡消耗次數本身金額是0，
+  // 不會跟這裡重複算。跟service_types分開一張表，因為這是『客人的
+  // 購買事件』不是『服務項目的定義』。
+  const loadCardPurchases = async () => {
+    const { data } = await sb.from("card_purchases").select("*").order("purchase_date", { ascending: false }).order("created_at", { ascending: false });
+    setCardList(data || []);
+  };
+  const saveCardPurchase = async () => {
+    if (!cardPhone.trim() || !cardAmount || cardSaving) return;
+    setCardSaving(true);
+    const { error } = await sb.from("card_purchases").insert({
+      customer_phone: cardPhone.trim(),
+      customer_name: cardName.trim() || null,
+      amount: parseFloat(cardAmount) || 0,
+      visit_count: parseInt(cardVisits) || 0,
+      purchase_date: cardDate,
+      master_id: loginMaster?.id || null
+    });
+    setCardSaving(false);
+    if (!error) {
+      setCardName("");
+      setCardPhone("");
+      setCardAmount("8000");
+      setCardVisits("12");
+      loadCardPurchases();
+      msg("已記錄");
+    } else msg("記錄失敗", true);
+  };
+  const deleteCardPurchase = async id => {
+    setCardList(prev => prev.filter(c => c.id !== id));
+    await sb.from("card_purchases").delete().eq("id", id);
+  };
   // 2026-07-18：頭貼上傳。檔案路徑固定用{自己的uid}/avatar.{副檔名}，
   // 每次重傳都用upsert:true直接覆蓋同一個檔案，不會累積一堆舊照片佔空間。
   // 存進masters.avatar_url的URL後面刻意加上?t=時間戳記，是因為檔案路徑
@@ -16461,7 +16501,7 @@ function SettingsModule({
         if (k === "crm") setCrmKey(p => p + 1);
         if (k === "history") loadHistory();
         if (k === "sync") loadSyncStatus();
-        if (k === "service_types") loadSvcTypes();
+        if (k === "service_types") { loadSvcTypes(); loadCardPurchases(); }
       },
       style: {
         background: "transparent",
@@ -16653,7 +16693,61 @@ function SettingsModule({
     const loadingMsg = !svcLoaded ? /*#__PURE__*/React.createElement("div", {
       style: { padding: 16, textAlign: "center", color: "var(--text-muted)", fontSize: 12 }
     }, "讀取中…") : null;
-    return /*#__PURE__*/React.createElement("div", { style: { padding: 0 } }, loadingMsg, ...rows, addRow);
+
+    const cardHeader = /*#__PURE__*/React.createElement("div", {
+      style: { fontSize: 12, color: "var(--text-muted)", padding: "20px 12px 8px" }
+    }, "儲值卡購買紀錄（用卡客人一次付清，這筆金額會算進購買當天的對帳）");
+    const cardFormRow1 = /*#__PURE__*/React.createElement("div", {
+      style: { display: "flex", gap: 8, padding: "0 12px 8px" }
+    },
+      /*#__PURE__*/React.createElement("input", {
+        placeholder: "姓名", value: cardName, onChange: e => setCardName(e.target.value),
+        style: { flex: 1, background: "var(--input-bg)", color: "var(--text-main)", border: "1px solid var(--border2)", borderRadius: 5, padding: "6px 8px", fontSize: 13 }
+      }),
+      /*#__PURE__*/React.createElement("input", {
+        placeholder: "電話", value: cardPhone, onChange: e => setCardPhone(e.target.value),
+        style: { flex: 1, background: "var(--input-bg)", color: "var(--text-main)", border: "1px solid var(--border2)", borderRadius: 5, padding: "6px 8px", fontSize: 13 }
+      })
+    );
+    const cardFormRow2 = /*#__PURE__*/React.createElement("div", {
+      style: { display: "flex", gap: 8, padding: "0 12px 8px", alignItems: "center" }
+    },
+      /*#__PURE__*/React.createElement("input", {
+        type: "number", placeholder: "金額", value: cardAmount, onChange: e => setCardAmount(e.target.value),
+        style: { width: 80, background: "var(--input-bg)", color: "var(--text-main)", border: "1px solid var(--border2)", borderRadius: 5, padding: "6px 8px", fontSize: 13 }
+      }),
+      /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: "var(--text-muted)" } }, "元 /"),
+      /*#__PURE__*/React.createElement("input", {
+        type: "number", placeholder: "次數", value: cardVisits, onChange: e => setCardVisits(e.target.value),
+        style: { width: 60, background: "var(--input-bg)", color: "var(--text-main)", border: "1px solid var(--border2)", borderRadius: 5, padding: "6px 8px", fontSize: 13 }
+      }),
+      /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: "var(--text-muted)" } }, "次"),
+      /*#__PURE__*/React.createElement("input", {
+        type: "date", value: cardDate, onChange: e => setCardDate(e.target.value),
+        style: { background: "var(--input-bg)", color: "var(--text-main)", border: "1px solid var(--border2)", borderRadius: 5, padding: "6px 8px", fontSize: 13 }
+      })
+    );
+    const cardSaveBtn = /*#__PURE__*/React.createElement("div", {
+      style: { padding: "0 12px 16px" }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: saveCardPurchase,
+      disabled: cardSaving,
+      style: { width: "100%", padding: "8px 14px", borderRadius: 6, border: "none", background: "var(--accent)", color: "#00171f", fontSize: 13, fontWeight: 700, cursor: "pointer" }
+    }, cardSaving ? "記錄中" : "記錄這筆購買"));
+    const cardRows = (cardList || []).map(c => /*#__PURE__*/React.createElement("div", {
+      key: c.id,
+      style: { display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderTop: "1px solid var(--border)", fontSize: 12 }
+    },
+      /*#__PURE__*/React.createElement("span", { style: { flex: 1 } }, c.purchase_date, "　", c.customer_name || "", "　", c.customer_phone),
+      /*#__PURE__*/React.createElement("span", { style: { color: "var(--accent-bright)", fontWeight: 700 } }, "$", Number(c.amount).toLocaleString(), " / ", c.visit_count, "次"),
+      /*#__PURE__*/React.createElement("button", {
+        onClick: () => deleteCardPurchase(c.id),
+        style: { background: "none", border: "none", color: "#e94560", cursor: "pointer", fontSize: 14 }
+      }, "×")
+    ));
+    const cardListSection = /*#__PURE__*/React.createElement("div", { style: { marginTop: 4 } }, cardHeader, cardFormRow1, cardFormRow2, cardSaveBtn, ...cardRows);
+
+    return /*#__PURE__*/React.createElement("div", { style: { padding: 0 } }, loadingMsg, ...rows, addRow, cardListSection);
   };
   const renderSelfEditModal = () => {
     const currentAvatar = loginMaster?.avatar_url;
