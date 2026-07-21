@@ -103,9 +103,9 @@ window.ACCENT_THEMES = {
 };
 window.applyAccentTheme = function(key) {
   const t = window.ACCENT_THEMES[key] || window.ACCENT_THEMES.purple;
-  document.documentElement.style.setProperty("--accent", t.accent);
-  document.documentElement.style.setProperty("--accent-bright", t.bright);
-  document.documentElement.style.setProperty("--accent-rgb", t.rgb);
+  document.body.style.setProperty("--accent", t.accent);
+  document.body.style.setProperty("--accent-bright", t.bright);
+  document.body.style.setProperty("--accent-rgb", t.rgb);
 };
 (function() {
   try {
