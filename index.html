@@ -283,6 +283,18 @@ function getTaipeiDateStr() {
   const t = getTaipeiNow();
   return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
 }
+// 2026-07-21：Hanna確認週間統計要改成只看「本週」(週日~週六)，不是
+// 所有歷史合起來——這個function算出本週的週日跟週六是幾號。
+function getCurrentWeekBounds() {
+  const now = getTaipeiNow();
+  const dow = now.getDay(); // 0=週日
+  const sunday = new Date(now);
+  sunday.setDate(now.getDate() - dow);
+  const saturday = new Date(sunday);
+  saturday.setDate(sunday.getDate() + 6);
+  const toStr = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return { start: toStr(sunday), end: toStr(saturday) };
+}
 function fmtDate(y, m, d) {
   return `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
@@ -15848,11 +15860,20 @@ function renderOneWeeklyCard(master, stats) {
   const maxVal = Math.max(1, ...stats.map(s => s.total));
   const grandTotal = stats.reduce((s, x) => s + x.total, 0);
   const grandNew = stats.reduce((s, x) => s + x.newC, 0);
+  const { start, end } = getCurrentWeekBounds();
+  const fmtShort = s => {
+    const [, m, d] = s.split("-");
+    return `${parseInt(m)}/${parseInt(d)}`;
+  };
+  const rangeLabel = `本週 ${fmtShort(start)}~${fmtShort(end)}`;
 
   const header = /*#__PURE__*/React.createElement("div", {
     style: { display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }
   },
-    /*#__PURE__*/React.createElement("span", { style: { fontWeight: 700, fontSize: 14 } }, master?.name || ""),
+    /*#__PURE__*/React.createElement("span", { style: { display: "flex", alignItems: "baseline", gap: 6 } },
+      /*#__PURE__*/React.createElement("span", { style: { fontWeight: 700, fontSize: 14 } }, master?.name || ""),
+      /*#__PURE__*/React.createElement("span", { style: { fontSize: 10, color: "var(--text-dim)" } }, rangeLabel)
+    ),
     /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: "var(--text-muted)" } }, "總計 ", grandTotal, "（新客 ", grandNew, "）")
   );
 
@@ -15903,9 +15924,10 @@ function MyWeeklyWidget({ masters, loginMaster }) {
     if (!targetIdsKey || data !== null || loading) return;
     setLoading(true);
     (async () => {
+      const { start, end } = getCurrentWeekBounds();
       let all = [], from = 0;
       while (true) {
-        const { data: rows } = await sb.from("bookings").select("master_id,date,guest_count,color_tag,status").in("master_id", targetIdsKey.split(",")).neq("status", "cancelled").neq("status", "no_show").range(from, from + 999);
+        const { data: rows } = await sb.from("bookings").select("master_id,date,guest_count,color_tag,status").in("master_id", targetIdsKey.split(",")).gte("date", start).lte("date", end).neq("status", "cancelled").neq("status", "no_show").range(from, from + 999);
         if (!rows || rows.length === 0) break;
         all = [...all, ...rows];
         if (rows.length < 1000) break;
