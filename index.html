@@ -15830,6 +15830,7 @@ function ReconcileWidget({ masters, loginMaster }) {
   const targetIdsKey = targetMasters.map(m => m.id).join(",");
 
   const [data, setData] = useState(null);
+  const [cardData, setCardData] = useState(null);
   const [loading, setLoading] = useState(false);
   useEffect(() => {
     if (!targetIdsKey || data !== null || loading) return;
@@ -15845,7 +15846,9 @@ function ReconcileWidget({ masters, loginMaster }) {
         if (rows.length < 1000) break;
         from += 1000;
       }
+      const { data: cardRows } = await sb.from("card_purchases").select("master_id,purchase_date,amount").in("master_id", targetIdsKey.split(",")).gte("purchase_date", monthStart).lte("purchase_date", today);
       setData(all);
+      setCardData(cardRows || []);
       setLoading(false);
     })();
   }, [targetIdsKey, data, loading]);
@@ -15863,6 +15866,13 @@ function ReconcileWidget({ masters, loginMaster }) {
     data.filter(b => b.master_id === masterId && b.color_tag !== "vacation" && b.price).forEach(b => {
       monthTotal += b.price;
       if (b.date === today) todayTotal += b.price;
+    });
+    // 2026-07-21：儲值卡購買(比如12次8000)在購買當天算一次進對帳，
+    // 之後每次來店用卡消耗次數，那次的預約price是0、不會在上面重複算，
+    // 所以這裡直接加購買紀錄的金額，不用擔心跟bookings.price對不上。
+    (cardData || []).filter(c => c.master_id === masterId).forEach(c => {
+      monthTotal += c.amount;
+      if (c.purchase_date === today) todayTotal += c.amount;
     });
     return { todayTotal, monthTotal };
   };
