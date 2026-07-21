@@ -1101,6 +1101,41 @@ function useReturningCustomer(inputValue, enabled = true) {
   return visitCount;
 }
 
+// 2026-07-21：用卡使用次數。選了用卡這個服務項目、輸入框裡有電話的
+// 時候，查這個客人用卡去過幾次(bookings.service_type_id=用卡的id)、
+// 以及最近一次購買的card_purchases記錄總次數是多少，讓師傅/老闆看到
+// 「已用3/12次」這種提示，知道還剩多少次。
+function useCardUsage(inputValue, cardServiceTypeId, enabled = true) {
+  const [usage, setUsage] = useState(null); // {used, total} | null
+  const timerRef = useRef(null);
+  useEffect(() => {
+    if (!enabled || !cardServiceTypeId) {
+      setUsage(null);
+      return;
+    }
+    const phoneMatch = inputValue.match(/\d{7,}/);
+    if (!phoneMatch) {
+      setUsage(null);
+      return;
+    }
+    const phone = phoneMatch[0];
+    clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(async () => {
+      try {
+        const [{ count }, { data: purchases }] = await Promise.all([
+          sb.from("bookings").select("id", { count: "exact", head: true }).eq("customer_phone", phone).eq("service_type_id", cardServiceTypeId).neq("status", "cancelled").neq("status", "no_show"),
+          sb.from("card_purchases").select("visit_count").eq("customer_phone", phone).order("purchase_date", { ascending: false }).limit(1)
+        ]);
+        setUsage({ used: count || 0, total: purchases && purchases[0] ? purchases[0].visit_count : null });
+      } catch (e) {
+        setUsage(null);
+      }
+    }, 300);
+    return () => clearTimeout(timerRef.current);
+  }, [inputValue, cardServiceTypeId, enabled]);
+  return usage;
+}
+
 // ═══════════════════════════════════════════
 // MAIN APP
 // ═══════════════════════════════════════════
@@ -3989,6 +4024,8 @@ function MainApp({
     dismiss: acDismiss
   } = useCustomerSuggest(form.input, !!dialog, dialog?.masterId || master?.id || null, masters);
   const returningVisitCount = useReturningCustomer(form.input, !!dialog);
+  const cardTypeId = serviceTypes.find(t => t.name === "用卡")?.id;
+  const cardUsage = useCardUsage(form.input, cardTypeId, !!dialog && form.serviceTypeId === cardTypeId);
   const [showEditLogs, setShowEditLogs] = useState(false);
   const [cellHistory, setCellHistory] = useState(null); // {dateStr,time,masterId,logs}
   const [toast, setToast] = useState(null);
@@ -4548,9 +4585,12 @@ function MainApp({
       }, "金額"),
       priceInput
     );
-    return /*#__PURE__*/React.createElement("div", {
+    const usageBadge = (form.serviceTypeId === cardTypeId && cardUsage) ? /*#__PURE__*/React.createElement("div", {
+      style: { fontSize: 11, color: "var(--accent-bright)", marginBottom: 10, marginTop: -4 }
+    }, "此客人已用卡 ", cardUsage.used, cardUsage.total ? ` / ${cardUsage.total}` : "", " 次") : null;
+    return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
       style: { display: "flex", gap: 8, marginBottom: 10 }
-    }, typeCol, priceCol);
+    }, typeCol, priceCol), usageBadge);
   };
   const saveBk = async (isContinuous = false) => {
     const needInput = !COLOR_NO_INPUT.has(form.color);
@@ -9299,6 +9339,8 @@ function OverviewMonth({
     dismiss: acDismiss
   } = useCustomerSuggest(form.input, !!dialog, dialog?.masterId || null, masters);
   const returningVisitCount = useReturningCustomer(form.input, !!dialog);
+  const cardTypeId = serviceTypes.find(t => t.name === "用卡")?.id;
+  const cardUsage = useCardUsage(form.input, cardTypeId, !!dialog && form.serviceTypeId === cardTypeId);
   const [ovShowEditLogs, setOvShowEditLogs] = useState(false);
   const [ovCellHistory, setOvCellHistory] = useState(null);
   const [ovDragMode, setOvDragMode] = useState(false);
@@ -9531,9 +9573,12 @@ function OverviewMonth({
       }, "金額"),
       priceInput
     );
-    return /*#__PURE__*/React.createElement("div", {
+    const usageBadge = (form.serviceTypeId === cardTypeId && cardUsage) ? /*#__PURE__*/React.createElement("div", {
+      style: { fontSize: 11, color: "var(--accent-bright)", marginBottom: 10, marginTop: -4 }
+    }, "此客人已用卡 ", cardUsage.used, cardUsage.total ? ` / ${cardUsage.total}` : "", " 次") : null;
+    return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
       style: { display: "flex", gap: 8, marginBottom: 10 }
-    }, typeCol, priceCol);
+    }, typeCol, priceCol), usageBadge);
   };
   const saveBk = async (isContinuous = false) => {
     const needInput = !COLOR_NO_INPUT.has(form.color);
