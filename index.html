@@ -16175,8 +16175,12 @@ function SettingsModule({
   const [svcNewName, setSvcNewName] = useState("");
   const [svcNewPrice, setSvcNewPrice] = useState("");
   const [svcSaving, setSvcSaving] = useState(false);
-  const [cardName, setCardName] = useState("");
-  const [cardPhone, setCardPhone] = useState("");
+  const [cardInput, setCardInput] = useState("");
+  const {
+    suggestions: cardSug,
+    showSug: cardShowSug,
+    dismiss: cardDismiss
+  } = useCustomerSuggest(cardInput, true, loginMaster?.id || null, masters);
   const [cardAmount, setCardAmount] = useState("8000");
   const [cardVisits, setCardVisits] = useState("12");
   const [cardDate, setCardDate] = useState(getTaipeiDateStr());
@@ -16412,11 +16416,12 @@ function SettingsModule({
     setCardList(data || []);
   };
   const saveCardPurchase = async () => {
-    if (!cardPhone.trim() || !cardAmount || cardSaving) return;
+    const parsed = parseInput(cardInput);
+    if (!parsed.phone || !cardAmount || cardSaving) return;
     setCardSaving(true);
     const { error } = await sb.from("card_purchases").insert({
-      customer_phone: cardPhone.trim(),
-      customer_name: cardName.trim() || null,
+      customer_phone: parsed.phone,
+      customer_name: parsed.name || null,
       amount: parseFloat(cardAmount) || 0,
       visit_count: parseInt(cardVisits) || 0,
       purchase_date: cardDate,
@@ -16424,8 +16429,7 @@ function SettingsModule({
     });
     setCardSaving(false);
     if (!error) {
-      setCardName("");
-      setCardPhone("");
+      setCardInput("");
       setCardAmount("8000");
       setCardVisits("12");
       loadCardPurchases();
@@ -16753,16 +16757,33 @@ function SettingsModule({
       style: { fontSize: 12, color: "var(--text-muted)", padding: "20px 12px 8px" }
     }, "儲值卡購買紀錄（用卡客人一次付清，這筆金額會算進購買當天的對帳）");
     const cardFormRow1 = /*#__PURE__*/React.createElement("div", {
-      style: { display: "flex", gap: 8, padding: "0 12px 8px" }
+      style: { position: "relative", padding: "0 12px 8px" }
     },
       /*#__PURE__*/React.createElement("input", {
-        placeholder: "姓名", value: cardName, onChange: e => setCardName(e.target.value),
-        style: { flex: 1, background: "var(--input-bg)", color: "var(--text-main)", border: "1px solid var(--border2)", borderRadius: 5, padding: "6px 8px", fontSize: 13 }
+        placeholder: "姓名＋電話", value: cardInput, onChange: e => setCardInput(e.target.value),
+        style: { width: "100%", background: "var(--input-bg)", color: "var(--text-main)", border: "1px solid var(--border2)", borderRadius: 5, padding: "6px 8px", fontSize: 13 }
       }),
-      /*#__PURE__*/React.createElement("input", {
-        placeholder: "電話", value: cardPhone, onChange: e => setCardPhone(e.target.value),
-        style: { flex: 1, background: "var(--input-bg)", color: "var(--text-main)", border: "1px solid var(--border2)", borderRadius: 5, padding: "6px 8px", fontSize: 13 }
-      })
+      cardShowSug && cardSug.length > 0 && /*#__PURE__*/React.createElement("div", {
+        style: {
+          position: "absolute", top: "100%", left: 12, right: 12, zIndex: 999,
+          background: "var(--bg-header)", border: "1px solid var(--border2)", borderRadius: 10,
+          marginTop: 3, boxShadow: "0 6px 20px rgba(0,0,0,0.4)", overflow: "hidden"
+        }
+      }, cardSug.map((c, i) => /*#__PURE__*/React.createElement("div", {
+        key: i,
+        onMouseDown: e => {
+          e.preventDefault();
+          setCardInput(c.name + (c.phone ? " " + c.phone : ""));
+          cardDismiss();
+        },
+        style: {
+          padding: "9px 13px", cursor: "pointer",
+          borderBottom: i < cardSug.length - 1 ? "1px solid var(--border)" : "none"
+        }
+      },
+        /*#__PURE__*/React.createElement("span", { style: { fontWeight: 700, fontSize: 13 } }, c.name),
+        /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: "var(--text-muted)", marginLeft: 8 } }, c.phone)
+      )))
     );
     const cardFormRow2 = /*#__PURE__*/React.createElement("div", {
       style: { display: "flex", gap: 8, padding: "0 12px 8px", alignItems: "center" }
