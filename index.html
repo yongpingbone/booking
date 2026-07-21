@@ -16417,10 +16417,10 @@ function SettingsModule({
   };
   const saveCardPurchase = async () => {
     const parsed = parseInput(cardInput);
-    if (!parsed.phone || !cardAmount || cardSaving) return;
+    if (!parsed.name || !cardAmount || cardSaving) return;
     setCardSaving(true);
     const { error } = await sb.from("card_purchases").insert({
-      customer_phone: parsed.phone,
+      customer_phone: parsed.phone || "",
       customer_name: parsed.name || null,
       amount: parseFloat(cardAmount) || 0,
       visit_count: parseInt(cardVisits) || 0,
@@ -16814,7 +16814,7 @@ function SettingsModule({
       key: c.id,
       style: { display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderTop: "1px solid var(--border)", fontSize: 12 }
     },
-      /*#__PURE__*/React.createElement("span", { style: { flex: 1 } }, c.purchase_date, "　", c.customer_name || "", "　", c.customer_phone),
+      /*#__PURE__*/React.createElement("span", { style: { flex: 1 } }, c.purchase_date, "　", c.customer_name || "", c.customer_phone ? "　" + c.customer_phone : ""),
       /*#__PURE__*/React.createElement("span", { style: { color: "var(--accent-bright)", fontWeight: 700 } }, "$", Number(c.amount).toLocaleString(), " / ", c.visit_count, "次"),
       /*#__PURE__*/React.createElement("button", {
         onClick: () => deleteCardPurchase(c.id),
