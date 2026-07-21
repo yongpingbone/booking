@@ -15861,10 +15861,10 @@ function renderOneWeeklyCard(master, stats) {
     const newBarPx = Math.max(s.newC > 0 ? 2 : 0, s.newC / maxVal * 60);
     const numberLabel = /*#__PURE__*/React.createElement("div", { style: { fontSize: 9, color: "var(--text-dim)" } }, s.total || "");
     const totalBar = /*#__PURE__*/React.createElement("div", {
-      style: { width: 8, height: totalBarPx + "px", background: "#74b9ff", borderRadius: "2px 2px 0 0" }
+      style: { width: 8, height: totalBarPx + "px", background: "var(--accent)", borderRadius: "2px 2px 0 0" }
     });
     const newBar = /*#__PURE__*/React.createElement("div", {
-      style: { width: 8, height: newBarPx + "px", background: "#f5a623", borderRadius: "2px 2px 0 0" }
+      style: { width: 8, height: newBarPx + "px", background: "var(--accent-bright)", borderRadius: "2px 2px 0 0" }
     });
     const barPair = /*#__PURE__*/React.createElement("div", {
       style: { display: "flex", gap: 2, alignItems: "flex-end", height: 60, width: "100%", justifyContent: "center" }
