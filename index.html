@@ -9205,23 +9205,33 @@ function CustomerOwnerPanel({
 const MASTER_TINTS = [{
   text: "var(--mt-0)",
   bg: "rgba(116,185,255,0.05)",
-  bgH: "rgba(116,185,255,0.15)"
+  bgH: "rgba(116,185,255,0.15)",
+  bgHSolid: "#74b9ff",
+  textHSolid: "#00171f"
 }, {
   text: "var(--mt-1)",
   bg: "rgba(46,217,195,0.05)",
-  bgH: "rgba(46,217,195,0.15)"
+  bgH: "rgba(46,217,195,0.15)",
+  bgHSolid: "#2ed9c3",
+  textHSolid: "#00171f"
 }, {
   text: "var(--mt-2)",
   bg: "rgba(255,169,77,0.05)",
-  bgH: "rgba(255,169,77,0.15)"
+  bgH: "rgba(255,169,77,0.15)",
+  bgHSolid: "#ffa94d",
+  textHSolid: "#1a1200"
 }, {
   text: "var(--mt-3)",
   bg: "rgba(218,119,242,0.05)",
-  bgH: "rgba(218,119,242,0.15)"
+  bgH: "rgba(218,119,242,0.15)",
+  bgHSolid: "#da77f2",
+  textHSolid: "#1a0022"
 }, {
   text: "var(--mt-4)",
   bg: "rgba(247,131,172,0.05)",
-  bgH: "rgba(247,131,172,0.15)"
+  bgH: "rgba(247,131,172,0.15)",
+  bgHSolid: "#f783ac",
+  textHSolid: "#22000e"
 }];
 function OverviewMonth({
   masters,
@@ -10989,10 +10999,10 @@ function OverviewMonth({
         top: 24,
         height: 22,
         padding: "2px 1px",
-        background: mt.bgH,
+        background: mt.bgHSolid,
         borderBottom: "1px solid var(--border)",
         borderRight: j === sel.length - 1 ? "2px solid var(--border2)" : "1px solid var(--border)",
-        color: mt.text,
+        color: mt.textHSolid,
         fontSize: FS.s - 1,
         fontWeight: 800,
         textAlign: "center",
