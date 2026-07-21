@@ -16417,11 +16417,6 @@ function SettingsModule({
       disabled: locked,
       onClick: () => {
         if (locked) return;
-        if (k === "self") {
-          setSelfForm({ name: loginMaster?.name || "", username: loginMaster?.username || "" });
-          setShowSelfEdit(true);
-          return;
-        }
         setSettTab(k);
         if (k === "crm") setCrmKey(p => p + 1);
         if (k === "history") loadHistory();
@@ -16467,7 +16462,7 @@ function SettingsModule({
   );
   const renderCategorizedGrid = () => {
     const sections = [
-      ["帳號", [["self", "我的帳號", "user"], ["masters", "帳號管理", "user"], ["appearance", "外觀", "spark"]]],
+      ["帳號", [["masters", "帳號管理", "user"], ["appearance", "外觀", "spark"]]],
       ["業務", [["crm", "客戶", "users"], ["analytics", "數據", "chart"], ["service_types", "服務項目", "sliders"], ["reconcile", "對帳", "chart"]]],
       ["排班設定", [["rest", "休息時段", "pause"], ["availability", "開放", "check"]]],
       ["系統", [["export", "批次刪除", "trash"], ["history", "歷史紀錄", "history"], ["sync", "資料同步", "sync"]]]
