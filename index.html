@@ -15998,9 +15998,11 @@ function MyWeeklyWidget({ masters, loginMaster }) {
     setLoading(true);
     (async () => {
       const { start, end } = getCurrentWeekBounds();
+      const today = getTaipeiDateStr();
+      const fetchEnd = end < today ? end : today; // 只算到今天，本週還沒到的日子不列入計算
       let all = [], from = 0;
       while (true) {
-        const { data: rows } = await sb.from("bookings").select("master_id,date,guest_count,color_tag,status").in("master_id", targetIdsKey.split(",")).gte("date", start).lte("date", end).neq("status", "cancelled").neq("status", "no_show").range(from, from + 999);
+        const { data: rows } = await sb.from("bookings").select("master_id,date,guest_count,color_tag,status").in("master_id", targetIdsKey.split(",")).gte("date", start).lte("date", fetchEnd).neq("status", "cancelled").neq("status", "no_show").range(from, from + 999);
         if (!rows || rows.length === 0) break;
         all = [...all, ...rows];
         if (rows.length < 1000) break;
