@@ -16193,6 +16193,7 @@ function SettingsModule({
   const [closureSaving, setClosureSaving] = useState(false);
   const [closureList, setClosureList] = useState(null);
   const [closureReason, setClosureReason] = useState("");
+  const [closurePreview, setClosurePreview] = useState(null);
   const [currentTheme, setCurrentTheme] = useState(() => {
     try { return localStorage.getItem("accentTheme") || "purple"; } catch (e) { return "purple"; }
   });
@@ -16485,13 +16486,26 @@ function SettingsModule({
     }
     const rangeLabel = closureDate === closureEndDate ? closureDate : `${closureDate} ~ ${closureEndDate}（共${dateList.length}天）`;
 
-    const { data: existing } = await sb.from("bookings").select("id").in("master_id", masterIds).gte("date", closureDate).lte("date", closureEndDate).neq("status", "cancelled").neq("status", "no_show").neq("color_tag", "vacation");
-    const overwriteCount = existing?.length || 0;
-    const confirmMsg = overwriteCount > 0
-      ? `確定要把 ${rangeLabel} 設為店休嗎？這段期間所有師傅（${activeMasters.map(m => m.name).join("、")}）的班表都會變成休假，客人端也會同步擋掉這段期間的線上預約，包含 ${overwriteCount} 筆已存在的預約會被清除，這個動作無法復原。`
-      : `確定要把 ${rangeLabel} 設為店休嗎？這段期間所有師傅（${activeMasters.map(m => m.name).join("、")}）的班表都會變成休假，客人端也會同步擋掉這段期間的線上預約。`;
-    if (!window.confirm(confirmMsg)) return;
+    // 2026-07-22：防呆機制——原本只顯示「X筆預約會被清除」這種單純數字，
+    // Hanna要求要能實際看到是哪個師傅、哪個客人的預約會被覆蓋，才有辦法
+    // 判斷要不要真的洗掉。改成先查出完整明細(師傅姓名+客人姓名電話+
+    // 日期時間)，有衝突就跳出renderClosurePreviewModal這個列表讓她逐筆
+    // 看過再決定；完全沒有衝突的情況維持原本簡單的window.confirm就好，
+    // 不用為了『沒有東西可以列』硬跳一個空白列表出來。
+    const { data: existing } = await sb.from("bookings").select("id,master_id,date,start_time,customer_name,customer_phone").in("master_id", masterIds).gte("date", closureDate).lte("date", closureEndDate).neq("status", "cancelled").neq("status", "no_show").neq("color_tag", "vacation");
+    const conflicts = (existing || []).map(b => ({
+      ...b,
+      masterName: activeMasters.find(m => m.id === b.master_id)?.name || "?"
+    })).sort((a, z) => (a.date + a.start_time).localeCompare(z.date + z.start_time));
 
+    if (conflicts.length > 0) {
+      setClosurePreview({ dateList, activeMasters, rangeLabel, conflicts });
+      return;
+    }
+    if (!window.confirm(`確定要把 ${rangeLabel} 設為店休嗎？這段期間所有師傅（${activeMasters.map(m => m.name).join("、")}）的班表都會變成休假，客人端也會同步擋掉這段期間的線上預約。`)) return;
+    executeStoreClosure(dateList, activeMasters, masterIds);
+  };
+  const executeStoreClosure = async (dateList, activeMasters, masterIds) => {
     setClosureSaving(true);
     await sb.from("bookings").delete().in("master_id", masterIds).gte("date", closureDate).lte("date", closureEndDate).neq("status", "cancelled").neq("status", "no_show");
 
@@ -16527,6 +16541,7 @@ function SettingsModule({
       created_by: loginMaster?.name || null
     });
     setClosureSaving(false);
+    setClosurePreview(null);
     if (!closureErr) {
       setClosureReason("");
       msg("已設定店休");
@@ -16993,6 +17008,54 @@ function SettingsModule({
     const cardListSection = /*#__PURE__*/React.createElement("div", { style: { marginTop: 4 } }, cardHeader, cardFormRow1, cardFormRow2, cardSaveBtn, ...cardRows);
 
     return /*#__PURE__*/React.createElement("div", { style: { padding: 0 } }, loadingMsg, ...rows, addRow, cardListSection);
+  };
+  const renderClosurePreviewModal = () => {
+    const { dateList, activeMasters, rangeLabel, conflicts } = closurePreview;
+    const titleRow = /*#__PURE__*/React.createElement("div", {
+      style: { fontSize: 16, fontWeight: 700, marginBottom: 6 }
+    }, "確認覆蓋預約");
+    const subLabel = /*#__PURE__*/React.createElement("div", {
+      style: { fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }
+    }, `${rangeLabel} 這段期間，以下 ${conflicts.length} 筆已存在的預約會被清除，請確認：`);
+    const rows = conflicts.map(c => {
+      const timeLabel = `${c.date.slice(5).replace("-", "/")} ${(c.start_time || "").slice(0, 5)}`;
+      const custLabel = [c.customer_name, c.customer_phone].filter(Boolean).join("　");
+      return /*#__PURE__*/React.createElement("div", {
+        key: c.id,
+        style: { display: "flex", gap: 8, padding: "8px 0", borderBottom: "1px solid var(--border)", fontSize: 12 }
+      },
+        /*#__PURE__*/React.createElement("span", { style: { color: "var(--accent-bright)", fontWeight: 700, flexShrink: 0 } }, c.masterName),
+        /*#__PURE__*/React.createElement("span", { style: { color: "var(--text-dim)", flexShrink: 0 } }, timeLabel),
+        /*#__PURE__*/React.createElement("span", { style: { color: "var(--text-main)" } }, custLabel || "（無姓名資料）")
+      );
+    });
+    const listBox = /*#__PURE__*/React.createElement("div", {
+      style: { maxHeight: "40vh", overflowY: "auto", background: "var(--bg-main)", border: "1px solid var(--border)", borderRadius: 8, padding: "0 10px", marginBottom: 16 }
+    }, rows);
+    const cancelBtn = /*#__PURE__*/React.createElement("button", {
+      onClick: () => setClosurePreview(null),
+      style: { flex: 1, padding: 10, borderRadius: 8, border: "1px solid var(--border2)", background: "transparent", color: "var(--text-muted)", fontSize: 14, fontWeight: 700, cursor: "pointer" }
+    }, "取消");
+    const overwriteBtn = /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        const masterIds = activeMasters.map(m => m.id);
+        executeStoreClosure(dateList, activeMasters, masterIds);
+      },
+      disabled: closureSaving,
+      style: { flex: 1.5, padding: 10, borderRadius: 8, border: "none", background: "#e94560", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }
+    }, closureSaving ? "設定中…" : "確認覆蓋並設定店休");
+    const buttonRow = /*#__PURE__*/React.createElement("div", {
+      style: { display: "flex", gap: 8 }
+    }, cancelBtn, overwriteBtn);
+    const card = /*#__PURE__*/React.createElement("div", {
+      style: { background: "var(--bg-header)", border: "1px solid var(--border2)", borderRadius: 16, padding: 20, width: "90%", maxWidth: 420 },
+      onClick: e => e.stopPropagation()
+    }, titleRow, subLabel, listBox, buttonRow);
+    return /*#__PURE__*/React.createElement("div", {
+      "data-modal-backdrop": "true",
+      style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 },
+      onClick: () => setClosurePreview(null)
+    }, card);
   };
   const renderSelfEditModal = () => {
     const currentAvatar = loginMaster?.avatar_url;
@@ -17852,7 +17915,7 @@ function SettingsModule({
       fontWeight: 700,
       cursor: "pointer"
     }
-  }, saving ? "儲存中..." : "儲存")))))), showSelfEdit && renderSelfEditModal());
+  }, saving ? "儲存中..." : "儲存")))))), showSelfEdit && renderSelfEditModal(), closurePreview && renderClosurePreviewModal());
 }
 class ErrorBoundary extends React.Component {
   constructor(p) {
