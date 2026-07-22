@@ -16189,6 +16189,7 @@ function SettingsModule({
   const [cardSaving, setCardSaving] = useState(false);
   const [cardList, setCardList] = useState(null);
   const [closureDate, setClosureDate] = useState(getTaipeiDateStr());
+  const [closureEndDate, setClosureEndDate] = useState(getTaipeiDateStr());
   const [closureSaving, setClosureSaving] = useState(false);
   const [closureList, setClosureList] = useState(null);
   const [closureReason, setClosureReason] = useState("");
@@ -16468,35 +16469,48 @@ function SettingsModule({
     setClosureList(data || []);
   };
   const setStoreClosure = async () => {
-    if (!closureDate || closureSaving) return;
+    if (!closureDate || !closureEndDate || closureSaving) return;
+    if (closureEndDate < closureDate) {
+      msg("結束日期不能早於開始日期", true);
+      return;
+    }
     const activeMasters = masters.filter(m => m.role !== "editor" && m.is_active !== false);
     if (activeMasters.length === 0) return;
     const masterIds = activeMasters.map(m => m.id);
 
-    const { data: existing } = await sb.from("bookings").select("id").in("master_id", masterIds).eq("date", closureDate).neq("status", "cancelled").neq("status", "no_show").neq("color_tag", "vacation");
+    // 產生區間內每一天的日期字串(YYYY-MM-DD)，單日設定時陣列長度就是1
+    const dateList = [];
+    for (let d = new Date(closureDate + "T00:00:00"); d <= new Date(closureEndDate + "T00:00:00"); d.setDate(d.getDate() + 1)) {
+      dateList.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+    }
+    const rangeLabel = closureDate === closureEndDate ? closureDate : `${closureDate} ~ ${closureEndDate}（共${dateList.length}天）`;
+
+    const { data: existing } = await sb.from("bookings").select("id").in("master_id", masterIds).gte("date", closureDate).lte("date", closureEndDate).neq("status", "cancelled").neq("status", "no_show").neq("color_tag", "vacation");
     const overwriteCount = existing?.length || 0;
     const confirmMsg = overwriteCount > 0
-      ? `確定要把 ${closureDate} 設為店休嗎？這天所有師傅（${activeMasters.map(m => m.name).join("、")}）的班表都會變成休假，客人端也會同步擋掉這天的線上預約，包含 ${overwriteCount} 筆已存在的預約會被清除，這個動作無法復原。`
-      : `確定要把 ${closureDate} 設為店休嗎？這天所有師傅（${activeMasters.map(m => m.name).join("、")}）的班表都會變成休假，客人端也會同步擋掉這天的線上預約。`;
+      ? `確定要把 ${rangeLabel} 設為店休嗎？這段期間所有師傅（${activeMasters.map(m => m.name).join("、")}）的班表都會變成休假，客人端也會同步擋掉這段期間的線上預約，包含 ${overwriteCount} 筆已存在的預約會被清除，這個動作無法復原。`
+      : `確定要把 ${rangeLabel} 設為店休嗎？這段期間所有師傅（${activeMasters.map(m => m.name).join("、")}）的班表都會變成休假，客人端也會同步擋掉這段期間的線上預約。`;
     if (!window.confirm(confirmMsg)) return;
 
     setClosureSaving(true);
-    await sb.from("bookings").delete().in("master_id", masterIds).eq("date", closureDate).neq("status", "cancelled").neq("status", "no_show");
+    await sb.from("bookings").delete().in("master_id", masterIds).gte("date", closureDate).lte("date", closureEndDate).neq("status", "cancelled").neq("status", "no_show");
 
     const rows = [];
-    activeMasters.forEach(m => {
-      TIMES.forEach(t => {
-        rows.push({
-          master_id: m.id,
-          raw_input: "店休",
-          customer_name: "店休",
-          customer_phone: null,
-          date: closureDate,
-          start_time: t + ":00",
-          guest_count: 0,
-          color_tag: "vacation",
-          note: null,
-          status: "confirmed"
+    dateList.forEach(dateStr => {
+      activeMasters.forEach(m => {
+        TIMES.forEach(t => {
+          rows.push({
+            master_id: m.id,
+            raw_input: "店休",
+            customer_name: "店休",
+            customer_phone: null,
+            date: dateStr,
+            start_time: t + ":00",
+            guest_count: 0,
+            color_tag: "vacation",
+            note: null,
+            status: "confirmed"
+          });
         });
       });
     });
@@ -16508,7 +16522,7 @@ function SettingsModule({
     }
     const { error: closureErr } = await sb.from("store_closures").insert({
       start_date: closureDate,
-      end_date: closureDate,
+      end_date: closureEndDate,
       reason: closureReason.trim() || null,
       created_by: loginMaster?.name || null
     });
@@ -16750,9 +16764,20 @@ function SettingsModule({
   const renderStoreClosureTab = () => {
     const activeMasterNames = masters.filter(m => m.role !== "editor" && m.is_active !== false).map(m => m.name).join("、");
     const dateInput = /*#__PURE__*/React.createElement("input", {
-      type: "date", value: closureDate, onChange: e => setClosureDate(e.target.value),
+      type: "date", value: closureDate,
+      onChange: e => {
+        const v = e.target.value;
+        setClosureDate(v);
+        if (v > closureEndDate) setClosureEndDate(v);
+      },
       style: { flex: 1, background: "var(--input-bg)", color: "var(--text-main)", border: "1px solid var(--border2)", borderRadius: 5, padding: "8px 10px", fontSize: 14 }
     });
+    const endDateInput = /*#__PURE__*/React.createElement("input", {
+      type: "date", value: closureEndDate,
+      onChange: e => setClosureEndDate(e.target.value),
+      style: { flex: 1, background: "var(--input-bg)", color: "var(--text-main)", border: "1px solid var(--border2)", borderRadius: 5, padding: "8px 10px", fontSize: 14 }
+    });
+    const arrowSep = /*#__PURE__*/React.createElement("span", { style: { color: "var(--text-muted)", fontSize: 13 } }, "~");
     const reasonInput = /*#__PURE__*/React.createElement("input", {
       placeholder: "原因（選填，客人端會顯示）", value: closureReason, onChange: e => setClosureReason(e.target.value),
       style: { flex: 1, background: "var(--input-bg)", color: "var(--text-main)", border: "1px solid var(--border2)", borderRadius: 5, padding: "8px 10px", fontSize: 14 }
@@ -16760,11 +16785,14 @@ function SettingsModule({
     const setBtn = /*#__PURE__*/React.createElement("button", {
       onClick: setStoreClosure,
       disabled: closureSaving,
-      style: { padding: "8px 16px", borderRadius: 6, border: "none", background: "#e94560", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }
+      style: { padding: "8px 16px", borderRadius: 6, border: "none", background: "#e94560", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }
     }, closureSaving ? "設定中" : "設為店休");
     const formRow1 = /*#__PURE__*/React.createElement("div", {
-      style: { display: "flex", gap: 8, padding: "12px 12px 8px" }
-    }, dateInput, setBtn);
+      style: { display: "flex", gap: 6, alignItems: "center", padding: "12px 12px 8px" }
+    }, dateInput, arrowSep, endDateInput);
+    const formRow1b = /*#__PURE__*/React.createElement("div", {
+      style: { padding: "0 12px 8px" }
+    }, setBtn);
     const formRow2 = /*#__PURE__*/React.createElement("div", {
       style: { padding: "0 12px 12px" }
     }, reasonInput);
@@ -16796,7 +16824,7 @@ function SettingsModule({
         }, "取消店休")
       );
     });
-    return /*#__PURE__*/React.createElement("div", { style: { padding: 0 } }, formRow1, formRow2, hint, listHeader, loadingRow, emptyRow, ...listRows);
+    return /*#__PURE__*/React.createElement("div", { style: { padding: 0 } }, formRow1, formRow1b, formRow2, hint, listHeader, loadingRow, emptyRow, ...listRows);
   };
   const renderAppearanceTab = () => {
     const swatches = Object.entries(window.ACCENT_THEMES || {}).map(([key, t]) => {
