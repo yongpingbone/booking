@@ -16188,6 +16188,9 @@ function SettingsModule({
   const [cardDate, setCardDate] = useState(getTaipeiDateStr());
   const [cardSaving, setCardSaving] = useState(false);
   const [cardList, setCardList] = useState(null);
+  const [closureDate, setClosureDate] = useState(getTaipeiDateStr());
+  const [closureSaving, setClosureSaving] = useState(false);
+  const [closureList, setClosureList] = useState(null);
   const [currentTheme, setCurrentTheme] = useState(() => {
     try { return localStorage.getItem("accentTheme") || "purple"; } catch (e) { return "purple"; }
   });
@@ -16442,6 +16445,65 @@ function SettingsModule({
     setCardList(prev => prev.filter(c => c.id !== id));
     await sb.from("card_purchases").delete().eq("id", id);
   };
+  // 2026-07-22：店休功能。設定某一天全店都休假，所有active師傅(排除
+  // editor/涵，因為涵沒有自己的排班表)這天的每個時段都會變成「休假」
+  // (跟拖曳批次休假saveDragVacation同一套color_tag:"vacation"機制)，
+  // 用raw_input:"店休"(不是"休假")當標記，方便跟師傅自己手動設定的
+  // 單一時段休假區分開來，之後要整批取消店休才抓得準，不會誤刪師傅
+  // 自己排的休假。
+  const loadClosures = async () => {
+    const { data } = await sb.from("bookings").select("date").eq("raw_input", "店休").eq("color_tag", "vacation").order("date", { ascending: false });
+    const uniqueDates = [...new Set((data || []).map(r => r.date))];
+    setClosureList(uniqueDates);
+  };
+  const setStoreClosure = async () => {
+    if (!closureDate || closureSaving) return;
+    const activeMasters = masters.filter(m => m.role !== "editor" && m.is_active !== false);
+    if (activeMasters.length === 0) return;
+    const masterIds = activeMasters.map(m => m.id);
+
+    const { data: existing } = await sb.from("bookings").select("id").in("master_id", masterIds).eq("date", closureDate).neq("status", "cancelled").neq("status", "no_show").neq("color_tag", "vacation");
+    const overwriteCount = existing?.length || 0;
+    const confirmMsg = overwriteCount > 0
+      ? `確定要把 ${closureDate} 設為店休嗎？這天所有師傅（${activeMasters.map(m => m.name).join("、")}）的班表都會變成休假，包含 ${overwriteCount} 筆已存在的預約會被清除，這個動作無法復原。`
+      : `確定要把 ${closureDate} 設為店休嗎？這天所有師傅（${activeMasters.map(m => m.name).join("、")}）的班表都會變成休假。`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setClosureSaving(true);
+    await sb.from("bookings").delete().in("master_id", masterIds).eq("date", closureDate).neq("status", "cancelled").neq("status", "no_show");
+
+    const rows = [];
+    activeMasters.forEach(m => {
+      TIMES.forEach(t => {
+        rows.push({
+          master_id: m.id,
+          raw_input: "店休",
+          customer_name: "店休",
+          customer_phone: null,
+          date: closureDate,
+          start_time: t + ":00",
+          guest_count: 0,
+          color_tag: "vacation",
+          note: null,
+          status: "confirmed"
+        });
+      });
+    });
+    const { error } = await sb.from("bookings").insert(rows);
+    setClosureSaving(false);
+    if (!error) {
+      msg("已設定店休");
+      loadClosures();
+    } else {
+      msg("設定失敗", true);
+    }
+  };
+  const removeStoreClosure = async date => {
+    if (!window.confirm(`確定要取消 ${date} 的店休嗎？這天會恢復成空的班表（不會恢復被覆蓋的原本預約）。`)) return;
+    await sb.from("bookings").delete().eq("date", date).eq("raw_input", "店休").eq("color_tag", "vacation");
+    loadClosures();
+    msg("已取消店休");
+  };
   // 2026-07-18：頭貼上傳。檔案路徑固定用{自己的uid}/avatar.{副檔名}，
   // 每次重傳都用upsert:true直接覆蓋同一個檔案，不會累積一堆舊照片佔空間。
   // 存進masters.avatar_url的URL後面刻意加上?t=時間戳記，是因為檔案路徑
@@ -16552,7 +16614,7 @@ function SettingsModule({
   // 『分類卡片內橫向排列』)，renderSection包一層標題+卡片，四個分類
   // 各自呼叫一次組出來，不是重寫整個九宮格的互動邏輯。
   const renderGridItem = ([k, l, iconKey]) => {
-    const locked = !isAdmin && ["masters", "export", "sync", "service_types"].includes(k);
+    const locked = !isAdmin && ["masters", "export", "sync", "service_types", "store_closure"].includes(k);
     return /*#__PURE__*/React.createElement("button", {
       key: k,
       disabled: locked,
@@ -16563,6 +16625,7 @@ function SettingsModule({
         if (k === "history") loadHistory();
         if (k === "sync") loadSyncStatus();
         if (k === "service_types") { loadSvcTypes(); loadCardPurchases(); }
+        if (k === "store_closure") loadClosures();
       },
       style: {
         background: "transparent",
@@ -16605,7 +16668,7 @@ function SettingsModule({
     const sections = [
       ["帳號", [["masters", "帳號管理", "user"], ["appearance", "外觀", "spark"]]],
       ["業務", [["crm", "客戶", "users"], ["analytics", "數據", "chart"], ["service_types", "服務項目", "sliders"], ["reconcile", "對帳", "chart"]]],
-      ["排班設定", [["rest", "休息時段", "pause"], ["availability", "開放", "check"]]],
+      ["排班設定", [["rest", "休息時段", "pause"], ["availability", "開放", "check"], ["store_closure", "店休", "eyeoff"]]],
       ["系統", [["export", "批次刪除", "trash"], ["history", "歷史紀錄", "history"], ["sync", "資料同步", "sync"]]]
     ];
     return /*#__PURE__*/React.createElement(React.Fragment, null, ...sections.map(([title, items]) => renderSection(title, items)));
@@ -16658,6 +16721,44 @@ function SettingsModule({
       style: { marginTop: 16 }
     }, /*#__PURE__*/React.createElement(MyWeeklyWidget, { masters: masters, loginMaster: loginMaster }));
     return /*#__PURE__*/React.createElement(React.Fragment, null, accountSection, weeklySection);
+  };
+  const renderStoreClosureTab = () => {
+    const activeMasterNames = masters.filter(m => m.role !== "editor" && m.is_active !== false).map(m => m.name).join("、");
+    const dateInput = /*#__PURE__*/React.createElement("input", {
+      type: "date", value: closureDate, onChange: e => setClosureDate(e.target.value),
+      style: { flex: 1, background: "var(--input-bg)", color: "var(--text-main)", border: "1px solid var(--border2)", borderRadius: 5, padding: "8px 10px", fontSize: 14 }
+    });
+    const setBtn = /*#__PURE__*/React.createElement("button", {
+      onClick: setStoreClosure,
+      disabled: closureSaving,
+      style: { padding: "8px 16px", borderRadius: 6, border: "none", background: "#e94560", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }
+    }, closureSaving ? "設定中" : "設為店休");
+    const formRow = /*#__PURE__*/React.createElement("div", {
+      style: { display: "flex", gap: 8, padding: 12 }
+    }, dateInput, setBtn);
+    const hint = /*#__PURE__*/React.createElement("div", {
+      style: { fontSize: 11, color: "var(--text-muted)", padding: "0 12px 12px" }
+    }, `設定後，${activeMasterNames || "所有師傅"}這天的整天班表都會變成休假（紅底），已存在的預約會被清除，這個動作無法復原，請先確認日期正確。`);
+    const listHeader = /*#__PURE__*/React.createElement("div", {
+      style: { fontSize: 12, color: "var(--text-muted)", padding: "8px 12px 4px", borderTop: "1px solid var(--border)" }
+    }, "已設定的店休日期");
+    const loadingRow = closureList === null ? /*#__PURE__*/React.createElement("div", {
+      style: { padding: 16, textAlign: "center", color: "var(--text-muted)", fontSize: 12 }
+    }, "讀取中…") : null;
+    const emptyRow = closureList && closureList.length === 0 ? /*#__PURE__*/React.createElement("div", {
+      style: { padding: 16, textAlign: "center", color: "var(--text-dim)", fontSize: 12 }
+    }, "目前沒有設定店休") : null;
+    const listRows = (closureList || []).map(date => /*#__PURE__*/React.createElement("div", {
+      key: date,
+      style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", borderTop: "1px solid var(--border)" }
+    },
+      /*#__PURE__*/React.createElement("span", { style: { fontSize: 13 } }, date),
+      /*#__PURE__*/React.createElement("button", {
+        onClick: () => removeStoreClosure(date),
+        style: { background: "none", border: "1px solid var(--border2)", borderRadius: 6, color: "#e94560", cursor: "pointer", fontSize: 12, padding: "3px 10px" }
+      }, "取消店休")
+    ));
+    return /*#__PURE__*/React.createElement("div", { style: { padding: 0 } }, formRow, hint, listHeader, loadingRow, emptyRow, ...listRows);
   };
   const renderAppearanceTab = () => {
     const swatches = Object.entries(window.ACCENT_THEMES || {}).map(([key, t]) => {
@@ -16962,7 +17063,7 @@ function SettingsModule({
     }
   }, "←"), /*#__PURE__*/React.createElement("span", {
     style: { fontSize: 14, fontWeight: 700, color: "var(--text-main)" }
-  }, { crm: "客戶", analytics: "數據", service_types: "服務項目", reconcile: "對帳", masters: "帳號管理", rest: "休息時段", export: "批次刪除", history: "歷史紀錄", availability: "開放", sync: "資料同步", appearance: "外觀" }[settTab])), settTab === "masters" && /*#__PURE__*/React.createElement("div", {
+  }, { crm: "客戶", analytics: "數據", service_types: "服務項目", reconcile: "對帳", masters: "帳號管理", rest: "休息時段", export: "批次刪除", history: "歷史紀錄", availability: "開放", sync: "資料同步", appearance: "外觀", store_closure: "店休" }[settTab])), settTab === "masters" && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: 16
     }
@@ -17470,7 +17571,7 @@ function SettingsModule({
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit"
-  }) : ""))))), settTab === "appearance" && renderAppearanceTab(), settTab === "service_types" && renderServiceTypesTab(), settTab === "reconcile" && /*#__PURE__*/React.createElement("div", {
+  }) : ""))))), settTab === "appearance" && renderAppearanceTab(), settTab === "store_closure" && renderStoreClosureTab(), settTab === "service_types" && renderServiceTypesTab(), settTab === "reconcile" && /*#__PURE__*/React.createElement("div", {
     style: { padding: 12 }
   }, /*#__PURE__*/React.createElement(ReconcileWidget, { masters: masters, loginMaster: loginMaster })), settTab === "crm" && /*#__PURE__*/React.createElement("div", {
     style: { padding: 0 }
