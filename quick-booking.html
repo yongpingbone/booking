@@ -129,6 +129,7 @@ input:focus{outline:none;border-color:var(--cyan)}
       <div class="ft" id="ft-status">尋找最快時段中...</div>
       <div class="fv" id="fv-result"></div>
       <button class="btn" id="fastestConfirmBtn" style="display:none" onclick="acceptFastest()">採用這個時段</button>
+      <button class="btn2" id="fastestNextBtn" style="display:none" onclick="nextFastestCandidate()">換一個</button>
     </div>
   </div>
 
@@ -283,19 +284,39 @@ async function pickAnyMaster(){
   document.getElementById('ft-status').textContent = '尋找最快時段中...';
   document.getElementById('fv-result').textContent = '';
   document.getElementById('fastestConfirmBtn').style.display = 'none';
-  const found = await findFastestSlot();
-  if(!found){
+  document.getElementById('fastestNextBtn').style.display = 'none';
+  const candidates = await findFastestSlot();
+  if(candidates.length===0){
     document.getElementById('ft-status').textContent = '接下來 14 天都沒有空檔';
     updateFooter();
     return;
   }
+  fastestCandidates = candidates;
+  fastestCandidateIdx = 0;
+  showFastestCandidate();
+  updateFooter();
+}
+
+let fastestCandidates = [];
+let fastestCandidateIdx = 0;
+// 2026-07-22：新增。把「顯示目前這筆候選」抽成獨立函式，pickAnyMaster
+// 第一次找到候選清單時、跟nextFastestCandidate換下一筆時都呼叫這個，
+// 兩處畫面更新邏輯只寫一份，不會日後改了一邊忘記改另一邊。
+function showFastestCandidate(){
+  const found = fastestCandidates[fastestCandidateIdx];
+  if(!found) return;
   fastestResult = found;
   const d = new Date(found.date+'T00:00:00');
   const wkArr=['日','一','二','三','四','五','六'];
   document.getElementById('ft-status').textContent = '找到最快空檔：';
   document.getElementById('fv-result').textContent = `${d.getMonth()+1}/${d.getDate()}（週${wkArr[d.getDay()]}）${found.time}　${MNAME[found.masterId]}`;
   document.getElementById('fastestConfirmBtn').style.display = 'block';
-  updateFooter();
+  document.getElementById('fastestNextBtn').style.display = fastestCandidates.length>1 ? 'block' : 'none';
+}
+function nextFastestCandidate(){
+  if(fastestCandidates.length===0) return;
+  fastestCandidateIdx = (fastestCandidateIdx+1) % fastestCandidates.length;
+  showFastestCandidate();
 }
 
 let fastestResult = null;
@@ -310,11 +331,14 @@ function acceptFastest(){
   document.getElementById('ft-status').textContent = '✓ 已採用：';
   document.getElementById('fv-result').textContent = `${d.getMonth()+1}/${d.getDate()}（週${wkArr[d.getDay()]}）${fastestResult.time}　${MNAME[fastestResult.masterId]}`;
   document.getElementById('fastestConfirmBtn').style.display = 'none';
+  document.getElementById('fastestNextBtn').style.display = 'none';
   updateFooter();
   toast('已採用推薦時段','ok');
 }
 
 // 從現在開始往後找 14 天內，全師傅最早的空檔（不受客人線上白名單限制，內部工具用）
+// 2026-07-22：原本找到第一筆就return，Hanna要求要能「換一個」看其他
+// 候選，改成收集最多20筆依時間先後排序的候選清單再一次回傳。
 async function findFastestSlot(){
   const now = new Date();
   const nowMinutes = now.getHours()*60+now.getMinutes();
@@ -328,7 +352,7 @@ async function findFastestSlot(){
       .gte('date', startStr).lte('date', endStr)
       .neq('status','cancelled').neq('status','no_show');
     allBookings = data || [];
-  }catch(e){ return null; }
+  }catch(e){ return []; }
   const takenSet = new Set(allBookings.map(b=> `${b.date}_${b.master_id}_${(b.start_time||'').slice(0,5)}`));
   // 順便把每天的資料寫進 takenCache，之後採用建議時段時就不用重新查一次
   const byDate = {};
@@ -339,6 +363,7 @@ async function findFastestSlot(){
     if(!takenCache[ds]) takenCache[ds] = byDate[ds] || [];
   }
 
+  const candidates = [];
   for(let dayOffset=0; dayOffset<14; dayOffset++){
     const d = new Date(now); d.setDate(d.getDate()+dayOffset);
     const dateStr = fmtD(d);
@@ -350,11 +375,12 @@ async function findFastestSlot(){
       for(const m of MASTERS){
         if(takenSet.has(`${dateStr}_${m.id}_${t}`)) continue;
         if(isRestSlot(m.id, dateStr, t)) continue;
-        return {date:dateStr, time:t, masterId:m.id};
+        candidates.push({date:dateStr, time:t, masterId:m.id});
+        if(candidates.length>=20) return candidates;
       }
     }
   }
-  return null;
+  return candidates;
 }
 
 function fmtD(d){
