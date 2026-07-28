@@ -98,7 +98,7 @@ body.dark {
 .c-vacation { background:rgba(163,84,76,0.45) !important; border-left:3px solid #A3544C !important; }
 .c-reserved { background:rgba(90,118,134,0.30) !important; border-left:3px solid #5A7686 !important; }
 .c-custom { background:rgba(var(--accent-rgb),0.30) !important; border-left:3px solid var(--accent) !important; }
-.c-aftercare { background:rgba(100,117,96,0.20) !important; border-left:3px solid #647560 !important; }
+.c-aftercare { background:#E5E9E1 !important; border-left:2px solid #788672 !important; }
 .drag-select { background:rgba(var(--accent-rgb),0.4) !important; border:1px solid var(--accent) !important; }
 .drag-over-cell { background:rgba(95,128,160,0.22) !important; outline:2px solid #5F80A0 !important; outline-offset:-2px; }
 .search-hl { outline:2px solid #A66E38 !important; outline-offset:-2px; background:rgba(166,110,56,0.18) !important; }
@@ -838,6 +838,19 @@ function bookingDisplayName(b) {
   const raw = (b.customer_name || "").trim();
   if (raw === "自訂" || raw === "卡位") return "";
   return displayName(b.customer_name);
+}
+// 2026-07-29：排班/全覽表格「預約格」專用的顯示文字——售後只用背景色
+// 標記，格內不顯示「售後」字樣；有客人姓名就顯示姓名，沒有就空白。
+// 刻意不去改bookingDisplayName本身，因為那個函式還被客戶歸屬面板、
+// 長按複製姓名等其他既有功能使用，這次任務明確限定在「預約格」，
+// 不擴大範圍去動其他地方的顯示邏輯。
+function cellDisplayName(b) {
+  if (!b) return "";
+  if (b.is_aftercare) {
+    const raw = (b.customer_name || "").trim();
+    return raw ? displayName(b.customer_name) : "";
+  }
+  return bookingDisplayName(b);
 }
 function getWeeksMon(y, m, showSun) {
   const dim = new Date(y, m + 1, 0).getDate();
@@ -5915,7 +5928,7 @@ function MainApp({
         marginRight: 2,
         color: "#A76A43"
       }
-    }, "★"), bookingDisplayName(b)), canDelete && /*#__PURE__*/React.createElement("span", {
+    }, "★"), cellDisplayName(b)), canDelete && /*#__PURE__*/React.createElement("span", {
       onClick: e => {
         e.stopPropagation();
         delBk(b.id);
@@ -11450,7 +11463,7 @@ function OverviewMonth({
           marginRight: 1,
           color: "#A76A43"
         }
-      }, "★"), bookingDisplayName(b)), isVac && /*#__PURE__*/React.createElement("div", {
+      }, "★"), cellDisplayName(b)), isVac && /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: FS.s,
           fontWeight: 800,
