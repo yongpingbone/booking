@@ -4759,7 +4759,10 @@ function MainApp({
     }, typeCol, priceCol), usageBadge);
   };
   const saveBk = async (isContinuous = false) => {
-    const needInput = !COLOR_NO_INPUT.has(form.color);
+    // 2026-07-29：售後(isAftercare)是獨立於form.color的checkbox，COLOR_NO_INPUT
+    // 只看form.color，本來不會涵蓋到它——這正是「勾選售後、姓名留白卻無法儲存」
+    // 的根因。加上||form.isAftercare這個例外，讓售後同樣可以空白姓名儲存。
+    const needInput = !COLOR_NO_INPUT.has(form.color) && !form.isAftercare;
     if (!dialog || needInput && !form.input.trim() || saving) return;
 
     // ── 重複預約：計算所有日期 + 衝突一個個確認 ──
@@ -4783,11 +4786,13 @@ function MainApp({
         if (!window.confirm(`即將建立 ${recurDates.length} 筆預約，數量很多，確定嗎？`)) return;
       }
       setSaving(true);
+      // 2026-07-29：售後/自訂不再fallback成文字標籤，姓名空白時讓它
+      // 真的存入空字串，不寫入「售後」「自訂」這些字面文字(Hanna明確
+      // 要求)。卡位/休假維持原本的fallback行為不變，因為「卡位」這個
+      // 字面值在別處(判斷卡位是否已被真名取代)有被依賴，不能動。
       const _colorLabels = {
         reserved: "卡位",
-        custom: "自訂",
-        vacation: "休假",
-        aftercare: "售後"
+        vacation: "休假"
       };
       const _rawInput = form.input.trim() || _colorLabels[form.color] || "";
       const _parsed = parseInput(_rawInput);
@@ -4877,11 +4882,10 @@ function MainApp({
       return;
     }
     setSaving(true);
+    // 2026-07-29：同上，售後/自訂不再fallback成文字標籤
     const colorLabels = {
       reserved: "卡位",
-      custom: "自訂",
-      vacation: "休假",
-      aftercare: "售後"
+      vacation: "休假"
     };
     const rawInput = form.input.trim() || colorLabels[form.color] || "";
     const {
@@ -7685,15 +7689,15 @@ function MainApp({
       if (e.key === "Enter" && !acShow) saveBk();
       if (e.key === "Escape") acDismiss();
     },
-    placeholder: COLOR_NO_INPUT.has(form.color) ? "（選填）輸入客戶姓名..." : "許小姐0978822100",
+    placeholder: COLOR_NO_INPUT.has(form.color) || form.isAftercare ? "（選填）輸入客戶姓名..." : "許小姐0978822100",
     style: {
       width: "100%",
-      background: COLOR_NO_INPUT.has(form.color) && !form.input.trim() ? `${{
+      background: (COLOR_NO_INPUT.has(form.color) || form.isAftercare) && !form.input.trim() ? `${{
         "reserved": "rgba(113,135,147,0.10)",
         "custom": "rgba(var(--accent-rgb),0.10)",
         "vacation": "rgba(167,96,85,0.10)"
       }[form.color] || "var(--input-bg)"}` : "var(--input-bg)",
-      border: `1px solid ${COLOR_NO_INPUT.has(form.color) && !form.input.trim() ? {
+      border: `1px solid ${(COLOR_NO_INPUT.has(form.color) || form.isAftercare) && !form.input.trim() ? {
         "reserved": "#71879388",
         "custom": "rgba(var(--accent-rgb),0.53)",
         "vacation": "#A7605588"
@@ -7811,7 +7815,7 @@ function MainApp({
         marginTop: 3
       }
     }, "✓ ", name, "\u3000", phone) : null;
-  })(), COLOR_NO_INPUT.has(form.color) && !form.input.trim() && /*#__PURE__*/React.createElement("div", {
+  })(), (COLOR_NO_INPUT.has(form.color) || form.isAftercare) && !form.input.trim() && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 10,
       color: {
@@ -8147,7 +8151,7 @@ function MainApp({
     }
   }, "取消"), /*#__PURE__*/React.createElement("button", {
     onClick: () => saveBk(true),
-    disabled: !COLOR_NO_INPUT.has(form.color) && !form.input.trim() || saving,
+    disabled: !COLOR_NO_INPUT.has(form.color) && !form.isAftercare && !form.input.trim() || saving,
     style: {
       flex: 1.5,
       padding: 10,
@@ -8161,14 +8165,14 @@ function MainApp({
     }
   }, "儲存並繼續"), /*#__PURE__*/React.createElement("button", {
     onClick: () => saveBk(false),
-    disabled: !COLOR_NO_INPUT.has(form.color) && !form.input.trim() || saving,
+    disabled: !COLOR_NO_INPUT.has(form.color) && !form.isAftercare && !form.input.trim() || saving,
     style: {
       flex: 1.5,
       padding: 10,
       borderRadius: 8,
-      background: (COLOR_NO_INPUT.has(form.color) || form.input.trim()) && !saving ? "#A76055" : "var(--border2)",
+      background: (COLOR_NO_INPUT.has(form.color) || form.isAftercare || form.input.trim()) && !saving ? "#A76055" : "var(--border2)",
       border: "none",
-      color: (COLOR_NO_INPUT.has(form.color) || form.input.trim()) && !saving ? "#fff" : "var(--text-dim)",
+      color: (COLOR_NO_INPUT.has(form.color) || form.isAftercare || form.input.trim()) && !saving ? "#fff" : "var(--text-dim)",
       fontSize: 14,
       fontWeight: 700,
       cursor: "pointer"
@@ -9801,7 +9805,10 @@ function OverviewMonth({
     }, typeCol, priceCol), usageBadge);
   };
   const saveBk = async (isContinuous = false) => {
-    const needInput = !COLOR_NO_INPUT.has(form.color);
+    // 2026-07-29：售後(isAftercare)是獨立於form.color的checkbox，COLOR_NO_INPUT
+    // 只看form.color，本來不會涵蓋到它——這正是「勾選售後、姓名留白卻無法儲存」
+    // 的根因。加上||form.isAftercare這個例外，讓售後同樣可以空白姓名儲存。
+    const needInput = !COLOR_NO_INPUT.has(form.color) && !form.isAftercare;
     if (!dialog || needInput && !form.input.trim() || saving) return;
 
     // ── 重複預約：計算所有日期 + 衝突一個個確認 ──
@@ -9825,11 +9832,13 @@ function OverviewMonth({
         if (!window.confirm(`即將建立 ${recurDates.length} 筆預約，數量很多，確定嗎？`)) return;
       }
       setSaving(true);
+      // 2026-07-29：售後/自訂不再fallback成文字標籤，姓名空白時讓它
+      // 真的存入空字串，不寫入「售後」「自訂」這些字面文字(Hanna明確
+      // 要求)。卡位/休假維持原本的fallback行為不變，因為「卡位」這個
+      // 字面值在別處(判斷卡位是否已被真名取代)有被依賴，不能動。
       const _colorLabels = {
         reserved: "卡位",
-        custom: "自訂",
-        vacation: "休假",
-        aftercare: "售後"
+        vacation: "休假"
       };
       const _rawInput = form.input.trim() || _colorLabels[form.color] || "";
       const _parsed = parseInput(_rawInput);
@@ -9919,11 +9928,10 @@ function OverviewMonth({
       return;
     }
     setSaving(true);
+    // 2026-07-29：同上，售後/自訂不再fallback成文字標籤
     const colorLabels = {
       reserved: "卡位",
-      custom: "自訂",
-      vacation: "休假",
-      aftercare: "售後"
+      vacation: "休假"
     };
     const rawInput = form.input.trim() || colorLabels[form.color] || "";
     const {
@@ -11882,15 +11890,15 @@ function OverviewMonth({
       if (e.key === "Enter" && !acShow) saveBk();
       if (e.key === "Escape") acDismiss();
     },
-    placeholder: COLOR_NO_INPUT.has(form.color) ? "（選填）輸入客戶姓名..." : "許小姐0978822100",
+    placeholder: COLOR_NO_INPUT.has(form.color) || form.isAftercare ? "（選填）輸入客戶姓名..." : "許小姐0978822100",
     style: {
       width: "100%",
-      background: COLOR_NO_INPUT.has(form.color) && !form.input.trim() ? {
+      background: (COLOR_NO_INPUT.has(form.color) || form.isAftercare) && !form.input.trim() ? {
         "reserved": "rgba(113,135,147,0.10)",
         "custom": "rgba(var(--accent-rgb),0.10)",
         "vacation": "rgba(167,96,85,0.10)"
       }[form.color] || "var(--input-bg)" : "var(--input-bg)",
-      border: `1px solid ${COLOR_NO_INPUT.has(form.color) && !form.input.trim() ? {
+      border: `1px solid ${(COLOR_NO_INPUT.has(form.color) || form.isAftercare) && !form.input.trim() ? {
         "reserved": "#71879388",
         "custom": "rgba(var(--accent-rgb),0.53)",
         "vacation": "#A7605588"
@@ -12007,7 +12015,7 @@ function OverviewMonth({
         marginTop: 3
       }
     }, "✓ ", name, "\u3000", phone) : null;
-  })(), COLOR_NO_INPUT.has(form.color) && !form.input.trim() && /*#__PURE__*/React.createElement("div", {
+  })(), (COLOR_NO_INPUT.has(form.color) || form.isAftercare) && !form.input.trim() && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 10,
       color: {
@@ -12343,7 +12351,7 @@ function OverviewMonth({
     }
   }, "取消"), /*#__PURE__*/React.createElement("button", {
     onClick: () => saveBk(true),
-    disabled: !COLOR_NO_INPUT.has(form.color) && !form.input.trim() || saving,
+    disabled: !COLOR_NO_INPUT.has(form.color) && !form.isAftercare && !form.input.trim() || saving,
     style: {
       flex: 1.5,
       padding: 10,
@@ -12357,14 +12365,14 @@ function OverviewMonth({
     }
   }, "儲存並繼續"), /*#__PURE__*/React.createElement("button", {
     onClick: () => saveBk(false),
-    disabled: !COLOR_NO_INPUT.has(form.color) && !form.input.trim() || saving,
+    disabled: !COLOR_NO_INPUT.has(form.color) && !form.isAftercare && !form.input.trim() || saving,
     style: {
       flex: 1.5,
       padding: 10,
       borderRadius: 8,
-      background: (COLOR_NO_INPUT.has(form.color) || form.input.trim()) && !saving ? "#A76055" : "var(--border2)",
+      background: (COLOR_NO_INPUT.has(form.color) || form.isAftercare || form.input.trim()) && !saving ? "#A76055" : "var(--border2)",
       border: "none",
-      color: (COLOR_NO_INPUT.has(form.color) || form.input.trim()) && !saving ? "#fff" : "var(--text-dim)",
+      color: (COLOR_NO_INPUT.has(form.color) || form.isAftercare || form.input.trim()) && !saving ? "#fff" : "var(--text-dim)",
       fontSize: 14,
       fontWeight: 700,
       cursor: "pointer"
