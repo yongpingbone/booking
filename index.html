@@ -72,19 +72,51 @@ body.dark {
 /* 2026-07-22：響應式側邊導覽——手機維持原本底部導覽不變(<768px)，
    平板768px~1199px顯示72px緊湊圖示側欄，桌機1200px+顯示220px完整
    圖示+文字側欄。側邊導覽用position:fixed疊加、不影響原本任何既有
-   DOM巢狀結構，只是在最外層多包一層Fragment，排班表格本身完全沒動。 */
-.sidebar-nav { display: none; }
+   DOM巢狀結構，只是在最外層多包一層Fragment，排班表格本身完全沒動。
+   2026-07-29修正：主內容容器改用margin-left+width:calc(100vw - Npx)
+   明確限制寬度，取代原本只用padding-left的做法——因為.sidebar-nav是
+   position:fixed(脫離文件流)，只用padding-left並不會讓主內容的border
+   box跟著縮小，容器本身仍然是100vw寬、只是內容被padding往右推，這樣
+   會讓頁面右側多出跟側欄等寬的溢出區域，導致整體版面跑掉。同時給
+   sidebar本身加上min-width/max-width/flex-basis多重限制，防止任何
+   情況下被意外撐開。 */
+.sidebar-nav {
+  display: none;
+  box-sizing: border-box;
+}
 .bottom-nav-mobile { display: flex; }
+.app-shell-body { box-sizing: border-box; }
 @media (min-width: 768px) {
-  .sidebar-nav { display: flex; width: 72px; }
-  .app-shell-body { padding-left: 72px; }
+  .sidebar-nav {
+    display: flex;
+    width: 72px;
+    min-width: 72px;
+    max-width: 72px;
+    flex: 0 0 72px;
+  }
+  .app-shell-body {
+    margin-left: 72px;
+    width: calc(100vw - 72px);
+    min-width: 0;
+    max-width: calc(100vw - 72px);
+    padding-left: 0;
+  }
   .bottom-nav-mobile { display: none; }
   .sidebar-nav-label { display: none; }
   .sidebar-fab { display: none; }
 }
 @media (min-width: 1200px) {
-  .sidebar-nav { width: 220px; }
-  .app-shell-body { padding-left: 220px; }
+  .sidebar-nav {
+    width: 220px;
+    min-width: 220px;
+    max-width: 220px;
+    flex: 0 0 220px;
+  }
+  .app-shell-body {
+    margin-left: 220px;
+    width: calc(100vw - 220px);
+    max-width: calc(100vw - 220px);
+  }
   .sidebar-nav-label { display: inline; }
 }
 .sidebar-nav-item { display:flex; align-items:center; gap:12px; padding:10px 14px; cursor:pointer; color:var(--text-muted); border-radius:8px; margin:2px 10px; position:relative; border:none; background:none; width:calc(100% - 20px); text-align:left; font-family:inherit; font-size:13px; }
