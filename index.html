@@ -183,6 +183,24 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
   font-weight: 400;
   color: #756D65;
 }
+/* 2026-07-29：全覽表格每週開始列的星期/日期表頭，橫跨當天目前顯示的
+   全部師傅欄位(colSpan動態依sel.length計算)，在合併後的儲存格正中央
+   置中顯示，不是靠padding/margin手動推置中。 */
+.week-date-header {
+  text-align: center;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.week-date-header__weekday {
+  display: block;
+  font-family: "Noto Serif TC", serif;
+  font-weight: 600;
+}
+.week-date-header__date {
+  display: block;
+  font-family: "IBM Plex Mono", monospace;
+  font-weight: 400;
+}
 .drag-active { transform:scale(0.97); opacity:0.6; }
 @media(max-width:768px) {
   .tab-btn { padding:10px 10px; font-size:11px; }
@@ -11290,33 +11308,34 @@ function OverviewMonth({
         color: "var(--text-week)",
         borderTop: "1px solid var(--border-week)"
       }
-    }, "W", wi + 1), wk.map((d, i) => sel.map((_m, j) => {
+    }, "W", wi + 1), wk.map((d, i) => {
       const isT = d === today.getDate() && mo === today.getMonth() && yr === today.getFullYear();
       const isSun = i === 0;
-      const mt = MASTER_TINTS[j % MASTER_TINTS.length];
       return /*#__PURE__*/React.createElement("td", {
-        key: `${i}-${j}`,
+        key: i,
+        colSpan: sel.length,
+        className: "week-date-header",
         style: {
           padding: "1px 2px",
-          textAlign: "center",
           borderBottom: "1px solid var(--border)",
-          borderRight: j === sel.length - 1 ? "2px solid var(--border2)" : "1px solid var(--border)",
+          borderRight: "2px solid var(--border2)",
           borderTop: "1px solid var(--border-week)",
-          background: isT ? "rgba(167,96,85,0.12)" : mt.bg
+          background: isT ? "rgba(167,96,85,0.12)" : "var(--schedule-surface-soft)"
         }
-      }, d && j === 0 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      }, d && /*#__PURE__*/React.createElement("div", {
+        className: "week-date-header__weekday",
         style: {
           fontSize: FS.s - 2,
-          color: isT ? "#A76055" : isSun ? "rgba(167,96,85,0.7)" : "var(--text-time)",
-          fontWeight: 700
+          color: isT ? "#A76055" : isSun ? "rgba(167,96,85,0.7)" : "var(--text-time)"
         }
-      }, "週", ALL_DAYS_OV[i]), /*#__PURE__*/React.createElement("div", {
+      }, "週", ALL_DAYS_OV[i]), d && /*#__PURE__*/React.createElement("div", {
+        className: "week-date-header__date",
         style: {
           fontSize: FS.s - 1,
           color: isT ? "#A76055" : isSun ? "rgba(167,96,85,0.5)" : "var(--text-dim)"
         }
-      }, mo + 1, "/", d)));
-    }))), TIMES.map(t => /*#__PURE__*/React.createElement("tr", {
+      }, mo + 1, "/", d));
+    })), TIMES.map(t => /*#__PURE__*/React.createElement("tr", {
       key: t,
       className: "cv-row"
     }, /*#__PURE__*/React.createElement("td", {
