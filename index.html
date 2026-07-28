@@ -12,7 +12,7 @@
 <link rel="manifest" href="/booking/manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700;900&family=Noto+Serif+TC:wght@500;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <title>永平整體保健中心 預約系統</title>
 <script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/booking/sw.js');</script>
 <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
@@ -25,8 +25,8 @@
   --vv-width:100vw; --vv-height:100vh;
   --vv-scale:1;
   --font-sans:"Inter","Noto Sans TC",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-  --font-serif-zh:"Noto Sans TC",sans-serif; --font-sans-zh:"Inter","Noto Sans TC",sans-serif;
-  --font-serif-en:"Inter",sans-serif; --font-mono:"IBM Plex Mono","SFMono-Regular",Consolas,monospace;
+  --font-serif-zh:"Noto Serif TC",serif; --font-sans-zh:"Inter","Noto Sans TC",sans-serif;
+  --font-serif-en:"Cormorant Garamond",serif; --font-mono:"IBM Plex Mono","SFMono-Regular",Consolas,monospace;
 }
 /* Modal backdrop 不再強制跟 visualViewport（鍵盤升起時會跑掉），讓 React 元件自己用 fixed inset:0 */
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -44,20 +44,20 @@ input, select, button, textarea { font-family: inherit; outline: none; }
 .f-serif-en { font-family: var(--font-serif-en); }
 .f-mono { font-family: var(--font-mono); }
 body.dark {
-  --bg-main:#F6F6F4; --bg-header:#F8F8F6; --bg-sub:#F2F1EE;
-  --bg-week:#FFFFFF; --bg-rest:rgba(102,99,95,0.1);
-  --border:#E2DFDA; --border2:#CCC7C0; --border-week:#CCC7C0;
-  --text-main:#242321; --text-muted:#66635F; --text-dim:#96918B;
-  --text-time:#9A6845; --text-week:#96918B;
-  --input-bg:#FFFFFF; --nav-bg:#F1F1EF; --nav-color:#66635F;
-  --mt-0:#6F8FA5; --mt-1:#7E9276; --mt-2:#C0875C; --mt-3:#B67C80; --mt-4:#8E819B;
+  --bg-main:#F7F2E9; --bg-header:#F9F5EC; --bg-sub:#F1EAD9;
+  --bg-week:#FFFDF7; --bg-rest:rgba(107,93,76,0.12);
+  --border:#DDD2BE; --border2:#C4B49C; --border-week:#C4B49C;
+  --text-main:#3D2E22; --text-muted:#6B5D4C; --text-dim:#8C7F6B;
+  --text-time:#9A6845; --text-week:#8C7F6B;
+  --input-bg:#FFFDF7; --nav-bg:#F1EAD9; --nav-color:#6B5D4C;
+  --mt-0:#5F80A0; --mt-1:#6E8567; --mt-2:#B87A4E; --mt-3:#A96F76; --mt-4:#7D708F;
   --accent:#9A6845; --accent-bright:#805538; --accent-rgb:154,104,69;
   --accent-soft:#EEE1D6; --accent-pale:#F7F0EA;
-  --success:#718269; --warning:#B17A42; --danger:#B05F59; --info:#668293;
+  --success:#647560; --warning:#A66E38; --danger:#A3544C; --info:#5A7686;
   --overlay:rgba(25,23,20,0.45);
-  --sheet-bg:#FFFFFF; --sheet-header:#F7F7F5; --sheet-grid:#E4E1DC; --sheet-grid-strong:#CCC7C0;
-  --sheet-weekend:#FAF7F3; --sheet-today:#F5ECE4; --sheet-rest:#F0EFEC; --sheet-selected:#EEE1D6;
-  --sheet-text:#292724; --sheet-muted:#77726C;
+  --sheet-bg:#FFFDF7; --sheet-header:#F9F5EC; --sheet-grid:#DDD2BE; --sheet-grid-strong:#C4B49C;
+  --sheet-weekend:#F5EEDD; --sheet-today:#F0E0C9; --sheet-rest:#EDE3D0; --sheet-selected:#EEE1D6;
+  --sheet-text:#241B14; --sheet-muted:#6B5D4C;
 }
 /* 2026-07-22：響應式側邊導覽——手機維持原本底部導覽不變(<768px)，
    平板768px~1199px顯示72px緊湊圖示側欄，桌機1200px+顯示220px完整
@@ -79,20 +79,20 @@ body.dark {
 }
 .sidebar-nav-item { display:flex; align-items:center; gap:12px; padding:10px 14px; cursor:pointer; color:var(--text-muted); border-radius:8px; margin:2px 10px; position:relative; border:none; background:none; width:calc(100% - 20px); text-align:left; font-family:inherit; font-size:13px; }
 .sidebar-nav-item.active { background:var(--accent-pale); color:var(--text-main); font-weight:600; }
-.nb { background:var(--nav-bg); border:1px solid var(--border2); color:var(--nav-color); border-radius:5px; padding:4px 10px; cursor:pointer; font-size:12px; }
+.nb { background:var(--nav-bg); border:1px solid var(--border2); color:var(--nav-color); border-radius:5px; padding:4px 10px; cursor:pointer; font-size:12px; white-space:nowrap; flex-shrink:0; }
 .tab-btn { padding:8px 14px; background:transparent; border:none; border-bottom:2px solid transparent; color:var(--text-muted); font-size:12px; cursor:pointer; white-space:nowrap; }
 .tab-btn.active { border-bottom-color:var(--accent-bright); color:var(--accent-bright); font-weight:700; }
 .c-none { background:transparent !important; }
-.c-new_customer { background:rgba(177,122,66,0.35) !important; border-left:3px solid #B17A42 !important; }
+.c-new_customer { background:rgba(166,110,56,0.35) !important; border-left:3px solid #A66E38 !important; }
 .c-cui { background:rgba(176,128,116,0.30) !important; border-left:3px solid #B08074 !important; }
-.c-vacation { background:rgba(176,95,89,0.45) !important; border-left:3px solid #B05F59 !important; }
-.c-reserved { background:rgba(102,130,147,0.30) !important; border-left:3px solid #668293 !important; }
+.c-vacation { background:rgba(163,84,76,0.45) !important; border-left:3px solid #A3544C !important; }
+.c-reserved { background:rgba(90,118,134,0.30) !important; border-left:3px solid #5A7686 !important; }
 .c-custom { background:rgba(var(--accent-rgb),0.30) !important; border-left:3px solid var(--accent) !important; }
-.c-aftercare { background:rgba(113,130,105,0.20) !important; border-left:3px solid #718269 !important; }
+.c-aftercare { background:rgba(100,117,96,0.20) !important; border-left:3px solid #647560 !important; }
 .drag-select { background:rgba(var(--accent-rgb),0.4) !important; border:1px solid var(--accent) !important; }
-.drag-over-cell { background:rgba(111,143,165,0.22) !important; outline:2px solid #6F8FA5 !important; outline-offset:-2px; }
-.search-hl { outline:2px solid #B17A42 !important; outline-offset:-2px; background:rgba(177,122,66,0.18) !important; }
-.search-hl-cur { outline:2px solid #B17A42 !important; outline-offset:-2px; background:rgba(177,122,66,0.45) !important; z-index:2; }
+.drag-over-cell { background:rgba(95,128,160,0.22) !important; outline:2px solid #5F80A0 !important; outline-offset:-2px; }
+.search-hl { outline:2px solid #A66E38 !important; outline-offset:-2px; background:rgba(166,110,56,0.18) !important; }
+.search-hl-cur { outline:2px solid #A66E38 !important; outline-offset:-2px; background:rgba(166,110,56,0.45) !important; z-index:2; }
 .th-corner { position:sticky; top:0; left:0; z-index:15 !important; background:var(--bg-header); }
 input[type="date"]::-webkit-calendar-picker-indicator {
   background:rgba(167,96,85,0.18); border:1px solid rgba(167,96,85,0.45); border-radius:5px;
@@ -520,6 +520,10 @@ let REST = new Set(DEFAULT_REST);
 const DAYS = ["一", "二", "三", "四", "五", "六", "日"];
 const ALL_DAYS_OV = ["日", "一", "二", "三", "四", "五", "六"];
 const MONTHS = ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"];
+// 英文月份名稱，給月份標題用Cormorant Garamond呈現「July 2026」這種格式
+// (July斜體、2026正常字重)，取代原本純中文的「2026年7月」——這裡只是
+// 呈現格式，底層year/month變數、日期判斷邏輯完全沒有變動
+const MONTH_EN = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const COLORS = [{
   key: "none",
   label: "舊客",
@@ -4018,6 +4022,7 @@ function MainApp({
   });
   const todayWkRef = useRef(null); // 指向個人排班月曆中今日所在週的 W-row
   const [showSlots, setShowSlots] = useState(false);
+  const [showMoreToolbar, setShowMoreToolbar] = useState(false); // 2026-07-28新增：手機工具列「更多」選單開關，純UI狀態
   const [slotDate, setSlotDate] = useState(null);
   const [dialog, setDialog] = useState(null);
   const [form, setForm] = useState({
@@ -4523,6 +4528,34 @@ function MainApp({
     setYear(y);
     setMonth(m);
     setWeekIdx(getFirstValidWeekIdx(y, m));
+  };
+  // 2026-07-28：從原本「當日」按鈕的onClick邏輯原封不動抽出來，供月份導航列的
+  // 新「今天」按鈕使用——邏輯完全沒變，只是從inline onClick搬成具名函式方便共用
+  const jumpToToday = () => {
+    // 跳到今日：切換年月 + 滾到今日時段
+    setYear(today.getFullYear());
+    setMonth(today.getMonth());
+    const wks = showSun === "1" ? getWeeksSun(today.getFullYear(), today.getMonth()) : getWeeksMon(today.getFullYear(), today.getMonth(), false);
+    const idx = wks.findIndex(wk => wk.includes(today.getDate()));
+    setWeekIdx(Math.max(0, idx));
+    setView("month");
+    setTimeout(() => {
+      const h = today.getHours(),
+        mn = today.getMinutes();
+      const tt = h < 22 ? `${String(Math.max(8, h)).padStart(2, "0")}:${mn < 30 ? "00" : "30"}` : "09:00";
+      const container = scrollContainerRef.current;
+      if (!container) return;
+      // 找到今日所在 row
+      const tds = container.querySelectorAll("td[data-cellkey]");
+      const todStr = fmtDate(today.getFullYear(), today.getMonth(), today.getDate());
+      const target = [...tds].find(td => td.dataset.cellkey?.startsWith(todStr + "__" + tt));
+      if (target) {
+        const cRect = container.getBoundingClientRect();
+        const tRect = target.getBoundingClientRect();
+        const delta = tRect.top - cRect.top - cRect.height / 2 + tRect.height / 2;
+        container.scrollTo({ top: container.scrollTop + delta, behavior: "smooth" });
+      }
+    }, 250);
   };
   const openDlg = (day, time) => {
     let tt = time;
@@ -5891,12 +5924,14 @@ function MainApp({
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "sidebar-brand",
-    style: { padding: "16px 14px", display: "flex", alignItems: "center", flexShrink: 0 }
+    style: { padding: "16px 14px", display: "flex", alignItems: "center", flexShrink: 0 },
+    title: "永平預約系統",
+    "aria-label": "永平預約系統"
   }, /*#__PURE__*/React.createElement("div", {
     style: { width: 30, height: 30, borderRadius: 8, background: "var(--accent)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, flexShrink: 0 }
   }, "永"), /*#__PURE__*/React.createElement("div", {
     className: "sidebar-nav-label",
-    style: { fontSize: 14, fontWeight: 700, color: "var(--text-main)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginLeft: 10 }
+    style: { fontFamily: "var(--font-serif-zh)", fontSize: 14, fontWeight: 700, color: "var(--text-main)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginLeft: 10 }
   }, "永平整體保健中心")), [["schedule", "排班", "schedule"], ["overview", "全覽", "grid"], ["pending", "待確認", "clipboard"], ...((isAdmin || canViewCRM) ? [["settings", "更多", "sliders"]] : [])].map(([k, l, iconName]) => /*#__PURE__*/React.createElement("button", {
     key: k,
     className: `sidebar-nav-item${tab === k ? " active" : ""}`,
@@ -5965,7 +6000,8 @@ function MainApp({
   }, /*#__PURE__*/React.createElement("div", {
     className: "store-name-label",
     style: {
-      fontWeight: 800,
+      fontFamily: "var(--font-serif-zh)",
+      fontWeight: 700,
       fontSize: 15,
       color: "var(--text-main)",
       whiteSpace: "nowrap",
@@ -6217,46 +6253,10 @@ function MainApp({
       display: "flex",
       gap: 4,
       padding: "0 8px",
-      alignItems: "center"
+      alignItems: "center",
+      flexWrap: "wrap"
     }
   }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      // 跳到今日：切換年月 + 滾到今日時段
-      setYear(today.getFullYear());
-      setMonth(today.getMonth());
-      const wks = showSun === "1" ? getWeeksSun(today.getFullYear(), today.getMonth()) : getWeeksMon(today.getFullYear(), today.getMonth(), false);
-      const idx = wks.findIndex(wk => wk.includes(today.getDate()));
-      setWeekIdx(Math.max(0, idx));
-      setView("month");
-      setTimeout(() => {
-        const h = today.getHours(),
-          mn = today.getMinutes();
-        const tt = h < 22 ? `${String(Math.max(8, h)).padStart(2, "0")}:${mn < 30 ? "00" : "30"}` : "09:00";
-        const container = scrollContainerRef.current;
-        if (!container) return;
-        // 找到今日所在 row
-        const tds = container.querySelectorAll("td[data-cellkey]");
-        const todStr = fmtDate(today.getFullYear(), today.getMonth(), today.getDate());
-        const target = [...tds].find(td => td.dataset.cellkey?.startsWith(todStr + "__" + tt));
-        if (target) {
-          const cRect = container.getBoundingClientRect();
-          const tRect = target.getBoundingClientRect();
-          const delta = tRect.top - cRect.top - cRect.height / 2 + tRect.height / 2;
-          container.scrollTo({ top: container.scrollTop + delta, behavior: "smooth" });
-        }
-      }, 250);
-    },
-    className: "nb",
-    style: {
-      color: "var(--accent)",
-      border: "none",
-      background: "none",
-      fontWeight: 700,
-      display: "flex",
-      alignItems: "center",
-      gap: 4
-    }
-  }, "當日"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       setShowSlots(true);
       setSlotDate(slotDate === "pick" ? null : "pick");
@@ -6304,7 +6304,27 @@ function MainApp({
       background: "none",
       fontWeight: 700
     }
-  }, "換一個") : null, undoStack.length > 0 ? /*#__PURE__*/React.createElement("button", {
+  }, "換一個") : null, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowMoreToolbar(v => !v),
+    className: "nb",
+    "aria-expanded": showMoreToolbar,
+    style: {
+      color: showMoreToolbar ? "var(--accent)" : "var(--nav-color)",
+      border: "none",
+      background: showMoreToolbar ? "rgba(var(--accent-rgb),0.12)" : "none",
+      fontWeight: 700
+    }
+  }, "更多", showMoreToolbar ? " ▴" : " ▾")), showMoreToolbar && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 4,
+      padding: "6px 8px 2px",
+      alignItems: "center",
+      flexWrap: "wrap",
+      borderTop: "1px solid var(--border)",
+      width: "100%"
+    }
+  }, undoStack.length > 0 ? /*#__PURE__*/React.createElement("button", {
     onClick: executeUndo,
     className: "nb",
     title: `還原：${undoStack[0]?.desc || ""}`,
@@ -6716,9 +6736,17 @@ function MainApp({
       flex: 1,
       textAlign: "center",
       fontWeight: 700,
-      fontSize: FS.b + 2
+      fontSize: FS.b + 2,
+      whiteSpace: "nowrap",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      minWidth: 0,
+      display: "flex",
+      alignItems: "baseline",
+      justifyContent: "center",
+      gap: 6
     }
-  }, master.name, "\u3000", year, "年", month + 1, "月", loading && /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement("span", null, master.name), /*#__PURE__*/React.createElement("span", { style: { fontFamily: "var(--font-serif-en)", fontStyle: "italic" } }, MONTH_EN[month]), /*#__PURE__*/React.createElement("span", { style: { fontFamily: "var(--font-serif-en)" } }, year), loading && /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 9,
       color: "var(--text-dim)",
@@ -6727,7 +6755,11 @@ function MainApp({
   }, "載入中")), /*#__PURE__*/React.createElement("button", {
     onClick: nextM,
     className: "nb"
-  }, "▶")), /*#__PURE__*/React.createElement("div", {
+  }, "▶"), /*#__PURE__*/React.createElement("button", {
+    onClick: jumpToToday,
+    className: "nb",
+    style: { color: "var(--accent)", fontWeight: 700, marginLeft: 4 }
+  }, "今天")), /*#__PURE__*/React.createElement("div", {
     className: "scroll-container",
     ref: scrollContainerRef,
     onTouchStart: e => {
@@ -10482,9 +10514,14 @@ function OverviewMonth({
   }, "◀"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontWeight: 700,
-      fontSize: FS.b + 1
+      fontSize: FS.b + 1,
+      whiteSpace: "nowrap",
+      flexShrink: 0,
+      display: "flex",
+      alignItems: "baseline",
+      gap: 6
     }
-  }, "全覽\u3000", yr, "年", mo + 1, "月", loading && /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement("span", { style: { fontFamily: "var(--font-serif-zh)" } }, "全覽"), /*#__PURE__*/React.createElement("span", { style: { fontFamily: "var(--font-serif-en)", fontStyle: "italic" } }, MONTH_EN[mo]), /*#__PURE__*/React.createElement("span", { style: { fontFamily: "var(--font-serif-en)" } }, yr), loading && /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 9,
       color: "var(--text-dim)",
