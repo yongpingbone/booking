@@ -7225,8 +7225,8 @@ function MainApp({
       if (k === "crm") setCrmKey(p => p + 1);
       if (k === "pending") loadPendingCount();
     }
-  }, /*#__PURE__*/React.createElement(SettingsIcon, { name: iconName, color: tab === k ? "var(--accent-bright)" : "rgba(var(--accent-rgb),0.65)", size: 20 }), /*#__PURE__*/React.createElement("span", {
-    style: { color: tab === k ? "var(--accent-bright)" : "rgba(var(--accent-rgb),0.65)" }
+  }, /*#__PURE__*/React.createElement(SettingsIcon, { name: iconName, color: tab === k ? "var(--text-main)" : "var(--text-muted)", size: 20 }), /*#__PURE__*/React.createElement("span", {
+    style: { color: tab === k ? "var(--text-main)" : "var(--text-muted)", fontWeight: tab === k ? 700 : 400 }
   }, l), k === "pending" && pendingCount > 0 && /*#__PURE__*/React.createElement("span", {
     style: {
       position: "absolute",
