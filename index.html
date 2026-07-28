@@ -83,16 +83,16 @@ body.dark {
 .tab-btn { padding:8px 14px; background:transparent; border:none; border-bottom:2px solid transparent; color:var(--text-muted); font-size:12px; cursor:pointer; white-space:nowrap; }
 .tab-btn.active { border-bottom-color:var(--accent-bright); color:var(--accent-bright); font-weight:700; }
 .c-none { background:transparent !important; }
-.c-new_customer { background:rgba(181,129,69,0.35) !important; border-left:3px solid #B58145 !important; }
+.c-new_customer { background:rgba(177,122,66,0.35) !important; border-left:3px solid #B17A42 !important; }
 .c-cui { background:rgba(176,128,116,0.30) !important; border-left:3px solid #B08074 !important; }
-.c-vacation { background:rgba(167,96,85,0.45) !important; border-left:3px solid #A76055 !important; }
-.c-reserved { background:rgba(113,135,147,0.30) !important; border-left:3px solid #718793 !important; }
+.c-vacation { background:rgba(176,95,89,0.45) !important; border-left:3px solid #B05F59 !important; }
+.c-reserved { background:rgba(102,130,147,0.30) !important; border-left:3px solid #668293 !important; }
 .c-custom { background:rgba(var(--accent-rgb),0.30) !important; border-left:3px solid var(--accent) !important; }
-.c-aftercare { background:rgba(117,134,110,0.20) !important; border-left:3px solid #75866E !important; }
+.c-aftercare { background:rgba(113,130,105,0.20) !important; border-left:3px solid #718269 !important; }
 .drag-select { background:rgba(var(--accent-rgb),0.4) !important; border:1px solid var(--accent) !important; }
-.drag-over-cell { background:rgba(139,157,175,0.22) !important; outline:2px solid #8B9DAF !important; outline-offset:-2px; }
-.search-hl { outline:2px solid #B58145 !important; outline-offset:-2px; background:rgba(181,129,69,0.18) !important; }
-.search-hl-cur { outline:2px solid #B58145 !important; outline-offset:-2px; background:rgba(181,129,69,0.45) !important; z-index:2; }
+.drag-over-cell { background:rgba(111,143,165,0.22) !important; outline:2px solid #6F8FA5 !important; outline-offset:-2px; }
+.search-hl { outline:2px solid #B17A42 !important; outline-offset:-2px; background:rgba(177,122,66,0.18) !important; }
+.search-hl-cur { outline:2px solid #B17A42 !important; outline-offset:-2px; background:rgba(177,122,66,0.45) !important; z-index:2; }
 .th-corner { position:sticky; top:0; left:0; z-index:15 !important; background:var(--bg-header); }
 input[type="date"]::-webkit-calendar-picker-indicator {
   background:rgba(167,96,85,0.18); border:1px solid rgba(167,96,85,0.45); border-radius:5px;
@@ -527,7 +527,7 @@ const COLORS = [{
 }, {
   key: "new_customer",
   label: "新客",
-  text: "#B58145"
+  text: "var(--warning)"
 }, {
   // 2026-07-13新增：脆——用磁紅色(#B08074)，跟現有5種顏色(灰/橙/紅/紫/
   // 青/綠)都不撞色，一眼能跟其他標記分開。Sheet匯入時偵測到客人名字裡
@@ -535,11 +535,11 @@ const COLORS = [{
   // extractCuiMarker)，這裡是給APP自己手動新增/編輯預約時也能選這個標記用。
   key: "cui",
   label: "脆",
-  text: "#B08074"
+  text: "var(--mt-3)"
 }, {
   key: "vacation",
   label: "休假",
-  text: "#A76055"
+  text: "var(--danger)"
 }, {
   key: "custom",
   label: "自訂",
