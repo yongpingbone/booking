@@ -123,6 +123,34 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
 .draggable-card { cursor:grab; touch-action:pan-x pan-y; width:100%; height:100%; display:flex; align-items:center; transition:opacity 0.2s,transform 0.2s; }
 .draggable-card:active { cursor:grabbing; opacity:0.7; }
 .draggable-card[draggable="true"]:hover { opacity:0.85; }
+/* 2026-07-29：排班/全覽預約格客人姓名統一文字系統——水平垂直置中、
+   Noto Sans TC、500字重、統一深灰黑色，取代原本依師傅色/狀態色變化
+   字重700-900的舊樣式。新客星號、待確認等小標記跟姓名視為同一組
+   置中內容(用flex+justifyContent:center達成)，刪除叉號在外層
+   draggable-card用space-between固定在右側，不受這裡影響。 */
+.booking-customer-name {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Noto Sans TC", sans-serif;
+  font-weight: 500;
+  font-style: normal;
+  letter-spacing: 0;
+  line-height: 1.25;
+  color: #302D29;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+.booking-secondary-text {
+  font-family: "IBM Plex Mono", monospace;
+  font-weight: 400;
+  color: #756D65;
+}
 .drag-active { transform:scale(0.97); opacity:0.6; }
 @media(max-width:768px) {
   .tab-btn { padding:10px 10px; font-size:11px; }
@@ -5862,15 +5890,9 @@ function MainApp({
         pointerEvents: dragMode ? "none" : undefined
       }
     }, /*#__PURE__*/React.createElement("span", {
+      className: "booking-customer-name",
       style: {
-        fontSize: FS.n - 1,
-        color: b.color_tag === "new_customer" ? "#B58145" : b.color_tag === "reserved" ? "#718793" : "var(--text-main)",
-        fontWeight: b.color_tag === "new_customer" ? 900 : 700,
-        overflow: "hidden",
-        whiteSpace: "nowrap",
-        textOverflow: "ellipsis",
-        flex: 1,
-        minWidth: 0,
+        fontSize: FS.n,
         opacity: b.status === "cancellation_requested" ? 0.6 : 1
       }
     }, b.status === "cancellation_requested" && /*#__PURE__*/React.createElement("span", {
@@ -5890,7 +5912,8 @@ function MainApp({
     }, "⏳"), b.color_tag === "new_customer" && /*#__PURE__*/React.createElement("span", {
       style: {
         fontSize: FS.s - 1,
-        marginRight: 2
+        marginRight: 2,
+        color: "#A76A43"
       }
     }, "★"), bookingDisplayName(b)), canDelete && /*#__PURE__*/React.createElement("span", {
       onClick: e => {
@@ -11399,13 +11422,9 @@ function OverviewMonth({
             setTimeout(() => el.style.opacity = orig, 600);
           });
         },
+        className: "booking-customer-name",
         style: {
-          fontSize: FS.n - 1,
-          fontWeight: 800,
-          overflow: "hidden",
-          whiteSpace: "nowrap",
-          textOverflow: "ellipsis",
-          color: mt.text,
+          fontSize: FS.n,
           cursor: "grab",
           WebkitUserSelect: "none",
           userSelect: "none",
@@ -11429,7 +11448,7 @@ function OverviewMonth({
         style: {
           fontSize: FS.s - 2,
           marginRight: 1,
-          color: "#B58145"
+          color: "#A76A43"
         }
       }, "★"), bookingDisplayName(b)), isVac && /*#__PURE__*/React.createElement("div", {
         style: {
