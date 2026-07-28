@@ -4083,6 +4083,8 @@ function MainApp({
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchMatchIdx, setSearchMatchIdx] = useState(0);
   const [findingSlot, setFindingSlot] = useState(false);
+  const [slotCandidates, setSlotCandidates] = useState([]); // [{masterId,masterName,date,time}]
+  const [slotCandidateIdx, setSlotCandidateIdx] = useState(0);
   const searchInputRef = useRef(null);
 
   // 註冊彈窗到全域 stack — 左滑時優先關彈窗
@@ -5427,23 +5429,32 @@ function MainApp({
     }, 500);
   };
 
+  // 2026-07-22：空檔查詢原本只查目前畫面上這一位師傅、找到第一筆就停，
+  // 沒有「換一個」的空間。Hanna要求要能切換其他人、其他時段的空檔——
+  // 改成一次查詢全部active師傅(排除editor/涵)，把接下來符合條件的
+  // 時段(最多20筆)依時間先後排成一份候選清單存起來，畫面上顯示第一筆，
+  // 「換一個」按鈕就是往後移到清單下一筆，不用重新查一次資料庫。
   const findNearestOpenSlot = async () => {
-    if (!master) { msg("請先選擇師傅", true); return; }
+    const activeMasters = masters.filter(m => m.role !== "editor" && m.is_active !== false);
+    if (activeMasters.length === 0) { msg("沒有可查詢的師傅", true); return; }
     setFindingSlot(true);
     try {
       const now = getTaipeiNow();
       const todayStr = fmtDate(now.getFullYear(), now.getMonth(), now.getDate());
       const endD = new Date(now); endD.setDate(endD.getDate() + 60);
       const endStr = fmtDate(endD.getFullYear(), endD.getMonth(), endD.getDate());
-      const { data, error } = await sb.from("bookings").select("date,start_time")
-        .eq("master_id", master.id).gte("date", todayStr).lte("date", endStr)
+      const masterIds = activeMasters.map(m => m.id);
+      const { data, error } = await sb.from("bookings").select("master_id,date,start_time")
+        .in("master_id", masterIds).gte("date", todayStr).lte("date", endStr)
         .neq("status", "cancelled").neq("status", "no_show").neq("color_tag", "vacation");
       if (error) { msg("查詢失敗，請再試", true); setFindingSlot(false); return; }
-      const taken = new Set((data || []).map(b => `${b.date}_${(b.start_time || "").slice(0, 5)}`));
-      const restSet = restOf(master.id);
+      const taken = new Set((data || []).map(b => `${b.master_id}_${b.date}_${(b.start_time || "").slice(0, 5)}`));
+      const restByMaster = {};
+      activeMasters.forEach(m => { restByMaster[m.id] = restOf(m.id); });
       const nowMinutes = now.getHours() * 60 + now.getMinutes();
-      let found = null;
-      for (let off = 0; off <= 60 && !found; off++) {
+      const candidates = [];
+      outer:
+      for (let off = 0; off <= 60; off++) {
         const d = new Date(now); d.setDate(d.getDate() + off);
         const dateStr = fmtDate(d.getFullYear(), d.getMonth(), d.getDate());
         for (const t of TIMES) {
@@ -5451,22 +5462,44 @@ function MainApp({
             const [hh, mm] = t.split(":").map(Number);
             if (hh * 60 + mm <= nowMinutes) continue;
           }
-          if (restSet.has(t)) continue;
-          if (taken.has(`${dateStr}_${t}`)) continue;
-          found = { date: dateStr, time: t };
-          break;
+          for (const m of activeMasters) {
+            if (restByMaster[m.id].has(t)) continue;
+            if (taken.has(`${m.id}_${dateStr}_${t}`)) continue;
+            candidates.push({ masterId: m.id, masterName: m.name, date: dateStr, time: t });
+            if (candidates.length >= 20) break outer;
+          }
         }
       }
       setFindingSlot(false);
-      if (!found) { msg("接下來 60 天內都排滿了，請手動確認", true); return; }
-      const wk = ["日", "一", "二", "三", "四", "五", "六"];
-      const dObj = new Date(found.date + "T00:00:00");
-      msg(`✓ 最近空檔：${found.date}（週${wk[dObj.getDay()]}）${found.time}`);
-      jumpToDate(found.date, found.time);
+      if (candidates.length === 0) { msg("接下來 60 天內都排滿了，請手動確認", true); return; }
+      setSlotCandidates(candidates);
+      setSlotCandidateIdx(0);
+      showSlotCandidate(candidates, 0);
     } catch (e) {
       setFindingSlot(false);
       msg("查詢失敗，請再試", true);
     }
+  };
+  const showSlotCandidate = (candidates, idx) => {
+    const c = candidates[idx];
+    if (!c) return;
+    const switchingMaster = !master || master.id !== c.masterId;
+    if (switchingMaster) {
+      const m = masters.find(x => x.id === c.masterId);
+      if (m) setMaster(m);
+    }
+    const wk = ["日", "一", "二", "三", "四", "五", "六"];
+    const dObj = new Date(c.date + "T00:00:00");
+    msg(`✓ ${c.masterName}　${c.date}（週${wk[dObj.getDay()]}）${c.time}　（${idx + 1}/${candidates.length}）`);
+    // 換師傅時排班表要重新抓那個人的預約資料、重新render，比單純換日期
+    // 多一個非同步步驟，多留一點時間再捲動定位，避免定位到還沒換好的舊畫面。
+    setTimeout(() => jumpToDate(c.date, c.time), switchingMaster ? 400 : 0);
+  };
+  const nextSlotCandidate = () => {
+    if (slotCandidates.length === 0) return;
+    const nextIdx = (slotCandidateIdx + 1) % slotCandidates.length;
+    setSlotCandidateIdx(nextIdx);
+    showSlotCandidate(slotCandidates, nextIdx);
   };
 
   // ── 執行上一步還原 ──
@@ -6197,7 +6230,17 @@ function MainApp({
       background: "none",
       fontWeight: 700
     }
-  }, findingSlot ? "查詢中" : "空檔"), undoStack.length > 0 ? /*#__PURE__*/React.createElement("button", {
+  }, findingSlot ? "查詢中" : "空檔"), slotCandidates.length > 1 ? /*#__PURE__*/React.createElement("button", {
+    onClick: nextSlotCandidate,
+    className: "nb",
+    title: "換一個空檔",
+    style: {
+      color: "var(--accent-bright)",
+      border: "none",
+      background: "none",
+      fontWeight: 700
+    }
+  }, "換一個") : null, undoStack.length > 0 ? /*#__PURE__*/React.createElement("button", {
     onClick: executeUndo,
     className: "nb",
     title: `還原：${undoStack[0]?.desc || ""}`,
