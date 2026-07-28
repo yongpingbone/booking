@@ -5890,8 +5890,14 @@ function MainApp({
       paddingTop: "env(safe-area-inset-top, 0px)", overflowY: "auto"
     }
   }, /*#__PURE__*/React.createElement("div", {
-    style: { padding: "18px 14px", fontSize: 14, fontWeight: 700, color: "var(--text-main)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }
-  }, "永平整體保健中心"), [["schedule", "排班", "schedule"], ["overview", "全覽", "grid"], ["pending", "待確認", "clipboard"], ...((isAdmin || canViewCRM) ? [["settings", "更多", "sliders"]] : [])].map(([k, l, iconName]) => /*#__PURE__*/React.createElement("button", {
+    className: "sidebar-brand",
+    style: { padding: "16px 14px", display: "flex", alignItems: "center", flexShrink: 0 }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: { width: 30, height: 30, borderRadius: 8, background: "var(--accent)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, flexShrink: 0 }
+  }, "永"), /*#__PURE__*/React.createElement("div", {
+    className: "sidebar-nav-label",
+    style: { fontSize: 14, fontWeight: 700, color: "var(--text-main)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginLeft: 10 }
+  }, "永平整體保健中心")), [["schedule", "排班", "schedule"], ["overview", "全覽", "grid"], ["pending", "待確認", "clipboard"], ...((isAdmin || canViewCRM) ? [["settings", "更多", "sliders"]] : [])].map(([k, l, iconName]) => /*#__PURE__*/React.createElement("button", {
     key: k,
     className: `sidebar-nav-item${tab === k ? " active" : ""}`,
     onClick: () => {
@@ -5960,7 +5966,7 @@ function MainApp({
     className: "store-name-label",
     style: {
       fontWeight: 800,
-      fontSize: 13,
+      fontSize: 15,
       color: "var(--text-main)",
       whiteSpace: "nowrap",
       overflow: "hidden",
@@ -5968,7 +5974,7 @@ function MainApp({
       flexShrink: 1,
       minWidth: 0
     }
-  }, "永平整體保健中心"), tab === "schedule" && canViewOthers ? /*#__PURE__*/React.createElement("select", {
+  }, { schedule: "排班", overview: "全覽", pending: "待確認", settings: "更多" }[tab] || "排班"), tab === "schedule" && canViewOthers ? /*#__PURE__*/React.createElement("select", {
     value: master.id,
     onChange: e => setMaster(masters.find(m => m.id === e.target.value)),
     style: {
@@ -7249,8 +7255,8 @@ function MainApp({
       loadPendingCount();
     }
   }))), /*#__PURE__*/React.createElement("div", {
+    className: "bottom-nav-mobile",
     style: {
-      display: "flex",
       justifyContent: "space-around",
       background: "var(--bg-header)",
       borderBottom: "1px solid var(--border2)",
