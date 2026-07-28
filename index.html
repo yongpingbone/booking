@@ -12,7 +12,7 @@
 <link rel="manifest" href="/booking/manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Noto+Serif+TC:wght@500;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <title>永平整體保健中心 預約系統</title>
 <script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/booking/sw.js');</script>
 <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
@@ -24,8 +24,9 @@
   --vv-top:0px; --vv-left:0px;
   --vv-width:100vw; --vv-height:100vh;
   --vv-scale:1;
-  --font-serif-zh:"Noto Serif TC",serif; --font-sans-zh:"Noto Sans TC",sans-serif;
-  --font-serif-en:"Cormorant Garamond",serif; --font-mono:"IBM Plex Mono",monospace;
+  --font-sans:"Inter","Noto Sans TC",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-serif-zh:"Noto Sans TC",sans-serif; --font-sans-zh:"Inter","Noto Sans TC",sans-serif;
+  --font-serif-en:"Inter",sans-serif; --font-mono:"IBM Plex Mono","SFMono-Regular",Consolas,monospace;
 }
 /* Modal backdrop 不再強制跟 visualViewport（鍵盤升起時會跑掉），讓 React 元件自己用 fixed inset:0 */
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -40,7 +41,7 @@ input, select, button, textarea { font-family: inherit; outline: none; }
    工整。這3個class是新增的、原本沒有任何地方在用，套用是額外加
    className，不會動到既有style屬性或元件結構。 */
 .f-serif { font-family: var(--font-serif-zh); }
-.f-serif-en { font-family: var(--font-serif-en); font-style: italic; }
+.f-serif-en { font-family: var(--font-serif-en); }
 .f-mono { font-family: var(--font-mono); }
 body.dark {
   --bg-main:#FCF8F1; --bg-header:#F7F1E7; --bg-sub:#EFE6D9;
@@ -1705,27 +1706,17 @@ function LoginScreen({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      width: 40, height: 1, background: "#B97843", margin: "0 auto 18px"
-    }
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "var(--font-serif-en)", fontStyle: "italic",
-      fontSize: 12, letterSpacing: 2, color: "#74685D", textTransform: "uppercase", marginBottom: 8
-    }
-  }, "Yongping Bodywork"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: "var(--font-serif-zh)",
-      fontSize: 22,
+      fontFamily: "var(--font-sans)",
+      fontSize: 21,
       fontWeight: 700,
-      color: "#3C3027",
-      letterSpacing: 1
+      color: "#242321"
     }
   }, "永平整體保健中心"), /*#__PURE__*/React.createElement("div", {
     style: {
-      fontFamily: "var(--font-serif-en)", fontStyle: "italic",
-      fontSize: 11, letterSpacing: 1.5, color: "#94887D", textTransform: "uppercase", marginTop: 8
+      fontFamily: "var(--font-sans)",
+      fontSize: 13, color: "#66635F", marginTop: 6
     }
-  }, "Staff Booking Management")), lineChecking && /*#__PURE__*/React.createElement("div", {
+  }, "師傅排班管理系統")), lineChecking && /*#__PURE__*/React.createElement("div", {
     style: { textAlign: "center", fontSize: 12, color: "#94887D", marginBottom: 12 }
   }, "檢查 LINE 登入狀態中..."), lineAvailable && !lineChecking && /*#__PURE__*/React.createElement("div", {
     style: { marginBottom: 20 }
@@ -4403,9 +4394,7 @@ function MainApp({
       gap: 10
     }
   }, /*#__PURE__*/React.createElement("div", {
-    style: { width: 32, height: 1, background: "var(--accent)" }
-  }), /*#__PURE__*/React.createElement("div", {
-    style: { fontFamily: "var(--font-serif-zh)", fontSize: 16, color: "var(--text-main)", marginTop: 4 }
+    style: { fontSize: 16, fontWeight: 600, color: "var(--text-main)" }
   }, "永平整體保健中心"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12
@@ -5925,7 +5914,7 @@ function MainApp({
       flexShrink: 1,
       minWidth: 0
     }
-  }, /*#__PURE__*/React.createElement("span", { style: { fontFamily: "var(--font-serif-zh)" } }, "永平整體保健中心")), tab === "schedule" && canViewOthers ? /*#__PURE__*/React.createElement("select", {
+  }, "永平整體保健中心"), tab === "schedule" && canViewOthers ? /*#__PURE__*/React.createElement("select", {
     value: master.id,
     onChange: e => setMaster(masters.find(m => m.id === e.target.value)),
     style: {
