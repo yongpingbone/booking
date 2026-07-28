@@ -48,16 +48,26 @@ body.dark {
   --bg-week:#FFFDF7; --bg-rest:rgba(107,93,76,0.12);
   --border:#DDD2BE; --border2:#C4B49C; --border-week:#C4B49C;
   --text-main:#3D2E22; --text-muted:#6B5D4C; --text-dim:#8C7F6B;
-  --text-time:#9A6845; --text-week:#8C7F6B;
+  --text-time:#825B3E; --text-week:#8C7F6B;
   --input-bg:#FFFDF7; --nav-bg:#F1EAD9; --nav-color:#6B5D4C;
   --mt-0:#5F80A0; --mt-1:#6E8567; --mt-2:#B87A4E; --mt-3:#A96F76; --mt-4:#7D708F;
   --accent:#9A6845; --accent-bright:#805538; --accent-rgb:154,104,69;
   --accent-soft:#EEE1D6; --accent-pale:#F7F0EA;
   --success:#647560; --warning:#A66E38; --danger:#A3544C; --info:#5A7686;
   --overlay:rgba(25,23,20,0.45);
-  --sheet-bg:#FFFDF7; --sheet-header:#F9F5EC; --sheet-grid:#DDD2BE; --sheet-grid-strong:#C4B49C;
-  --sheet-weekend:#F5EEDD; --sheet-today:#F0E0C9; --sheet-rest:#EDE3D0; --sheet-selected:#EEE1D6;
-  --sheet-text:#241B14; --sheet-muted:#6B5D4C;
+  /* 2026-07-28：排班/全覽表格專用色票，Hanna核准方向後的最終精修值——
+     --sheet-*系列直接對齊到這組數值，維持既有引用相容 */
+  --schedule-page-bg:#F2EDE5; --schedule-surface:#FFFDF9; --schedule-surface-soft:#F8F3EB;
+  --schedule-header-bg:#F8F3EC;
+  --schedule-text:#342F2A; --schedule-text-secondary:#70675F; --schedule-text-muted:#988E84;
+  --schedule-time-text:#825B3E;
+  --schedule-grid:#E3DDD4; --schedule-grid-strong:#CEC3B7;
+  --schedule-rest-bg:#EEEAE4; --schedule-weekend-bg:#FBF6F0; --schedule-today-bg:#F4E7DB;
+  --schedule-selected-bg:#E9D2C0;
+  --schedule-accent:#A76A43; --schedule-accent-hover:#915838; --schedule-danger:#A35D55;
+  --sheet-bg:#FFFDF9; --sheet-header:#F8F3EC; --sheet-grid:#E3DDD4; --sheet-grid-strong:#CEC3B7;
+  --sheet-weekend:#FBF6F0; --sheet-today:#F4E7DB; --sheet-rest:#EEEAE4; --sheet-selected:#E9D2C0;
+  --sheet-text:#342F2A; --sheet-muted:#988E84;
 }
 /* 2026-07-22：響應式側邊導覽——手機維持原本底部導覽不變(<768px)，
    平板768px~1199px顯示72px緊湊圖示側欄，桌機1200px+顯示220px完整
@@ -93,7 +103,7 @@ body.dark {
 .drag-over-cell { background:rgba(95,128,160,0.22) !important; outline:2px solid #5F80A0 !important; outline-offset:-2px; }
 .search-hl { outline:2px solid #A66E38 !important; outline-offset:-2px; background:rgba(166,110,56,0.18) !important; }
 .search-hl-cur { outline:2px solid #A66E38 !important; outline-offset:-2px; background:rgba(166,110,56,0.45) !important; z-index:2; }
-.th-corner { position:sticky; top:0; left:0; z-index:15 !important; background:var(--bg-header); }
+.th-corner { position:sticky; top:0; left:0; z-index:15 !important; background:var(--schedule-header-bg); }
 input[type="date"]::-webkit-calendar-picker-indicator {
   background:rgba(167,96,85,0.18); border:1px solid rgba(167,96,85,0.45); border-radius:5px;
   padding:3px 4px; cursor:pointer; width:20px; height:20px;
@@ -107,7 +117,7 @@ body.dark input[type="date"]::-webkit-calendar-picker-indicator {
 body.light input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(0) sepia(1) saturate(4) hue-rotate(295deg) brightness(0.85);
 }
-.scroll-container { flex:1; min-height:0; overflow:auto; width:100%; position:relative; -webkit-overflow-scrolling:touch; will-change:scroll-position; touch-action:pan-x pan-y; scroll-snap-type:x mandatory; scroll-padding-left:42px; padding-bottom:calc(120px + env(safe-area-inset-bottom, 0px)); }
+.scroll-container { flex:1; min-height:0; overflow:auto; width:100%; position:relative; -webkit-overflow-scrolling:touch; will-change:scroll-position; touch-action:pan-x pan-y; scroll-snap-type:x mandatory; scroll-padding-left:42px; padding-bottom:calc(120px + env(safe-area-inset-bottom, 0px)); background:var(--schedule-page-bg); }
 .cv-row { content-visibility: auto; contain-intrinsic-size: 0 28px; }
 .cv-cell { contain: layout style; }
 .draggable-card { cursor:grab; touch-action:pan-x pan-y; width:100%; height:100%; display:flex; align-items:center; transition:opacity 0.2s,transform 0.2s; }
@@ -971,10 +981,10 @@ const thTime = (fs, isTop = false, cwForScale = 52) => {
   const w = timeColWidth(cwForScale);
   return {
     padding: "2px 4px",
-    background: "var(--bg-header)",
-    borderBottom: "1px solid var(--border)",
-    borderRight: "1px solid var(--border)",
-    color: "var(--text-time)",
+    background: "var(--schedule-header-bg)",
+    borderBottom: "1px solid var(--schedule-grid)",
+    borderRight: "1px solid var(--schedule-grid)",
+    color: "var(--schedule-time-text)",
     fontSize: fs,
     fontWeight: 700,
     position: "sticky",
@@ -988,10 +998,10 @@ const thTime = (fs, isTop = false, cwForScale = 52) => {
 };
 const thDay = (fs, cw) => ({
   padding: "3px",
-  background: "var(--bg-header)",
-  borderBottom: "1px solid var(--border)",
-  borderRight: "1px solid var(--border)",
-  color: "var(--text-muted)",
+  background: "var(--schedule-header-bg)",
+  borderBottom: "1px solid var(--schedule-grid)",
+  borderRight: "1px solid var(--schedule-grid)",
+  color: "var(--schedule-text-secondary)",
   fontSize: fs,
   fontWeight: 600,
   textAlign: "center",
@@ -7230,15 +7240,15 @@ function MainApp({
       width: 52,
       height: 52,
       borderRadius: "50%",
-      background: "#A76055",
-      color: "#fff",
+      background: "#A76A43",
+      color: "#FFF9F1",
       border: "none",
       fontSize: 26,
       fontWeight: 400,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      boxShadow: "0 4px 14px rgba(167,96,85,0.45)",
+      boxShadow: "0 6px 18px rgba(72,48,31,0.16)",
       zIndex: 50,
       cursor: "pointer"
     }
@@ -9384,35 +9394,20 @@ function CustomerOwnerPanel({
 // text: CSS variable (dark=亮色 / light=深色，確保黑白畫面皆可辨識)
 // bgH: 師傅名稱列的強調背景; bg: 空格淡底色
 const MASTER_TINTS = [{
-  text: "var(--mt-0)",
-  bg: "rgba(139,157,175,0.05)",
-  bgH: "rgba(139,157,175,0.15)",
-  bgHSolid: "#8B9DAF",
-  textHSolid: "#FFF9F1"
+  base: "#718B9B", pale: "#EAF0F3", text: "#445762",
+  bg: "rgba(113,139,155,0.05)", bgH: "rgba(113,139,155,0.15)"
 }, {
-  text: "var(--mt-1)",
-  bg: "rgba(124,144,131,0.05)",
-  bgH: "rgba(124,144,131,0.15)",
-  bgHSolid: "#7C9083",
-  textHSolid: "#FFF9F1"
+  base: "#7E9277", pale: "#EDF2EA", text: "#495845",
+  bg: "rgba(126,146,119,0.05)", bgH: "rgba(126,146,119,0.15)"
 }, {
-  text: "var(--mt-2)",
-  bg: "rgba(181,129,69,0.05)",
-  bgH: "rgba(181,129,69,0.15)",
-  bgHSolid: "#B97843",
-  textHSolid: "#FFF9F1"
+  base: "#B98258", pale: "#F7ECE3", text: "#684933",
+  bg: "rgba(185,130,88,0.05)", bgH: "rgba(185,130,88,0.15)"
 }, {
-  text: "var(--mt-3)",
-  bg: "rgba(155,124,148,0.05)",
-  bgH: "rgba(155,124,148,0.15)",
-  bgHSolid: "#9B7C94",
-  textHSolid: "#FFF9F1"
+  base: "#AA777C", pale: "#F5E9EA", text: "#65464A",
+  bg: "rgba(170,119,124,0.05)", bgH: "rgba(170,119,124,0.15)"
 }, {
-  text: "var(--mt-4)",
-  bg: "rgba(176,128,116,0.05)",
-  bgH: "rgba(176,128,116,0.15)",
-  bgHSolid: "#B08074",
-  textHSolid: "#FFF9F1"
+  base: "#8E8198", pale: "#F0ECF2", text: "#554D5B",
+  bg: "rgba(142,129,152,0.05)", bgH: "rgba(142,129,152,0.15)"
 }];
 function OverviewMonth({
   masters,
@@ -10449,10 +10444,10 @@ function OverviewMonth({
   };
   const TT = {
     padding: "2px 4px",
-    background: "var(--bg-header)",
-    borderBottom: "1px solid var(--border)",
-    borderRight: "1px solid var(--border)",
-    color: "var(--text-time)",
+    background: "var(--schedule-header-bg)",
+    borderBottom: "1px solid var(--schedule-grid)",
+    borderRight: "1px solid var(--schedule-grid)",
+    color: "var(--schedule-time-text)",
     fontSize: FS.t,
     fontWeight: 700,
     position: "sticky",
@@ -11168,10 +11163,10 @@ function OverviewMonth({
       top: 0,
       height: 24,
       padding: "2px 4px",
-      background: "var(--bg-header)",
-      borderBottom: "1px solid var(--border)",
-      borderRight: "1px solid var(--border)",
-      color: l === "日" ? "#A76055" : "var(--text-muted)",
+      background: "var(--schedule-header-bg)",
+      borderBottom: "1px solid var(--schedule-grid)",
+      borderRight: "1px solid var(--schedule-grid)",
+      color: l === "日" ? "#A76055" : "var(--schedule-text-secondary)",
       fontSize: FS.t,
       fontWeight: 800,
       textAlign: "center",
@@ -11196,18 +11191,21 @@ function OverviewMonth({
         top: 24,
         height: 22,
         padding: "2px 1px",
-        background: mt.bgHSolid,
-        borderBottom: "1px solid var(--border)",
-        borderRight: j === sel.length - 1 ? "2px solid var(--border2)" : "1px solid var(--border)",
-        color: mt.textHSolid,
+        background: mt.pale,
+        borderTop: `2px solid ${mt.base}`,
+        borderBottom: "1px solid var(--schedule-grid)",
+        borderRight: j === sel.length - 1 ? "2px solid var(--schedule-grid-strong)" : "1px solid var(--schedule-grid)",
+        color: mt.text,
         fontSize: FS.s - 1,
-        fontWeight: 800,
+        fontWeight: 700,
         textAlign: "center",
         zIndex: 6,
         overflow: "hidden",
         whiteSpace: "nowrap"
       }
-    }, m.name);
+    }, /*#__PURE__*/React.createElement("span", {
+      style: { display: "inline-block", width: 5, height: 5, borderRadius: "50%", background: mt.base, marginRight: 4, verticalAlign: "middle" }
+    }), m.name);
   })))), /*#__PURE__*/React.createElement("tbody", null, wks.map((wk, wi) => {
     const ovWeekHasToday = wk.some(d => d === today.getDate() && mo === today.getMonth() && yr === today.getFullYear());
     return /*#__PURE__*/React.createElement(React.Fragment, {
@@ -11267,11 +11265,20 @@ function OverviewMonth({
       const canAdd = !b && d && !isVac;
       const co = COLORS.find(c => c.key === (b?.color_tag || "none")) || COLORS[0];
       const mt = MASTER_TINTS[j % MASTER_TINTS.length];
-      const emptyBg = isVac ? "rgba(167,96,85,0.45)" : isR ? "rgba(148,136,125,0.12)" : mt.bg;
+      // 2026-07-28：空白格統一用schedule-surface(不分師傅)；一般預約(色標是
+      // none，也就是沒有特殊狀態的舊客)才用師傅pale淡底+左側細線識別，這樣
+      // 才能「優雅融入畫面」而不是整欄塗色。休假/新客/店休等既有狀態色一律
+      // 優先於師傅色，靠c-*系列class(background:!important)蓋過這裡的
+      // inline style，沒有動到既有的狀態優先順序邏輯。
+      const isPlainBooking = b && b.color_tag === "none" && !b.is_aftercare;
+      const emptyBg = isVac ? "var(--schedule-danger)" : isR ? "var(--schedule-rest-bg)" : "var(--schedule-surface)";
+      const cellStyle = isPlainBooking
+        ? { background: mt.pale, borderLeft: `2px solid ${mt.base}` }
+        : {};
       return /*#__PURE__*/React.createElement("td", {
         key: `${i}-${j}`,
         "data-ovcellkey": cellKey,
-        className: b ? (b.is_aftercare ? "c-aftercare" : `c-${b.color_tag}`) : ovDragCells.has(cellKey) ? "drag-select" : "",
+        className: b ? (b.is_aftercare ? "c-aftercare" : isPlainBooking ? "" : `c-${b.color_tag}`) : ovDragCells.has(cellKey) ? "drag-select" : "",
         draggable: false,
         onMouseDown: e => !b && cellKey && onOvCellMouseDown(cellKey, e),
         onMouseEnter: () => !b && onOvCellMouseEnter(cellKey),
@@ -11344,12 +11351,13 @@ function OverviewMonth({
         },
         style: {
           padding: "1px 2px",
-          borderBottom: "1px solid var(--border)",
-          borderRight: j === sel.length - 1 ? "2px solid var(--border2)" : "1px solid var(--border)",
+          borderBottom: "1px solid var(--schedule-grid)",
+          borderRight: j === sel.length - 1 ? "2px solid var(--schedule-grid-strong)" : "1px solid var(--schedule-grid)",
+          borderLeft: cellStyle.borderLeft,
           height: orh,
           verticalAlign: "middle",
           overflow: "hidden",
-          background: b && b.status === "awaiting_customer" ? "rgba(181,129,69,0.22)" : b ? undefined : emptyBg,
+          background: b && b.status === "awaiting_customer" ? "rgba(181,129,69,0.22)" : isPlainBooking ? cellStyle.background : b ? undefined : emptyBg,
           outline: b && b.status === "awaiting_customer" ? "2px solid #B58145" : undefined,
           outlineOffset: b && b.status === "awaiting_customer" ? -2 : 0,
           cursor: canAdd || b ? "pointer" : "default",
