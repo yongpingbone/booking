@@ -4400,13 +4400,13 @@ function MainApp({
       background: "var(--bg-main)",
       color: "var(--text-dim)",
       flexDirection: "column",
-      gap: 12
+      gap: 10
     }
   }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 24
-    }
-  }, "🦴"), /*#__PURE__*/React.createElement("div", null, "永平整體保健中心"), /*#__PURE__*/React.createElement("div", {
+    style: { width: 32, height: 1, background: "var(--accent)" }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: { fontFamily: "var(--font-serif-zh)", fontSize: 16, color: "var(--text-main)", marginTop: 4 }
+  }, "永平整體保健中心"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12
     }
@@ -5925,7 +5925,7 @@ function MainApp({
       flexShrink: 1,
       minWidth: 0
     }
-  }, "🦴 永平整體保健中心"), tab === "schedule" && canViewOthers ? /*#__PURE__*/React.createElement("select", {
+  }, /*#__PURE__*/React.createElement("span", { style: { fontFamily: "var(--font-serif-zh)" } }, "永平整體保健中心")), tab === "schedule" && canViewOthers ? /*#__PURE__*/React.createElement("select", {
     value: master.id,
     onChange: e => setMaster(masters.find(m => m.id === e.target.value)),
     style: {
@@ -5983,7 +5983,7 @@ function MainApp({
       flexShrink: 0,
       padding: 0
     }
-  }, "🔔"), tab === "schedule" && /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement(SettingsIcon, { name: "bell", color: "var(--nav-color)", size: 14 })), tab === "schedule" && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowDisplaySettings(v => !v),
     title: "顯示設定（字體、欄寬、列高）",
     "aria-label": "顯示設定",
@@ -6023,7 +6023,7 @@ function MainApp({
       flexShrink: 0,
       padding: 0
     }
-  }, "⚡"), /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement(SettingsIcon, { name: "spark", color: "#7C9083", size: 14 })), /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 12,
       color: "var(--text-muted)",
@@ -16209,6 +16209,10 @@ function SettingsIcon({ name, color, size }) {
     plus: [
       /*#__PURE__*/React.createElement("line", { key: "a", x1: 12, y1: 4, x2: 12, y2: 20 }),
       /*#__PURE__*/React.createElement("line", { key: "b", x1: 4, y1: 12, x2: 20, y2: 12 })
+    ],
+    bell: [
+      /*#__PURE__*/React.createElement("path", { key: "a", d: "M6 8a6 6 0 0 1 12 0c0 5.5 2 7.5 2 7.5H4S6 13.5 6 8z" }),
+      /*#__PURE__*/React.createElement("path", { key: "b", d: "M10 19.5a2 2 0 0 0 4 0" })
     ]
   };
   return /*#__PURE__*/React.createElement("svg", common, ...(paths[name] || paths.check));
