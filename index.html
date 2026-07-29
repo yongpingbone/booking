@@ -275,6 +275,7 @@ window.applyAccentTheme = function(key) {
 const {
   useState,
   useEffect,
+  useLayoutEffect,
   useCallback,
   useRef,
   useMemo
@@ -4538,6 +4539,21 @@ function MainApp({
     };
   }, [loadBk]);
 
+  // 2026-07-29：確保排班頁初次進入/切換師傅時，水平捲動位置明確歸零。
+  // 這裡不改變垂直「跳轉到今日」的行為，只單獨處理水平方向，避免不明
+  // 原因的非零scrollLeft，讓表格視覺上看起來像被縮小置中(左側被捲出
+  // 視野、右側留白)——這是Hanna反饋「桌機排班表被嚴重縮小並置中」
+  // 的實際根因，不是table本身的寬度或margin問題。用多個時間點重試，
+  // 因為單一setTimeout(0)量測到會被某個更晚的瀏覽器原生行為蓋回去。
+  useEffect(() => {
+    if (tab !== "schedule") return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const tids = [0, 50, 150, 300, 500].map(delay => setTimeout(() => {
+      if (container.scrollLeft !== 0) container.scrollLeft = 0;
+    }, delay));
+    return () => tids.forEach(clearTimeout);
+  }, [tab, master?.id]);
   // 自動跳轉到今日：切換到排班 tab、切換視圖、或載入當月時觸發
   useEffect(() => {
     if (tab !== "schedule") return;
@@ -7002,7 +7018,7 @@ function MainApp({
       borderSpacing: 0,
       tableLayout: "fixed",
       width: `${timeColWidth(cw) + ACTIVE_DAYS.length * cw}px`,
-      margin: isMobile ? undefined : "0 auto"
+      margin: 0
     }
   }, /*#__PURE__*/React.createElement("colgroup", null, /*#__PURE__*/React.createElement("col", {
     style: {
@@ -9532,6 +9548,24 @@ function OverviewMonth({
   const ocw = ovColW || 75;
   const orh = ovRowH || 22;
   const today = getTaipeiNow();
+  // 2026-07-29：星期表頭的實際渲染高度會受zoom/padding/border疊加影響，
+  // 不是CSS宣告的24px那麼單純(實測過會是30.6px這種不整齊的數字)——改用
+  // ref+useLayoutEffect動態量測真實高度，師傅表頭的sticky top直接用這個
+  // 量到的值，而不是繼續假設一個寫死的固定數字，才能真正做到「星期／
+  // 日期完整可見、師傅姓名完整可見、不互相重疊」。
+  const weekdayHeaderRef = useRef(null);
+  const [dayHeaderHeight, setDayHeaderHeight] = useState(24);
+  useLayoutEffect(() => {
+    const measure = () => {
+      if (weekdayHeaderRef.current) {
+        const h = weekdayHeaderRef.current.getBoundingClientRect().height;
+        if (h > 0 && Math.abs(h - dayHeaderHeight) > 0.5) setDayHeaderHeight(h);
+      }
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  });
   const [yr, setYr] = useState(today.getFullYear());
   const [mo, setMo] = useState(today.getMonth());
   const [bks, setBks] = useState({});
@@ -11265,6 +11299,7 @@ function OverviewMonth({
     }
   }, "時間"), ALL_DAYS_OV.map((l, i) => /*#__PURE__*/React.createElement("th", {
     key: i,
+    ref: i === 0 ? weekdayHeaderRef : undefined,
     colSpan: sel.length,
     style: {
       position: "sticky",
@@ -11285,7 +11320,7 @@ function OverviewMonth({
     className: "th-corner",
     style: {
       ...TT,
-      top: 24,
+      top: dayHeaderHeight,
       zIndex: 60,
       fontSize: "var(--schedule-font-master)",
       height: 22
@@ -11296,7 +11331,7 @@ function OverviewMonth({
       key: `${i}-${j}`,
       style: {
         position: "sticky",
-        top: 24,
+        top: dayHeaderHeight,
         height: 22,
         padding: "2px 1px",
         background: mt.pale,
