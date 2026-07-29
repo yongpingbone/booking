@@ -150,15 +150,18 @@ body.dark {
 input[type="date"]::-webkit-calendar-picker-indicator {
   background:rgba(167,96,85,0.18); border:1px solid rgba(167,96,85,0.45); border-radius:5px;
   padding:3px 4px; cursor:pointer; width:20px; height:20px;
+  opacity: 0.7;
+  filter: sepia(0.35) saturate(0.65);
 }
 input[type="date"]::-webkit-calendar-picker-indicator:hover {
   background:rgba(167,96,85,0.35);
+  opacity: 1;
 }
 body.dark input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(0.85) sepia(1) saturate(4) hue-rotate(295deg) brightness(1.1);
+  filter: sepia(0.35) saturate(0.65) invert(0.82) brightness(1.15);
 }
 body.light input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(0) sepia(1) saturate(4) hue-rotate(295deg) brightness(0.85);
+  filter: sepia(0.35) saturate(0.65);
 }
 .scroll-container { flex:1; min-height:0; overflow:auto; width:100%; position:relative; -webkit-overflow-scrolling:touch; will-change:scroll-position; touch-action:pan-x pan-y; scroll-snap-type:x mandatory; scroll-padding-left:42px; padding-bottom:calc(120px + env(safe-area-inset-bottom, 0px)); background:var(--schedule-page-bg); }
 .cv-row { content-visibility: auto; contain-intrinsic-size: 0 28px; }
@@ -260,7 +263,7 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
 }
 /* 2026-07-29：個人排班空檔資訊區，取代原本綠灰色、像除錯文字的大字設計 */
 .availability-summary {
-  width: min(100%, 680px);
+  width: min(100%, 820px);
   padding: 18px 16px 20px;
   text-align: left;
   border-bottom: 1px solid var(--border);
@@ -300,9 +303,10 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
   margin-left: 2px;
 }
 .availability-times {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(72px, 1fr));
+  gap: 7px;
+  margin-top: 12px;
 }
 .availability-time-chip {
   font-family: "IBM Plex Mono", monospace;
@@ -313,6 +317,10 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
   border-radius: 3px;
   padding: 4px 9px;
   cursor: pointer;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .availability-time-chip:hover {
   border-color: #A76A43;
@@ -364,8 +372,6 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
 .schedule-tool-actions .nb {
   background: none !important;
   border: none !important;
-  font-weight: 400 !important;
-  color: #8C7F6B;
 }
 .schedule-tool-actions .nb:hover:not(:disabled) {
   background: rgba(167,122,67,0.08) !important;
@@ -375,6 +381,10 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
   opacity: 0.55;
 }
 @media(max-width:768px) {
+  .schedule-command-bar {
+    flex-wrap: wrap;
+    height: auto;
+  }
   .schedule-tool-actions {
     border-top: 1px solid var(--border);
     width: 100%;
@@ -402,13 +412,31 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
   width: min(100%, 680px);
 }
 .schedule-slots-panel {
-  width: min(100%, 680px);
+  width: min(100%, 820px);
 }
 .drag-active { transform:scale(0.97); opacity:0.6; }
 @media(max-width:768px) {
   .tab-btn { padding:10px 10px; font-size:11px; }
   .nb { padding:6px 10px; font-size:12px; min-height:32px; }
   input, select { font-size:16px !important; }
+  .availability-summary {
+    width: 100%;
+    padding: 18px 16px;
+  }
+  .availability-times {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .availability-time-chip {
+    min-width: 0;
+    min-height: 38px;
+    padding: 6px 4px;
+    font-size: 12px;
+  }
+  .schedule-slots-panel {
+    width: 100%;
+  }
 }
 .store-name-label{max-width:96px}
 @media(min-width:769px) {
@@ -6681,10 +6709,10 @@ function MainApp({
     disabled: true,
     title: "目前沒有可還原的操作",
     style: {
-      color: "var(--text-dim)",
+      color: "var(--text-muted)",
       border: "none",
       background: "none",
-      opacity: 0.5,
+      opacity: 0.45,
       cursor: "not-allowed",
       fontSize: 12
     }
@@ -6701,9 +6729,10 @@ function MainApp({
     className: "nb",
     title: showSun === "1" ? "點一下隱藏週日欄位" : "點一下顯示週日欄位",
     style: {
-      color: showSun === "1" ? "var(--accent)" : "var(--nav-color)",
+      color: showSun === "1" ? "var(--accent)" : "var(--text-main)",
       border: "none",
-      background: showSun === "1" ? "rgba(var(--accent-rgb),0.12)" : "none"
+      background: showSun === "1" ? "rgba(var(--accent-rgb),0.12)" : "none",
+      fontWeight: 500
     }
   }, showSun === "1" ? "隱藏週日" : "週日"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
@@ -6713,10 +6742,10 @@ function MainApp({
     },
     className: "nb",
     style: {
-      color: dragMode ? "#A76055" : "var(--nav-color)",
+      color: dragMode ? "#A76055" : "var(--text-main)",
       border: "none",
       background: dragMode ? "rgba(167,96,85,0.12)" : "none",
-      fontWeight: dragMode ? 700 : 400
+      fontWeight: dragMode ? 700 : 500
     }
   }, dragMode ? "退出" : "休假"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
@@ -6725,10 +6754,10 @@ function MainApp({
     },
     className: "nb",
     style: {
-      color: moveMode ? "var(--accent)" : "var(--nav-color)",
+      color: moveMode ? "var(--accent)" : "var(--text-main)",
       border: "none",
       background: moveMode ? "rgba(var(--accent-rgb),0.12)" : "none",
-      fontWeight: moveMode ? 700 : 400
+      fontWeight: moveMode ? 700 : 500
     }
   }, moveMode ? "退出" : "移動"))), showSearch && /*#__PURE__*/React.createElement("div", {
     className: "schedule-search-panel",
