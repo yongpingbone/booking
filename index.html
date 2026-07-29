@@ -260,8 +260,10 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
 }
 /* 2026-07-29：個人排班空檔資訊區，取代原本綠灰色、像除錯文字的大字設計 */
 .availability-summary {
-  padding: 10px 14px 12px;
+  width: min(100%, 680px);
+  padding: 18px 16px 20px;
   text-align: left;
+  border-bottom: 1px solid var(--border);
 }
 .availability-eyebrow {
   font-family: "Cormorant Garamond", serif;
@@ -336,6 +338,71 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
 .availability-secondary-action:disabled {
   opacity: 0.5;
   cursor: default;
+}
+/* 2026-07-29：排班工具列桌機單行排列。mode-actions(選日/搜尋/空檔/更多)
+   靠左，tool-actions(還原/週日/休假/移動)桌機版常駐靠右，跟mode-actions
+   用justify-content:space-between自然分開，不需要額外的flex-grow設定。 */
+.schedule-command-bar {
+  justify-content: space-between;
+  min-height: 44px;
+}
+.schedule-mode-actions .nb {
+  background: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 10px 10px !important;
+  min-height: 44px;
+  font-family: "Noto Sans TC", sans-serif;
+  font-size: 13px;
+  position: relative;
+  box-sizing: border-box;
+}
+.schedule-mode-actions .nb.schedule-mode-active {
+  border-bottom: 2px solid #A76A43 !important;
+  color: #3D2E22 !important;
+}
+.schedule-tool-actions .nb {
+  background: none !important;
+  border: none !important;
+  font-weight: 400 !important;
+  color: #8C7F6B;
+}
+.schedule-tool-actions .nb:hover:not(:disabled) {
+  background: rgba(167,122,67,0.08) !important;
+  border-radius: 5px;
+}
+.schedule-tool-actions .nb:disabled {
+  opacity: 0.55;
+}
+@media(max-width:768px) {
+  .schedule-tool-actions {
+    border-top: 1px solid var(--border);
+    width: 100%;
+    padding: 6px 8px 2px;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .schedule-tool-actions button {
+    min-height: 44px;
+    justify-content: center;
+  }
+  .schedule-mode-actions {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
+    flex-wrap: nowrap !important;
+  }
+  .schedule-mode-actions button {
+    min-height: 44px;
+    justify-content: center;
+  }
+}
+.schedule-search-panel > div {
+  width: min(100%, 680px);
+}
+.schedule-slots-panel {
+  width: min(100%, 680px);
 }
 .drag-active { transform:scale(0.97); opacity:0.6; }
 @media(max-width:768px) {
@@ -6516,6 +6583,7 @@ function MainApp({
       lineHeight: 1.4
     }
   }, "💡 排班表格上用雙指縮放也能調整這兩個數值"))), tab === "schedule" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "schedule-command-bar",
     style: {
       display: "flex",
       background: "var(--bg-header)",
@@ -6526,6 +6594,7 @@ function MainApp({
       padding: "6px 8px"
     }
   }, /*#__PURE__*/React.createElement("div", {
+    className: "schedule-mode-actions",
     style: {
       display: "flex",
       gap: 4,
@@ -6539,7 +6608,7 @@ function MainApp({
       setShowSlots(true);
       setSlotDate(slotDate === "pick" ? null : "pick");
     },
-    className: "nb",
+    className: showSlots && slotDate === "pick" ? "nb schedule-mode-active" : "nb",
     style: {
       color: showSlots && slotDate === "pick" ? "var(--accent)" : "var(--nav-color)",
       border: "none",
@@ -6558,7 +6627,7 @@ function MainApp({
       setSearchQ("");
       setSearchResults([]);
     },
-    className: "nb",
+    className: showSearch ? "nb schedule-mode-active" : "nb",
     style: {
       color: showSearch ? "var(--accent)" : "var(--nav-color)",
       border: "none",
@@ -6570,7 +6639,7 @@ function MainApp({
       setShowSlots(true);
       setSlotDate(null);
     },
-    className: "nb",
+    className: showSlots && (!slotDate || slotDate === null) ? "nb schedule-mode-active" : "nb",
     title: "今日空檔",
     style: {
       color: showSlots && (!slotDate || slotDate === null) ? "var(--accent)" : "var(--nav-color)",
@@ -6588,15 +6657,13 @@ function MainApp({
       background: showMoreToolbar ? "rgba(var(--accent-rgb),0.12)" : "none",
       fontWeight: 700
     }
-  }, "更多", showMoreToolbar ? " ▴" : " ▾")), showMoreToolbar && /*#__PURE__*/React.createElement("div", {
+  }, "更多", showMoreToolbar ? " ▴" : " ▾")), (isMobile ? showMoreToolbar : true) && /*#__PURE__*/React.createElement("div", {
+    className: "schedule-tool-actions",
     style: {
       display: "flex",
       gap: 4,
-      padding: "6px 8px 2px",
       alignItems: "center",
-      flexWrap: "wrap",
-      borderTop: "1px solid var(--border)",
-      width: "100%"
+      flexWrap: "wrap"
     }
   }, undoStack.length > 0 ? /*#__PURE__*/React.createElement("button", {
     onClick: executeUndo,
@@ -6664,6 +6731,7 @@ function MainApp({
       fontWeight: moveMode ? 700 : 400
     }
   }, moveMode ? "退出" : "移動"))), showSearch && /*#__PURE__*/React.createElement("div", {
+    className: "schedule-search-panel",
     style: {
       background: "var(--bg-header)",
       borderBottom: "1px solid var(--border)",
@@ -6787,6 +6855,7 @@ function MainApp({
       padding: "8px 0"
     }
   }, "找不到相關預約")), showSlots && /*#__PURE__*/React.createElement("div", {
+    className: "schedule-slots-panel",
     style: {
       background: "var(--bg-header)",
       borderBottom: "1px solid var(--border)",
@@ -6794,6 +6863,7 @@ function MainApp({
       flexShrink: 0
     }
   }, slotDate === "pick" && /*#__PURE__*/React.createElement("div", {
+    className: "schedule-date-panel",
     style: {
       marginBottom: 6,
       display: "flex",
