@@ -258,6 +258,64 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
   color: #A09589;
   font-weight: 400;
 }
+/* 2026-07-29：個人排班空檔資訊區，取代原本綠灰色、像除錯文字的大字設計 */
+.availability-summary {
+  padding: 10px 14px 12px;
+  text-align: left;
+}
+.availability-eyebrow {
+  font-family: "Cormorant Garamond", serif;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: #8C7F6B;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.availability-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+  font-family: "Noto Sans TC", sans-serif;
+  font-size: 13px;
+  color: #6B5D4C;
+}
+.availability-master {
+  font-family: "Noto Serif TC", serif;
+  font-size: 19px;
+  font-weight: 600;
+  color: #3D2E22;
+}
+.availability-divider {
+  color: #C4B49C;
+}
+.availability-count {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 17px;
+  font-weight: 500;
+  color: #A76A43;
+  margin-left: 2px;
+}
+.availability-times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.availability-time-chip {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  color: #4B443E;
+  background: #FFFDF9;
+  border: 1px solid #E3DDD4;
+  border-radius: 3px;
+  padding: 4px 9px;
+  cursor: pointer;
+}
+.availability-time-chip:hover {
+  border-color: #A76A43;
+  color: #A76A43;
+}
 .drag-active { transform:scale(0.97); opacity:0.6; }
 @media(max-width:768px) {
   .tab-btn { padding:10px 10px; font-size:11px; }
@@ -4565,6 +4623,12 @@ function MainApp({
     };
   }, [loadBk]);
 
+  // 2026-07-29：切換師傅時，立即清除舊的空檔候選結果——避免使用者切換
+  // 到新師傅後，畫面上還殘留著上一位師傅的空檔候選清單(slotCandidates)。
+  useEffect(() => {
+    setSlotCandidates([]);
+    setSlotCandidateIdx(0);
+  }, [master?.id]);
   // 2026-07-29：確保排班頁初次進入/切換師傅時，水平捲動位置明確歸零。
   // 這裡不改變垂直「跳轉到今日」的行為，只單獨處理水平方向，避免不明
   // 原因的非零scrollLeft，讓表格視覺上看起來像被縮小置中(左側被捲出
@@ -5700,8 +5764,13 @@ function MainApp({
   // 時段(最多20筆)依時間先後排成一份候選清單存起來，畫面上顯示第一筆，
   // 「換一個」按鈕就是往後移到清單下一筆，不用重新查一次資料庫。
   const findNearestOpenSlot = async () => {
-    const activeMasters = masters.filter(m => m.role !== "editor" && m.is_active !== false);
-    if (activeMasters.length === 0) { msg("沒有可查詢的師傅", true); return; }
+    // 2026-07-29：個人排班的空檔查詢，只能讀取目前選中的這一位師傅
+    // (master)，不能像原本那樣遍歷masters這個全部師傅陣列——原本的
+    // 邏輯不只會把別的師傅的空檔一起當作候選，甚至因為showSlotCandidate
+    // 裡的switchingMaster判斷，還會在候選剛好是別的師傅時，自動把
+    // 使用者目前選中的師傅切換掉。這裡直接鎖定只查master.id這一位。
+    if (!master) { msg("尚未選擇師傅", true); return; }
+    const activeMasters = [master];
     setFindingSlot(true);
     try {
       const now = getTaipeiNow();
@@ -5736,7 +5805,7 @@ function MainApp({
         }
       }
       setFindingSlot(false);
-      if (candidates.length === 0) { msg("接下來 60 天內都排滿了，請手動確認", true); return; }
+      if (candidates.length === 0) { msg(`${master.name} 接下來 60 天內都排滿了，請手動確認`, true); return; }
       setSlotCandidates(candidates);
       setSlotCandidateIdx(0);
       showSlotCandidate(candidates, 0);
@@ -6777,34 +6846,14 @@ function MainApp({
         cursor: "pointer"
       }
     }, t))));
-  })(), (!slotDate || slotDate === null) && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: FS.s,
-      color: "#75866E",
-      marginBottom: 4
-    }
-  }, master.name, " 今日空檔 ", todaySlots.length, " 格"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      flexWrap: "wrap",
-      gap: 4
-    }
-  }, todaySlots.map(t => /*#__PURE__*/React.createElement("button", {
+  })(), (!slotDate || slotDate === null) && /*#__PURE__*/React.createElement("div", {className: "availability-summary"}, /*#__PURE__*/React.createElement("div", {className: "availability-eyebrow"}, "Today's Availability"), todaySlots.length > 0 ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {className: "availability-title"}, /*#__PURE__*/React.createElement("span", {className: "availability-master"}, master.name), /*#__PURE__*/React.createElement("span", {className: "availability-divider"}, "｜"), /*#__PURE__*/React.createElement("span", null, "今日空檔"), /*#__PURE__*/React.createElement("span", {className: "availability-count"}, todaySlots.length, " 格")), /*#__PURE__*/React.createElement("div", {className: "availability-times"}, todaySlots.map(t => /*#__PURE__*/React.createElement("button", {
     key: t,
+    className: "availability-time-chip",
     onClick: () => {
       openDlg(today.getDate(), t);
       setShowSlots(false);
-    },
-    style: {
-      padding: "2px 7px",
-      background: "#75866E15",
-      border: "1px solid #75866E40",
-      color: "#75866E",
-      borderRadius: 4,
-      fontSize: 10,
-      cursor: "pointer"
     }
-  }, t))))), dragMode && /*#__PURE__*/React.createElement("div", {
+  }, t)))) : /*#__PURE__*/React.createElement("div", {className: "availability-title"}, /*#__PURE__*/React.createElement("span", {className: "availability-master"}, master.name), /*#__PURE__*/React.createElement("span", {className: "availability-divider"}, "｜"), /*#__PURE__*/React.createElement("span", null, "今日暫無空檔")))), dragMode && /*#__PURE__*/React.createElement("div", {
     style: {
       background: "rgba(167,96,85,0.12)",
       borderBottom: "1px solid #A76055",
