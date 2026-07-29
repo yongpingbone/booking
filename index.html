@@ -232,6 +232,32 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
   font-size: 12px;
   color: #4B443E;
 }
+/* 2026-07-29：排班/全覽的每日／週計人數統計，統一用同一個元件+樣式，
+   不再因為count===0走另一條完全不同的render分支(那條分支之前沿用
+   FS.s這個依賴欄寬動態縮放的舊字級，導致0顯示得特別大、跟其他數字
+   不一致)。0人時顯示"—"，用次要灰褐色，字級/line-height/display
+   完全不因數值而改變。 */
+.daily-count-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  color: #625A52;
+  text-align: center;
+}
+.daily-count-cell .dcc-new {
+  margin-top: 2px;
+  color: #A76A43;
+}
+.daily-count-cell.is-empty {
+  color: #A09589;
+  font-weight: 400;
+}
 .drag-active { transform:scale(0.97); opacity:0.6; }
 @media(max-width:768px) {
   .tab-btn { padding:10px 10px; font-size:11px; }
@@ -7223,24 +7249,11 @@ function MainApp({
           minWidth: cw,
           maxWidth: cw
         }
-      }, d && t > 0 ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: "var(--schedule-font-summary)",
-          color: "var(--text-time)",
-          fontWeight: 700
-        }
-      }, t), n > 0 && /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: "var(--schedule-font-summary)",
-          color: "#B58145",
-          fontWeight: 700
-        }
-      }, "★", n)) : d ? /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: FS.s,
-          color: "var(--text-dim)"
-        }
-      }, "0") : "");
+      }, d && /*#__PURE__*/React.createElement("div", {
+        className: `daily-count-cell${t > 0 ? "" : " is-empty"}`
+      }, t > 0 ? t : "—", n > 0 && /*#__PURE__*/React.createElement("span", {
+        className: "dcc-new"
+      }, "★", n)));
     })));
   }), view === "week" && /*#__PURE__*/React.createElement("tr", {
     style: {
@@ -11597,24 +11610,11 @@ function OverviewMonth({
           borderRight: j === sel.length - 1 ? "2px solid var(--border2)" : "1px solid var(--border)",
           background: mt.bg
         }
-      }, d && t > 0 ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: FS.s,
-          color: mt.text,
-          fontWeight: 800
-        }
-      }, t), n > 0 && /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: FS.s - 1,
-          color: "#B58145",
-          fontWeight: 900
-        }
-      }, "★", n)) : d ? /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: FS.s,
-          color: "var(--text-dim)"
-        }
-      }, "0") : "");
+      }, d && /*#__PURE__*/React.createElement("div", {
+        className: `daily-count-cell${t > 0 ? "" : " is-empty"}`
+      }, t > 0 ? t : "—", n > 0 && /*#__PURE__*/React.createElement("span", {
+        className: "dcc-new"
+      }, "★", n)));
     }))), /*#__PURE__*/React.createElement("tr", {
       style: {
         background: "var(--bg-sub)"
@@ -11650,17 +11650,10 @@ function OverviewMonth({
           background: mt.bgH
         }
       }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: "var(--schedule-font-summary)",
-          color: mt.text,
-          fontWeight: 700
-        }
-      }, t || "—"), n > 0 && /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: "var(--schedule-font-summary)",
-          color: "#B58145"
-        }
-      }, "新", n));
+        className: `daily-count-cell${t > 0 ? "" : " is-empty"}`
+      }, t > 0 ? t : "—", n > 0 && /*#__PURE__*/React.createElement("span", {
+        className: "dcc-new"
+      }, "★", n)));
     }))));
   })))), ovCellHistory && /*#__PURE__*/React.createElement("div", {
     "data-modal-backdrop": "true",
