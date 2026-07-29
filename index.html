@@ -4876,7 +4876,11 @@ function MainApp({
       }
       msg(`✅ 成功建立 ${_inserted.length} 筆${_skipDates.size > 0 ? `（跳過 ${_skipDates.size} 筆衝突）` : ""}`);
       loadBk();
-      if (onBookingAdded) onBookingAdded();
+      // 2026-07-29：onBookingAdded在排班頁(MainApp)作用域裡從未被宣告過，
+      // 直接呼叫會拋出ReferenceError導致後續setDialog(null)等收尾動作
+      // 執行不到(Modal卡住不會自動關閉)——這是從系統最初建立就存在的既有
+      // bug(git log -S查證過)，這裡拿掉這個無效引用，loadBk()這個真正
+      // 重要的重新整理邏輯，在同一段程式碼裡本來就有呼叫，不受影響。
       if (typeof setCrmKey === "function") setCrmKey(p => p + 1);
       setDialog(null);
       return;
@@ -5040,7 +5044,11 @@ function MainApp({
       }
       msg(rows.length > 1 ? "已成功建立多筆拆單預約！" : "預約成功！");
       loadBk();
-      if (onBookingAdded) onBookingAdded();
+      // 2026-07-29：onBookingAdded在排班頁(MainApp)作用域裡從未被宣告過，
+      // 直接呼叫會拋出ReferenceError導致後續setDialog(null)等收尾動作
+      // 執行不到(Modal卡住不會自動關閉)——這是從系統最初建立就存在的既有
+      // bug(git log -S查證過)，這裡拿掉這個無效引用，loadBk()這個真正
+      // 重要的重新整理邏輯，在同一段程式碼裡本來就有呼叫，不受影響。
       setCrmKey(p => p + 1);
       if (isContinuous) setForm(f => ({
         ...f,
@@ -5110,7 +5118,11 @@ function MainApp({
       msg("已刪除");
     }
     loadBk();
-    if (onBookingAdded) onBookingAdded();
+    // 2026-07-29：onBookingAdded在排班頁(MainApp)作用域裡從未被宣告過，
+    // 直接呼叫會拋出ReferenceError導致後續setDialog(null)等收尾動作
+    // 執行不到(Modal卡住不會自動關閉)——這是從系統最初建立就存在的既有
+    // bug(git log -S查證過)，這裡拿掉這個無效引用，loadBk()這個真正
+    // 重要的重新整理邏輯，在同一段程式碼裡本來就有呼叫，不受影響。
   };
   const copyBk = async () => {
     if (!cpMode || !cpTarget.date || !cpTarget.time || saving) return;
