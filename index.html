@@ -891,9 +891,8 @@ function bookingDisplayName(b) {
 }
 // 2026-07-29：排班/全覽表格「預約格」專用的顯示文字——售後只用背景色
 // 標記，格內不顯示「售後」字樣；有客人姓名就顯示姓名，沒有就空白。
-// 刻意不去改bookingDisplayName本身，因為那個函式還被客戶歸屬面板、
-// 長按複製姓名等其他既有功能使用，這次任務明確限定在「預約格」，
-// 不擴大範圍去動其他地方的顯示邏輯。
+// 這次任務(售後/自訂允許空白姓名)後，全站所有原本呼叫bookingDisplayName
+// 的地方都已經改成呼叫這個函式，統一售後/自訂的顯示規則。
 function cellDisplayName(b) {
   if (!b) return "";
   if (b.is_aftercare) {
@@ -901,6 +900,19 @@ function cellDisplayName(b) {
     return raw ? displayName(b.customer_name) : "";
   }
   return bookingDisplayName(b);
+}
+// 給「清單類」情境專用(搜尋結果／客戶歸屬面板／放鳥記錄)——這些是持續
+// 顯示的清單，如果姓名空白直接留白，會讓整列看起來像沒有內容、不知道
+// 這筆記錄是誰。但直接顯示「售後」「自訂」這幾個字又會被誤認為姓名。
+// 折衷方案：姓名空白時，用日期+時間這種明確不會被誤認為姓名的資訊
+// 當作可辨識文字，讓使用者知道「這是哪一筆」，但不會誤以為那是客人的名字。
+function listItemDisplayName(b) {
+  if (!b) return "";
+  const name = cellDisplayName(b);
+  if (name) return name;
+  const d = b.date || "";
+  const t = (b.start_time || "").slice(0, 5);
+  return d && t ? `${d} ${t}` : "（未命名）";
 }
 function getWeeksMon(y, m, showSun) {
   const dim = new Date(y, m + 1, 0).getDate();
@@ -5934,7 +5946,7 @@ function MainApp({
         if (dragMode) return; // 休假模式不攔截 touch
         handleTouchStart(e, b);
         // 長按600ms複製姓名
-        const name = bookingDisplayName(b);
+        const name = cellDisplayName(b);
         const cpTimer = setTimeout(() => {
           navigator.clipboard.writeText(name).then(() => {
             const el = e.currentTarget;
@@ -5954,7 +5966,7 @@ function MainApp({
       },
       onContextMenu: e => {
         e.preventDefault();
-        const name = bookingDisplayName(b);
+        const name = cellDisplayName(b);
         navigator.clipboard.writeText(name).then(() => {
           const el = e.currentTarget;
           const orig = el.style.opacity;
@@ -6596,7 +6608,7 @@ function MainApp({
       fontWeight: 700,
       color: "var(--text-main)"
     }
-  }, bookingDisplayName(b)), /*#__PURE__*/React.createElement("div", {
+  }, listItemDisplayName(b)), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 11,
       color: "var(--text-muted)",
@@ -9414,7 +9426,7 @@ function CustomerOwnerPanel({
     }
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: nameStyle
-  }, bookingDisplayName(b), b.color_tag === "new_customer" && /*#__PURE__*/React.createElement("span", {
+  }, listItemDisplayName(b), b.color_tag === "new_customer" && /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 10,
       color: "#B58145",
@@ -9455,7 +9467,7 @@ function CustomerOwnerPanel({
     }
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: nameStyle
-  }, bookingDisplayName(b), b.color_tag === "new_customer" && /*#__PURE__*/React.createElement("span", {
+  }, listItemDisplayName(b), b.color_tag === "new_customer" && /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 10,
       color: "#B58145",
@@ -10941,7 +10953,7 @@ function OverviewMonth({
       fontWeight: 700,
       color: "var(--text-main)"
     }
-  }, bookingDisplayName(b)), /*#__PURE__*/React.createElement("div", {
+  }, listItemDisplayName(b)), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 11,
       color: "var(--text-muted)",
@@ -11478,7 +11490,7 @@ function OverviewMonth({
         },
         onTouchStart: e => {
           ovHandleTouchStart(e, b);
-          const name = bookingDisplayName(b);
+          const name = cellDisplayName(b);
           const cpTimer = setTimeout(() => {
             navigator.clipboard.writeText(name).then(() => {
               const el = e.currentTarget;
@@ -11498,7 +11510,7 @@ function OverviewMonth({
         },
         onContextMenu: e => {
           e.preventDefault();
-          const name = bookingDisplayName(b);
+          const name = cellDisplayName(b);
           navigator.clipboard.writeText(name).then(() => {
             const el = e.currentTarget;
             const orig = el.style.opacity;
@@ -15480,7 +15492,7 @@ function CRMModule({
       marginBottom: 2,
       color: "#A76055"
     }
-  }, bookingDisplayName(b), " ", /*#__PURE__*/React.createElement("span", {
+  }, listItemDisplayName(b), " ", /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 10,
       background: "rgba(167,96,85,0.15)",
