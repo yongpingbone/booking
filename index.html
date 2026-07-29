@@ -68,6 +68,17 @@ body.dark {
   --sheet-bg:#FFFDF9; --sheet-header:#F8F3EC; --sheet-grid:#E3DDD4; --sheet-grid-strong:#CEC3B7;
   --sheet-weekend:#FBF6F0; --sheet-today:#F4E7DB; --sheet-rest:#EEEAE4; --sheet-selected:#E9D2C0;
   --sheet-text:#342F2A; --sheet-muted:#988E84;
+  /* 2026-07-29：排班/全覽共用字級變數。排班頁桌機字級原本用deskBase這個
+     依賴欄寬(cw)動態計算的公式，但排班桌機欄寬有「自動填滿可用寬度」的
+     既有機制(viewport越寬、欄寬跟字級都會自動跟著放大)，全覽的欄寬(ocw)
+     沒有這個機制、且欄寬本身不能修改——如果字級繼續綁在各自的欄寬上，
+     兩頁不可能在所有viewport下都保持一致。這裡數值取cw=85(程式碼裡的
+     設計預設欄寬，不受自動填滿影響的穩定基準)下，排班頁實際的computed
+     style為準，讓這幾項文字完全脫離欄寬動態計算，兩頁直接共用固定值。 */
+  --schedule-font-time: 11px;
+  --schedule-font-weekday: 11px;
+  --schedule-font-master: 14px;
+  --schedule-font-summary: 10px;
 }
 /* 2026-07-22：響應式側邊導覽——手機維持原本底部導覽不變(<768px)，
    平板768px~1199px顯示72px緊湊圖示側欄，桌機1200px+顯示220px完整
@@ -135,7 +146,7 @@ body.dark {
 .drag-over-cell { background:rgba(95,128,160,0.22) !important; outline:2px solid #5F80A0 !important; outline-offset:-2px; }
 .search-hl { outline:2px solid #A66E38 !important; outline-offset:-2px; background:rgba(166,110,56,0.18) !important; }
 .search-hl-cur { outline:2px solid #A66E38 !important; outline-offset:-2px; background:rgba(166,110,56,0.45) !important; z-index:2; }
-.th-corner { position:sticky; top:0; left:0; z-index:15 !important; background:var(--schedule-header-bg); }
+.th-corner { position:sticky; top:0; left:0; z-index:60 !important; background:var(--schedule-header-bg); }
 input[type="date"]::-webkit-calendar-picker-indicator {
   background:rgba(167,96,85,0.18); border:1px solid rgba(167,96,85,0.45); border-radius:5px;
   padding:3px 4px; cursor:pointer; width:20px; height:20px;
@@ -201,6 +212,25 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
   display: block;
   font-family: "IBM Plex Mono", monospace;
   font-weight: 400;
+}
+/* 2026-07-29：排班/全覽底部統計列，改成緊湊次要資訊列，不再搶過排班表本身 */
+.schedule-summary-bar {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  font-family: "Noto Sans TC", sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: #756D65;
+  background: #FFFDF9;
+  border-top: 1px solid #E3DDD4;
+}
+.schedule-summary-bar .summary-value {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  color: #4B443E;
 }
 .drag-active { transform:scale(0.97); opacity:0.6; }
 @media(max-width:768px) {
@@ -1089,12 +1119,12 @@ const thTime = (fs, isTop = false, cwForScale = 52) => {
     borderBottom: "1px solid var(--schedule-grid)",
     borderRight: "1px solid var(--schedule-grid)",
     color: "var(--schedule-time-text)",
-    fontSize: fs,
+    fontSize: "var(--schedule-font-time)",
     fontWeight: 700,
     position: "sticky",
     left: 0,
     top: isTop ? 0 : undefined,
-    zIndex: isTop ? 15 : 10,
+    zIndex: isTop ? 55 : 35,
     minWidth: w,
     width: w,
     textAlign: "center"
@@ -1106,12 +1136,12 @@ const thDay = (fs, cw) => ({
   borderBottom: "1px solid var(--schedule-grid)",
   borderRight: "1px solid var(--schedule-grid)",
   color: "var(--schedule-text-secondary)",
-  fontSize: fs,
+  fontSize: "var(--schedule-font-weekday)",
   fontWeight: 600,
   textAlign: "center",
   position: "sticky",
   top: 0,
-  zIndex: 9,
+  zIndex: 40,
   width: cw,
   minWidth: cw,
   maxWidth: cw,
@@ -6028,16 +6058,7 @@ function MainApp({
         margin: "-4px -3px -4px 0",
         flexShrink: 0
       }
-    }, "✕")), isVac && b && /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: FS.s,
-        fontWeight: 700,
-        textAlign: "center",
-        color: dragMode && removeVacCells.has(cellKey) ? "#B58145" : "#A76055",
-        textDecoration: dragMode && removeVacCells.has(cellKey) ? "line-through" : "none",
-        pointerEvents: "none"
-      }
-    }, dragMode && removeVacCells.has(cellKey) ? "取消" : "休"));
+    }, "✕")));
   };
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "sidebar-nav",
@@ -7188,15 +7209,15 @@ function MainApp({
         }
       }, d && t > 0 ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
         style: {
-          fontSize: FS.s,
+          fontSize: "var(--schedule-font-summary)",
           color: "var(--text-time)",
           fontWeight: 700
         }
       }, t), n > 0 && /*#__PURE__*/React.createElement("div", {
         style: {
-          fontSize: FS.s - 1,
+          fontSize: "var(--schedule-font-summary)",
           color: "#B58145",
-          fontWeight: 900
+          fontWeight: 700
         }
       }, "★", n)) : d ? /*#__PURE__*/React.createElement("div", {
         style: {
@@ -7281,41 +7302,10 @@ function MainApp({
       cursor: "pointer"
     }
   }, "✕ 清除")), /*#__PURE__*/React.createElement("div", {
+    className: "schedule-summary-bar",
+    style: { flexShrink: 0 }
+  }, /*#__PURE__*/React.createElement("span", null, year, "/", month + 1), /*#__PURE__*/React.createElement("span", null, "共\u00A0", /*#__PURE__*/React.createElement("span", { className: "summary-value" }, mT), "\u00A0人"), /*#__PURE__*/React.createElement("span", { style: { color: "#A76A43" } }, "新客\u00A0", /*#__PURE__*/React.createElement("span", { className: "summary-value", style: { color: "#A76A43" } }, mN)), /*#__PURE__*/React.createElement("span", { style: { color: "#65765F" } }, "回頭\u00A0", /*#__PURE__*/React.createElement("span", { className: "summary-value", style: { color: "#65765F" } }, mT - mN)), dragMode && /*#__PURE__*/React.createElement("span", {
     style: {
-      background: "var(--bg-header)",
-      borderTop: "1px solid var(--border2)",
-      padding: "5px 14px",
-      display: "flex",
-      gap: 14,
-      flexShrink: 0,
-      alignItems: "center"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: FS.s,
-      color: "var(--text-dim)"
-    }
-  }, "📊 ", year, "/", month + 1), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: FS.b,
-      color: "#8B9DAF",
-      fontWeight: 700
-    }
-  }, "共 ", mT, " 人"), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: FS.b,
-      color: "#B58145",
-      fontWeight: 700
-    }
-  }, "新客 ", mN), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: FS.b,
-      color: "#75866E",
-      fontWeight: 700
-    }
-  }, "回頭 ", mT - mN), dragMode && /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: FS.s,
       color: "#A76055",
       marginLeft: "auto",
       cursor: "pointer"
@@ -11270,7 +11260,7 @@ function OverviewMonth({
     style: {
       ...TT,
       top: 0,
-      zIndex: 10,
+      zIndex: 60,
       height: 24
     }
   }, "時間"), ALL_DAYS_OV.map((l, i) => /*#__PURE__*/React.createElement("th", {
@@ -11285,10 +11275,10 @@ function OverviewMonth({
       borderBottom: "1px solid var(--schedule-grid)",
       borderRight: "1px solid var(--schedule-grid)",
       color: l === "日" ? "#A76055" : "var(--schedule-text-secondary)",
-      fontSize: FS.t,
+      fontSize: "var(--schedule-font-weekday)",
       fontWeight: 800,
       textAlign: "center",
-      zIndex: 7,
+      zIndex: 40,
       scrollSnapAlign: "start"
     }
   }, "週", l))), /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", {
@@ -11296,8 +11286,8 @@ function OverviewMonth({
     style: {
       ...TT,
       top: 24,
-      zIndex: 10,
-      fontSize: FS.s,
+      zIndex: 60,
+      fontSize: "var(--schedule-font-master)",
       height: 22
     }
   }, "師傅"), ALL_DAYS_OV.map((_, i) => sel.map((m, j) => {
@@ -11314,10 +11304,10 @@ function OverviewMonth({
         borderBottom: "1px solid var(--schedule-grid)",
         borderRight: j === sel.length - 1 ? "2px solid var(--schedule-grid-strong)" : "1px solid var(--schedule-grid)",
         color: mt.text,
-        fontSize: FS.s - 1,
+        fontSize: "var(--schedule-font-master)",
         fontWeight: 700,
         textAlign: "center",
-        zIndex: 6,
+        zIndex: 45,
         overflow: "hidden",
         whiteSpace: "nowrap"
       }
@@ -11477,8 +11467,8 @@ function OverviewMonth({
           verticalAlign: "middle",
           overflow: "hidden",
           background: b && b.status === "awaiting_customer" ? "rgba(181,129,69,0.22)" : isPlainBooking ? cellStyle.background : b ? undefined : emptyBg,
-          outline: b && b.status === "awaiting_customer" ? "2px solid #B58145" : undefined,
-          outlineOffset: b && b.status === "awaiting_customer" ? -2 : 0,
+          outline: ovDragMode && isVac && ovRemoveVacCells.has(cellKey) ? "2px dashed #B58145" : b && b.status === "awaiting_customer" ? "2px solid #B58145" : "none",
+          outlineOffset: ovDragMode && isVac && ovRemoveVacCells.has(cellKey) || b && b.status === "awaiting_customer" ? -2 : 0,
           cursor: canAdd || b ? "pointer" : "default",
           touchAction: ovIsDragActive ? "none" : "auto"
         }
@@ -11545,15 +11535,7 @@ function OverviewMonth({
           marginRight: 1,
           color: "#A76A43"
         }
-      }, "★"), cellDisplayName(b)), isVac && /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: FS.s,
-          fontWeight: 800,
-          textAlign: "center",
-          color: ovDragMode && ovRemoveVacCells.has(cellKey) ? "#B58145" : "#fff",
-          textDecoration: ovDragMode && ovRemoveVacCells.has(cellKey) ? "line-through" : "none"
-        }
-      }, ovDragMode && ovRemoveVacCells.has(cellKey) ? "取消" : "休"));
+      }, "★"), cellDisplayName(b)));
     })))), /*#__PURE__*/React.createElement("tr", {
       style: {
         background: "var(--bg-week)"
@@ -11634,13 +11616,13 @@ function OverviewMonth({
         }
       }, /*#__PURE__*/React.createElement("div", {
         style: {
-          fontSize: FS.s - 1,
+          fontSize: "var(--schedule-font-summary)",
           color: mt.text,
-          fontWeight: 800
+          fontWeight: 700
         }
       }, t || "—"), n > 0 && /*#__PURE__*/React.createElement("div", {
         style: {
-          fontSize: FS.s - 2,
+          fontSize: "var(--schedule-font-summary)",
           color: "#B58145"
         }
       }, "新", n));
