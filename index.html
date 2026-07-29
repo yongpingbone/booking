@@ -6514,6 +6514,7 @@ function MainApp({
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: () => {
+      setShowSearch(false);
       setShowSlots(true);
       setSlotDate(slotDate === "pick" ? null : "pick");
     },
@@ -6527,7 +6528,10 @@ function MainApp({
     onClick: () => {
       setShowSearch(s => {
         const next = !s;
-        if (next) setTimeout(() => searchInputRef.current?.focus(), 80);
+        if (next) {
+          setShowSlots(false);
+          setTimeout(() => searchInputRef.current?.focus(), 80);
+        }
         return next;
       });
       setSearchQ("");
@@ -6540,17 +6544,20 @@ function MainApp({
       background: showSearch ? "rgba(var(--accent-rgb),0.12)" : "none"
     }
   }, "搜尋"), /*#__PURE__*/React.createElement("button", {
-    onClick: findNearestOpenSlot,
-    disabled: findingSlot,
+    onClick: () => {
+      setShowSearch(false);
+      setShowSlots(true);
+      setSlotDate(null);
+    },
     className: "nb",
-    title: "最近空檔",
+    title: "今日空檔",
     style: {
-      color: "var(--accent)",
+      color: showSlots && (!slotDate || slotDate === null) ? "var(--accent)" : "var(--nav-color)",
       border: "none",
-      background: "none",
+      background: showSlots && (!slotDate || slotDate === null) ? "rgba(var(--accent-rgb),0.12)" : "none",
       fontWeight: 700
     }
-  }, findingSlot ? "查詢中" : "空檔"), slotCandidates.length > 1 ? /*#__PURE__*/React.createElement("button", {
+  }, "空檔"), slotCandidates.length > 1 ? /*#__PURE__*/React.createElement("button", {
     onClick: nextSlotCandidate,
     className: "nb",
     title: "換一個空檔",
