@@ -168,10 +168,11 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
   align-items: center;
   justify-content: center;
   font-family: "Noto Sans TC", sans-serif;
+  font-size: clamp(11px, 0.85vw, 13px);
   font-weight: 500;
   font-style: normal;
   letter-spacing: 0;
-  line-height: 1.25;
+  line-height: 1.15;
   color: #302D29;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -5983,7 +5984,6 @@ function MainApp({
     }, /*#__PURE__*/React.createElement("span", {
       className: "booking-customer-name",
       style: {
-        fontSize: FS.n,
         opacity: b.status === "cancellation_requested" ? 0.6 : 1
       }
     }, b.status === "cancellation_requested" && /*#__PURE__*/React.createElement("span", {
@@ -11520,7 +11520,6 @@ function OverviewMonth({
         },
         className: "booking-customer-name",
         style: {
-          fontSize: FS.n,
           cursor: "grab",
           WebkitUserSelect: "none",
           userSelect: "none",
