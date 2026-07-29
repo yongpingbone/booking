@@ -148,13 +148,14 @@ body.dark {
 .search-hl-cur { outline:2px solid #A66E38 !important; outline-offset:-2px; background:rgba(166,110,56,0.45) !important; z-index:2; }
 .th-corner { position:sticky; top:0; left:0; z-index:60 !important; background:var(--schedule-header-bg); }
 input[type="date"]::-webkit-calendar-picker-indicator {
-  background:rgba(167,96,85,0.18); border:1px solid rgba(167,96,85,0.45); border-radius:5px;
-  padding:3px 4px; cursor:pointer; width:20px; height:20px;
-  opacity: 0.7;
+  opacity: 0.55;
+  cursor: pointer;
+  background-color: transparent;
+  border: 0;
+  padding: 2px;
   filter: sepia(0.35) saturate(0.65);
 }
 input[type="date"]::-webkit-calendar-picker-indicator:hover {
-  background:rgba(167,96,85,0.35);
   opacity: 1;
 }
 body.dark input[type="date"]::-webkit-calendar-picker-indicator {
@@ -263,7 +264,7 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
 }
 /* 2026-07-29：個人排班空檔資訊區，取代原本綠灰色、像除錯文字的大字設計 */
 .availability-summary {
-  width: min(100%, 820px);
+  width: min(100%, 960px);
   padding: 18px 16px 20px;
   text-align: left;
   border-bottom: 1px solid var(--border);
@@ -304,7 +305,7 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
 }
 .availability-times {
   display: grid;
-  grid-template-columns: repeat(6, minmax(72px, 1fr));
+  grid-template-columns: repeat(6, minmax(90px, 1fr));
   gap: 7px;
   margin-top: 12px;
 }
@@ -332,9 +333,9 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
   gap: 3px;
   margin-top: 10px;
   font-family: "Noto Sans TC", sans-serif;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
-  color: #8C7F6B;
+  color: var(--text-muted);
   background: none;
   border: none;
   padding: 4px 0;
@@ -388,13 +389,15 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
   .schedule-tool-actions {
     border-top: 1px solid var(--border);
     width: 100%;
-    padding: 6px 8px 2px;
+    padding: 6px 16px 10px;
     display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
+    gap: 4px 8px;
   }
   .schedule-tool-actions button {
-    min-height: 44px;
+    min-height: 42px;
+    padding: 6px 8px;
+    font-size: 14px;
     justify-content: center;
   }
   .schedule-mode-actions {
@@ -412,7 +415,7 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
   width: min(100%, 680px);
 }
 .schedule-slots-panel {
-  width: min(100%, 820px);
+  width: min(100%, 960px);
 }
 .drag-active { transform:scale(0.97); opacity:0.6; }
 @media(max-width:768px) {
@@ -425,14 +428,15 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
   }
   .availability-times {
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 6px;
+    gap: 5px;
     margin-top: 10px;
   }
   .availability-time-chip {
     min-width: 0;
-    min-height: 38px;
-    padding: 6px 4px;
+    min-height: 34px;
+    padding: 4px 3px;
     font-size: 12px;
+    border-radius: 3px;
   }
   .schedule-slots-panel {
     width: 100%;
