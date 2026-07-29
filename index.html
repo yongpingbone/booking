@@ -316,6 +316,27 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
   border-color: #A76A43;
   color: #A76A43;
 }
+.availability-secondary-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 10px;
+  font-family: "Noto Sans TC", sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: #8C7F6B;
+  background: none;
+  border: none;
+  padding: 4px 0;
+  cursor: pointer;
+}
+.availability-secondary-action:hover {
+  color: #A76A43;
+}
+.availability-secondary-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
 .drag-active { transform:scale(0.97); opacity:0.6; }
 @media(max-width:768px) {
   .tab-btn { padding:10px 10px; font-size:11px; }
@@ -6557,17 +6578,7 @@ function MainApp({
       background: showSlots && (!slotDate || slotDate === null) ? "rgba(var(--accent-rgb),0.12)" : "none",
       fontWeight: 700
     }
-  }, "空檔"), slotCandidates.length > 1 ? /*#__PURE__*/React.createElement("button", {
-    onClick: nextSlotCandidate,
-    className: "nb",
-    title: "換一個空檔",
-    style: {
-      color: "var(--accent-bright)",
-      border: "none",
-      background: "none",
-      fontWeight: 700
-    }
-  }, "換一個") : null, /*#__PURE__*/React.createElement("button", {
+  }, "空檔"), /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowMoreToolbar(v => !v),
     className: "nb",
     "aria-expanded": showMoreToolbar,
@@ -6860,7 +6871,15 @@ function MainApp({
       openDlg(today.getDate(), t);
       setShowSlots(false);
     }
-  }, t)))) : /*#__PURE__*/React.createElement("div", {className: "availability-title"}, /*#__PURE__*/React.createElement("span", {className: "availability-master"}, master.name), /*#__PURE__*/React.createElement("span", {className: "availability-divider"}, "｜"), /*#__PURE__*/React.createElement("span", null, "今日暫無空檔")))), dragMode && /*#__PURE__*/React.createElement("div", {
+  }, t)))) : /*#__PURE__*/React.createElement("div", {className: "availability-title"}, /*#__PURE__*/React.createElement("span", {className: "availability-master"}, master.name), /*#__PURE__*/React.createElement("span", {className: "availability-divider"}, "｜"), /*#__PURE__*/React.createElement("span", null, "今日暫無空檔")), /*#__PURE__*/React.createElement("div", {style: {display: "flex", alignItems: "center"}}, /*#__PURE__*/React.createElement("button", {
+    className: "availability-secondary-action",
+    disabled: findingSlot,
+    onClick: findNearestOpenSlot
+  }, findingSlot ? "查詢中…" : "找最近空檔 →"), slotCandidates.length > 1 && /*#__PURE__*/React.createElement("button", {
+    className: "availability-secondary-action",
+    style: { marginLeft: 12 },
+    onClick: nextSlotCandidate
+  }, "下一個空檔 →")))), dragMode && /*#__PURE__*/React.createElement("div", {
     style: {
       background: "rgba(167,96,85,0.12)",
       borderBottom: "1px solid #A76055",
