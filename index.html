@@ -359,17 +359,25 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
     border-radius: 10px !important;
     max-width: 560px !important;
     max-height: 86vh;
-    overflow-y: auto;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
     box-shadow: 0 8px 32px rgba(61,46,34,0.18);
   }
 }
 @media(max-width:768px) {
   .booking-sheet-panel {
     max-height: 92dvh;
-    overflow-y: auto;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
   }
+}
+.booking-sheet-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .booking-sheet-section {
   padding: 20px 0;
@@ -7948,7 +7956,7 @@ function MainApp({
       maxWidth: 480
     },
     onClick: e => e.stopPropagation()
-  }, /*#__PURE__*/React.createElement(BookingSheetSection, { number: "01", title: "日期與時段" }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", { className: "booking-sheet-content" }, /*#__PURE__*/React.createElement(BookingSheetSection, { number: "01", title: "日期與時段" }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       flexWrap: "wrap",
@@ -8535,11 +8543,13 @@ function MainApp({
       color: "var(--text-main)",
       fontSize: 14
     }
-  }))), /*#__PURE__*/React.createElement("div", {
+  })))), /*#__PURE__*/React.createElement("div", {
     className: "booking-sheet-footer",
     style: {
       display: "flex",
-      gap: 8
+      gap: 8,
+      position: "static",
+      flexShrink: 0
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: () => setDialog(null),
