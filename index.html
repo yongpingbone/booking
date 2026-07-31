@@ -348,6 +348,152 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
   opacity: 0.5;
   cursor: default;
 }
+/* 2026-07-30：新增/編輯預約 Bottom Sheet 改版視覺系統。全部採用
+   booking-sheet-前綴，純新增class，不影響任何既有樣式，也不修改
+   任何既有DOM結構或欄位邏輯——只用來包裝既有欄位、插入分組標題。 */
+@media(min-width:769px) {
+  .booking-sheet-backdrop {
+    align-items: center !important;
+  }
+  .booking-sheet-panel {
+    border-radius: 10px !important;
+    max-width: 560px !important;
+    max-height: 86vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(61,46,34,0.18);
+  }
+}
+@media(max-width:768px) {
+  .booking-sheet-panel {
+    max-height: 92dvh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+}
+.booking-sheet-section {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border);
+}
+.booking-sheet-section:last-child {
+  border-bottom: 0;
+}
+.booking-sheet-section-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.booking-sheet-section-number {
+  font-family: "Cormorant Garamond", serif;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+}
+.booking-sheet-section-title {
+  font-family: "Noto Serif TC", serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: #3D2E22;
+}
+.booking-sheet-footer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  background: rgba(251,247,239,0.98);
+  border-top: 1px solid var(--border);
+  z-index: 3;
+}
+.booking-sheet-body {
+  overflow-y: auto;
+  flex: 1;
+}
+.booking-sheet-utility-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+.booking-sheet-utility-row > span,
+.booking-sheet-utility-row > button {
+  font-family: "Noto Sans TC", sans-serif;
+  font-size: 11px;
+  color: var(--accent);
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 4px 0;
+}
+.booking-sheet-label {
+  font-family: "Noto Sans TC", sans-serif;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 5px;
+}
+.booking-sheet-input {
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  background: var(--input-bg);
+  color: var(--text-main);
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-family: "Noto Sans TC", sans-serif;
+  font-size: 14px;
+}
+.booking-sheet-input:focus {
+  outline: none;
+  border-color: #A76A43;
+  box-shadow: 0 0 0 2px rgba(167,106,67,0.15);
+}
+.booking-sheet-input:disabled {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+.booking-sheet-input-mono {
+  font-family: "IBM Plex Mono", monospace;
+}
+.booking-sheet-btn {
+  min-height: 44px;
+  border-radius: 4px;
+  font-family: "Noto Sans TC", sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 8px 16px;
+}
+.booking-sheet-btn-primary {
+  background: #A76A43;
+  color: #FFFDF9;
+  border: none;
+}
+.booking-sheet-btn-primary:disabled {
+  background: var(--border2);
+  color: var(--text-dim);
+  cursor: default;
+}
+.booking-sheet-btn-secondary {
+  background: #FFFDF9;
+  color: #3D2E22;
+  border: 1px solid var(--border2);
+}
+.booking-sheet-btn-danger {
+  background: rgba(167,96,85,0.12);
+  color: #A76055;
+  border: 1px solid rgba(167,96,85,0.35);
+}
+.booking-sheet-btn-ghost {
+  background: transparent;
+}
+@media(max-width:768px) {
+  .booking-sheet-input {
+    font-size: 16px;
+  }
+}
 /* 2026-07-29：排班工具列桌機單行排列。mode-actions(選日/搜尋/空檔/更多)
    靠左，tool-actions(還原/週日/休假/移動)桌機版常駐靠右，跟mode-actions
    用justify-content:space-between自然分開，不需要額外的flex-grow設定。 */
@@ -1142,6 +1288,40 @@ function cellDisplayName(b) {
 // 這筆記錄是誰。但直接顯示「售後」「自訂」這幾個字又會被誤認為姓名。
 // 折衷方案：姓名空白時，用日期+時間這種明確不會被誤認為姓名的資訊
 // 當作可辨識文字，讓使用者知道「這是哪一筆」，但不會誤以為那是客人的名字。
+// 2026-07-30：新增/編輯預約Bottom Sheet改版用的純視覺helper。這4個
+// 函式只負責包裝既有欄位的視覺呈現(分組標題、footer、單行資訊列)，
+// 完全不持有state、不查詢資料、不判斷金額、不儲存預約——所有既有的
+// state/handler/驗證邏輯都維持在原本呼叫端(MainApp/OverviewMonth)
+// 裡，這裡只是純函式包裝，讓排班頁跟全覽頁能共用同一套視覺結構。
+function BookingSheetSection({ number, title, children }) {
+  // 不在這裡用children內容自動判斷要不要渲染——React element內部
+  // 回傳null、陣列包含false/null等情況都可能誤判。是否要顯示整個
+  // 區塊，交由呼叫端用「既有的商業邏輯條件式」在外層判斷
+  // (existingCondition && React.createElement(BookingSheetSection, ...))，
+  // 不在這個純視覺helper裡新增或猜測條件。
+  return /*#__PURE__*/React.createElement("div", { className: "booking-sheet-section" },
+    /*#__PURE__*/React.createElement(BookingSheetSectionTitle, { number, title }),
+    children
+  );
+}
+function BookingSheetSectionTitle({ number, title }) {
+  return /*#__PURE__*/React.createElement("div", { className: "booking-sheet-section-heading" },
+    number ? /*#__PURE__*/React.createElement("span", { className: "booking-sheet-section-number" }, number) : null,
+    /*#__PURE__*/React.createElement("span", { className: "booking-sheet-section-title" }, title)
+  );
+}
+function BookingSheetFooter({ children }) {
+  return /*#__PURE__*/React.createElement("div", { className: "booking-sheet-footer" }, children);
+}
+function BookingSheetMetaRow({ label, value }) {
+  if (value === null || value === undefined || value === "") return null;
+  return /*#__PURE__*/React.createElement("div", {
+    style: { display: "flex", justifyContent: "space-between", gap: 12, padding: "5px 0", fontSize: 13 }
+  },
+    /*#__PURE__*/React.createElement("span", { style: { color: "var(--text-muted)" } }, label),
+    /*#__PURE__*/React.createElement("span", { style: { color: "var(--text-main)", fontFamily: "IBM Plex Mono, monospace", textAlign: "right" } }, value)
+  );
+}
 function listItemDisplayName(b) {
   if (!b) return "";
   const name = cellDisplayName(b);
@@ -7746,6 +7926,7 @@ function MainApp({
     }
   }, "＋ 新增預約")))), dialog && /*#__PURE__*/React.createElement("div", {
     "data-modal-backdrop": "true",
+    className: "booking-sheet-backdrop",
     style: {
       position: "fixed",
       inset: 0,
@@ -7757,6 +7938,7 @@ function MainApp({
     },
     onClick: () => setDialog(null)
   }, /*#__PURE__*/React.createElement("div", {
+    className: "booking-sheet-panel",
     style: {
       background: "var(--bg-header)",
       border: "1px solid var(--border2)",
@@ -7766,7 +7948,7 @@ function MainApp({
       maxWidth: 480
     },
     onClick: e => e.stopPropagation()
-  }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(BookingSheetSection, { number: "01", title: "日期與時段" }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       flexWrap: "wrap",
@@ -7831,7 +8013,8 @@ function MainApp({
   }, masters.filter(m => m.role !== "editor").map(m => /*#__PURE__*/React.createElement("option", {
     key: m.id,
     value: m.id
-  }, m.name, m.role === "admin" ? "(老闆)" : "")))), /*#__PURE__*/React.createElement("div", {
+  }, m.name, m.role === "admin" ? "(老闆)" : ""))))), /*#__PURE__*/React.createElement("div", {
+    className: "booking-sheet-utility-row",
     style: {
       marginBottom: 10,
       textAlign: "right"
@@ -7856,7 +8039,7 @@ function MainApp({
       cursor: "pointer",
       userSelect: "none"
     }
-  }, "🕐 查此格歷史紀錄")), /*#__PURE__*/React.createElement("div", {
+  }, "🕐 查此格歷史紀錄")), /*#__PURE__*/React.createElement(BookingSheetSection, { number: "02", title: "客戶與人數" }, /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 10,
       position: "relative"
@@ -8082,7 +8265,7 @@ function MainApp({
       fontWeight: 700,
       cursor: "pointer"
     }
-  }, n)))), renderServiceTypeSection(), parseInt(form.guests) > 1 && /*#__PURE__*/React.createElement("div", {
+  }, n))))), /*#__PURE__*/React.createElement(BookingSheetSection, { number: "03", title: "服務、金額與用卡" }, renderServiceTypeSection()), /*#__PURE__*/React.createElement(BookingSheetSection, { number: "04", title: "多人、標記與預約設定" }, parseInt(form.guests) > 1 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 10,
       padding: 8,
@@ -8179,7 +8362,7 @@ function MainApp({
     type: "checkbox",
     checked: !!form.isAftercare,
     onChange: e => setForm(f => ({ ...f, isAftercare: e.target.checked }))
-  }), "售後（勾選後不列入客人統計，可跟上面任一標記並存）")), /*#__PURE__*/React.createElement("div", {
+  }), "售後（勾選後不列入客人統計，可跟上面任一標記並存）"))), /*#__PURE__*/React.createElement(BookingSheetSection, { number: "05", title: "重複預約" }, /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 10,
       padding: 10,
@@ -8326,7 +8509,7 @@ function MainApp({
     } catch (e) {
       return "請填寫結束日期/次數";
     }
-  })()))), /*#__PURE__*/React.createElement("div", {
+  })())))), /*#__PURE__*/React.createElement(BookingSheetSection, { number: "06", title: "備註" }, /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 12
     }
@@ -8352,13 +8535,15 @@ function MainApp({
       color: "var(--text-main)",
       fontSize: 14
     }
-  })), /*#__PURE__*/React.createElement("div", {
+  }))), /*#__PURE__*/React.createElement("div", {
+    className: "booking-sheet-footer",
     style: {
       display: "flex",
       gap: 8
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: () => setDialog(null),
+    className: "booking-sheet-btn booking-sheet-btn-secondary",
     style: {
       flex: 1,
       padding: 10,
@@ -8373,6 +8558,7 @@ function MainApp({
   }, "取消"), /*#__PURE__*/React.createElement("button", {
     onClick: () => saveBk(true),
     disabled: !COLOR_NO_INPUT.has(form.color) && !form.isAftercare && !form.input.trim() || saving,
+    className: "booking-sheet-btn booking-sheet-btn-ghost",
     style: {
       flex: 1.5,
       padding: 10,
@@ -8387,6 +8573,7 @@ function MainApp({
   }, "儲存並繼續"), /*#__PURE__*/React.createElement("button", {
     onClick: () => saveBk(false),
     disabled: !COLOR_NO_INPUT.has(form.color) && !form.isAftercare && !form.input.trim() || saving,
+    className: "booking-sheet-btn booking-sheet-btn-primary",
     style: {
       flex: 1.5,
       padding: 10,
