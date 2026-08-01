@@ -497,6 +497,81 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
 .booking-sheet-btn-ghost {
   background: transparent;
 }
+/* 2026-07-31：編輯預約editForm視覺對齊，完全獨立的edit-booking-*
+   前綴，不與booking-sheet-*共用，避免日後修改新增表單時連動影響
+   編輯表單。手機Bottom Sheet貼底，桌機置中Modal(比新增表單更窄
+   更小，不做成大型底部面板)。 */
+.edit-booking-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 200;
+}
+.edit-booking-panel {
+  background: var(--bg-header);
+  border: 1px solid var(--border2);
+  border-radius: 16px 16px 0 0;
+  width: 100%;
+  max-height: 92dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.edit-booking-header {
+  padding: 18px 18px 4px;
+  font-family: "Noto Serif TC", serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-main);
+  flex-shrink: 0;
+}
+.edit-booking-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 18px;
+}
+.edit-booking-section {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+.edit-booking-section:last-of-type {
+  border-bottom: none;
+}
+.edit-booking-label {
+  font-family: "Noto Sans TC", sans-serif;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.edit-booking-footer {
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  padding: 12px 18px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--border);
+  background: var(--bg-header);
+}
+@media(min-width:769px) {
+  .edit-booking-backdrop {
+    align-items: center;
+  }
+  .edit-booking-panel {
+    border-radius: 16px;
+    width: min(92vw, 460px);
+    max-height: 86vh;
+  }
+}
+@media(max-width:768px) {
+  .edit-booking-content input,
+  .edit-booking-content textarea {
+    font-size: 16px;
+  }
+}
 @media(max-width:768px) {
   .booking-sheet-input {
     font-size: 16px;
@@ -9018,34 +9093,22 @@ function MainApp({
     }
   }, "刪除")))), editForm && /*#__PURE__*/React.createElement("div", {
     "data-modal-backdrop": "true",
+    className: "edit-booking-backdrop",
     style: {
       position: "fixed",
       inset: 0,
       background: "rgba(0,0,0,0.85)",
       display: "flex",
-      alignItems: "center",
       justifyContent: "center",
       zIndex: 200
     },
     onClick: () => setEditForm(null)
   }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: "var(--bg-header)",
-      border: "1px solid var(--border2)",
-      borderRadius: 16,
-      padding: 18,
-      width: "92%",
-      maxWidth: 420
-    },
+    className: "edit-booking-panel",
     onClick: e => e.stopPropagation()
   }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontWeight: 700,
-      fontSize: 15,
-      marginBottom: 12,
-      color: "#8B9DAF"
-    }
-  }, "✏️ 編輯預約"), /*#__PURE__*/React.createElement("div", {
+    className: "edit-booking-header"
+  }, "編輯預約"), /*#__PURE__*/React.createElement("div", { className: "edit-booking-content" }, /*#__PURE__*/React.createElement("div", { className: "edit-booking-section" }, /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 10
     }
@@ -9124,7 +9187,7 @@ function MainApp({
       color: "var(--text-main)",
       outline: "none"
     }
-  })), /*#__PURE__*/React.createElement("div", {
+  }))), /*#__PURE__*/React.createElement("div", { className: "edit-booking-section" }, /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 10
     }
@@ -9216,7 +9279,8 @@ function MainApp({
     type: "checkbox",
     checked: !!editForm.isAftercare,
     onChange: e => setEditForm(f => ({ ...f, isAftercare: e.target.checked }))
-  }), "售後（勾選後不列入客人統計，可跟上面任一標記並存）")), /*#__PURE__*/React.createElement("div", {
+  }), "售後（勾選後不列入客人統計，可跟上面任一標記並存）"))), /*#__PURE__*/React.createElement("div", {
+    className: "edit-booking-utility",
     style: {
       marginBottom: 10
     }
@@ -9249,7 +9313,8 @@ function MainApp({
       fontWeight: 700,
       cursor: "pointer"
     }
-  }, "🔁 套用到未來重複")), /*#__PURE__*/React.createElement("div", {
+  }, "🔁 套用到未來重複"))), /*#__PURE__*/React.createElement("div", {
+    className: "edit-booking-footer",
     style: {
       display: "flex",
       gap: 8
