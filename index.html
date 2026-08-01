@@ -183,7 +183,7 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
   align-items: center;
   justify-content: center;
   font-family: "Noto Sans TC", sans-serif;
-  font-size: clamp(11px, 0.85vw, 13px);
+  font-size: var(--schedule-font-time);
   font-weight: 500;
   font-style: normal;
   letter-spacing: 0;
@@ -11787,13 +11787,13 @@ function OverviewMonth({
         top: dayHeaderHeight,
         height: 22,
         padding: "2px 1px",
-        background: mt.pale,
-        borderTop: `2px solid ${mt.base}`,
+        background: "transparent",
+        borderTop: `1px solid ${mt.base}`,
         borderBottom: "1px solid var(--schedule-grid)",
         borderRight: j === sel.length - 1 ? "2px solid var(--schedule-grid-strong)" : "1px solid var(--schedule-grid)",
         color: mt.text,
         fontSize: "var(--schedule-font-master)",
-        fontWeight: 700,
+        fontWeight: 500,
         textAlign: "center",
         zIndex: 45,
         overflow: "hidden",
@@ -12001,6 +12001,8 @@ function OverviewMonth({
           cursor: "grab",
           WebkitUserSelect: "none",
           userSelect: "none",
+          fontSize: FS.t,
+          fontWeight: 500,
           opacity: b.status === "cancellation_requested" ? 0.6 : 1
         }
       }, b.status === "cancellation_requested" && /*#__PURE__*/React.createElement("span", {
