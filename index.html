@@ -1563,6 +1563,17 @@ function presencePageLabel(page) {
   if (page === "more") return "正在使用系統";
   return "在線上";
 }
+// 讀取端相容層:部署過渡期間可能同時存在新版payload({user_id,
+// display_name, page, updated_at})跟舊版payload({masterId, name,
+// activity, at})。這裡只做安全fallback，明確不讀取item.activity
+// (即使它存在、即使它裡面帶有客人姓名)，欄位缺少時一律用安全預設值。
+function normalizePresenceItem(item) {
+  const id = item.user_id || item.masterId || "";
+  const displayName = item.display_name || item.name || "使用者";
+  const allowedPages = ["schedule", "overview", "pending", "more"];
+  const page = allowedPages.includes(item.page) ? item.page : "more";
+  return { id, displayName, page };
+}
 function PresenceBar({
   others,
   onTapPerson
@@ -1575,28 +1586,31 @@ function PresenceBar({
       gap: 4,
       marginRight: 4
     }
-  }, others.slice(0, 6).map(p => /*#__PURE__*/React.createElement("div", {
-    key: p.user_id,
-    onClick: () => onTapPerson && onTapPerson(p),
-    title: `${p.display_name}：${presencePageLabel(p.page)}`,
-    "aria-label": `${p.display_name}：${presencePageLabel(p.page)}`,
-    style: {
-      width: 24,
-      height: 24,
-      borderRadius: "50%",
-      background: presenceColor(p.user_id),
-      color: "#fff",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      fontSize: 11,
-      fontWeight: 800,
-      flexShrink: 0,
-      cursor: "pointer",
-      border: "2px solid var(--bg-header)",
-      boxShadow: "0 0 0 1px var(--border2)"
-    }
-  }, (p.display_name || "?").slice(0, 1))), others.length > 6 && /*#__PURE__*/React.createElement("div", {
+  }, others.slice(0, 6).map(raw => {
+    const p = normalizePresenceItem(raw);
+    return /*#__PURE__*/React.createElement("div", {
+      key: p.id || Math.random(),
+      onClick: () => onTapPerson && onTapPerson(p),
+      title: `${p.displayName}：${presencePageLabel(p.page)}`,
+      "aria-label": `${p.displayName}：${presencePageLabel(p.page)}`,
+      style: {
+        width: 24,
+        height: 24,
+        borderRadius: "50%",
+        background: presenceColor(p.id),
+        color: "#fff",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 11,
+        fontWeight: 800,
+        flexShrink: 0,
+        cursor: "pointer",
+        border: "2px solid var(--bg-header)",
+        boxShadow: "0 0 0 1px var(--border2)"
+      }
+    }, p.displayName.slice(0, 1));
+  }), others.length > 6 && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 10,
       color: "var(--text-muted)"
@@ -6693,7 +6707,7 @@ function MainApp({
     }
   }), /*#__PURE__*/React.createElement(PresenceBar, {
     others: presenceOthers,
-    onTapPerson: p => msg(`${p.display_name}：${presencePageLabel(p.page)}`, false)
+    onTapPerson: p => msg(`${p.displayName}：${presencePageLabel(p.page)}`, false)
   }), pushSupported && !pushSubscribed && /*#__PURE__*/React.createElement("button", {
     onClick: subscribeToPush,
     title: "開啟推播通知(跟LINE通知同步收到，需要允許通知權限)",
