@@ -497,6 +497,16 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
 .booking-sheet-btn-ghost {
   background: transparent;
 }
+/* 2026-07-31：全覽頁月份導覽旁的師傅篩選按鈕(不是表格內每天的師傅
+   名稱表頭，是完全不同的另一個元件)。改成緊湊文字分頁樣式，不用
+   大圓角膠囊，只在hover時顯示極淡背景，active用底線標示。 */
+.overview-master-filter-btn {
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.overview-master-filter-btn:hover {
+  background: rgba(154,104,69,0.08) !important;
+}
 /* 2026-07-31：編輯預約editForm視覺對齊，完全獨立的edit-booking-*
    前綴，不與booking-sheet-*共用，避免日後修改新增表單時連動影響
    編輯表單。手機Bottom Sheet貼底，桌機置中Modal(比新增表單更窄
@@ -11128,19 +11138,26 @@ function OverviewMonth({
   }, "▶"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
-      gap: 5,
-      marginLeft: 8
+      alignItems: "center",
+      gap: 4,
+      marginLeft: 8,
+      overflowX: "auto",
+      minWidth: 0
     }
   }, masters.filter(m => m.role !== "editor" && m.name !== "Hanna" && m.username !== "hanna").map(m => /*#__PURE__*/React.createElement("button", {
     key: m.id,
+    className: "overview-master-filter-btn",
     onClick: () => setOvMasters(p => p.includes(m.id) ? p.filter(x => x !== m.id) : [...p, m.id]),
     style: {
-      padding: "3px 10px",
-      borderRadius: 16,
-      border: `1px solid ${ovMasters.includes(m.id) ? "var(--accent)" : "var(--border2)"}`,
-      background: ovMasters.includes(m.id) ? "rgba(var(--accent-rgb),0.15)" : "transparent",
+      padding: "0 9px",
+      minHeight: 32,
+      borderRadius: 4,
+      border: "none",
+      borderBottom: ovMasters.includes(m.id) ? "2px solid var(--accent)" : "2px solid transparent",
+      background: "transparent",
       color: ovMasters.includes(m.id) ? "var(--accent-bright)" : "var(--text-muted)",
-      fontSize: FS.s,
+      fontSize: 13,
+      fontWeight: 500,
       cursor: "pointer"
     }
   }, m.name))), /*#__PURE__*/React.createElement("div", {
