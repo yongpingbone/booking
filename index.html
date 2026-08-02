@@ -507,6 +507,20 @@ body.light input[type="date"]::-webkit-calendar-picker-indicator {
 .overview-master-filter-btn:hover {
   background: rgba(154,104,69,0.08) !important;
 }
+@media(max-width:768px) {
+  .overview-month-nav-row {
+    flex-wrap: wrap;
+  }
+  .overview-master-filter-row {
+    width: 100%;
+    margin-left: 0 !important;
+    order: 3;
+    padding-top: 2px;
+  }
+  .overview-master-filter-btn {
+    min-height: 40px !important;
+  }
+}
 /* 2026-07-31：編輯預約editForm視覺對齊，完全獨立的edit-booking-*
    前綴，不與booking-sheet-*共用，避免日後修改新增表單時連動影響
    編輯表單。手機Bottom Sheet貼底，桌機置中Modal(比新增表單更窄
@@ -11093,6 +11107,7 @@ function OverviewMonth({
       textAlign: "center"
     }
   }, toast.m), /*#__PURE__*/React.createElement("div", {
+    className: "overview-month-nav-row",
     style: {
       display: "flex",
       alignItems: "center",
@@ -11136,13 +11151,14 @@ function OverviewMonth({
     },
     className: "nb"
   }, "▶"), /*#__PURE__*/React.createElement("div", {
+    className: "overview-master-filter-row",
     style: {
       display: "flex",
       alignItems: "center",
       gap: 4,
       marginLeft: 8,
       overflowX: "auto",
-      minWidth: 0
+      flexShrink: 0
     }
   }, masters.filter(m => m.role !== "editor" && m.name !== "Hanna" && m.username !== "hanna").map(m => /*#__PURE__*/React.createElement("button", {
     key: m.id,
