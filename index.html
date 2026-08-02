@@ -1492,12 +1492,12 @@ function presenceColor(masterId) {
 // 其他人畫面上消失，不用自己做心跳/逾時清理)。activity可以是任何可以
 // JSON化的物件，每次改變都會重新track、同步給頻道裡所有人。
 // 回傳「除了自己以外」目前在線的人清單。
-function usePresence(authMaster, activity) {
+function usePresence(authMaster, page) {
   const [others, setOthers] = useState([]);
   const channelRef = useRef(null);
   const subscribedRef = useRef(false);
-  const activityRef = useRef(activity);
-  activityRef.current = activity;
+  const pageRef = useRef(page);
+  pageRef.current = page;
   useEffect(() => {
     if (!authMaster?.id) return;
     subscribedRef.current = false;
@@ -1527,10 +1527,10 @@ function usePresence(authMaster, activity) {
         subscribedRef.current = true;
         try {
           await ch.track({
-            masterId: authMaster.id,
-            name: authMaster.name,
-            activity: activityRef.current,
-            at: Date.now()
+            user_id: authMaster.id,
+            display_name: authMaster.name,
+            page: pageRef.current,
+            updated_at: Date.now()
           });
         } catch (_) {}
       }
@@ -1546,16 +1546,23 @@ function usePresence(authMaster, activity) {
   useEffect(() => {
     if (!subscribedRef.current || !channelRef.current || !authMaster?.id) return;
     channelRef.current.track({
-      masterId: authMaster.id,
-      name: authMaster.name,
-      activity: activity,
-      at: Date.now()
+      user_id: authMaster.id,
+      display_name: authMaster.name,
+      page: page,
+      updated_at: Date.now()
     }).catch(() => {});
-  }, [activity, authMaster?.id, authMaster?.name]);
+  }, [page, authMaster?.id, authMaster?.name]);
   return others;
 }
 // 在線頭像列——放在header裡，所有分頁都看得到。單顆頭像tap會跳一個
-// toast顯示完整的活動內容(手機上title tooltip不會有作用，用tap代替hover)。
+// toast顯示對方目前在哪一頁(不含客人姓名或日期時間)。
+function presencePageLabel(page) {
+  if (page === "schedule") return "正在查看排班";
+  if (page === "overview") return "正在查看全覽";
+  if (page === "pending") return "正在查看待確認";
+  if (page === "more") return "正在使用系統";
+  return "在線上";
+}
 function PresenceBar({
   others,
   onTapPerson
@@ -1569,15 +1576,15 @@ function PresenceBar({
       marginRight: 4
     }
   }, others.slice(0, 6).map(p => /*#__PURE__*/React.createElement("div", {
-    key: p.masterId,
+    key: p.user_id,
     onClick: () => onTapPerson && onTapPerson(p),
-    title: `${p.name}：${p.activity?.summary || "在線上"}`,
-    "aria-label": `${p.name}：${p.activity?.summary || "在線上"}`,
+    title: `${p.display_name}：${presencePageLabel(p.page)}`,
+    "aria-label": `${p.display_name}：${presencePageLabel(p.page)}`,
     style: {
       width: 24,
       height: 24,
       borderRadius: "50%",
-      background: presenceColor(p.masterId),
+      background: presenceColor(p.user_id),
       color: "#fff",
       display: "flex",
       alignItems: "center",
@@ -1589,7 +1596,7 @@ function PresenceBar({
       border: "2px solid var(--bg-header)",
       boxShadow: "0 0 0 1px var(--border2)"
     }
-  }, (p.name || "?").slice(0, 1))), others.length > 6 && /*#__PURE__*/React.createElement("div", {
+  }, (p.display_name || "?").slice(0, 1))), others.length > 6 && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 10,
       color: "var(--text-muted)"
@@ -4712,43 +4719,17 @@ function MainApp({
     availability: "🟢 開放",
     settings: "⚙️ 設定"
   };
-  // 給presence用的「目前在做什麼」——依tab跟正在編輯的預約算出一句話。
-  // 用useMemo是因為這個物件會被track()整包送到realtime頻道，沒有memo的話
-  // 每次render都是新物件參照，會導致usePresence裡的effect每次render都重送。
-  const activity = React.useMemo(() => {
-    const tabLabel = TAB_LABELS[tab] || tab;
-    if (tab === "schedule" && editForm?._booking) {
-      const b = editForm._booking;
-      const when = b.date ? `${parseInt(b.date.slice(5, 7))}/${parseInt(b.date.slice(8, 10))} ${b.start_time ? b.start_time.slice(0, 5) : ""}` : "";
-      return {
-        tab,
-        summary: `${tabLabel} · 編輯 ${editForm.customer_name || "客戶"} ${when} 的預約`
-      };
-    }
-    if (tab === "overview" && overviewEditing?._booking) {
-      const b = overviewEditing._booking;
-      const when = b.date ? `${parseInt(b.date.slice(5, 7))}/${parseInt(b.date.slice(8, 10))} ${b.start_time ? b.start_time.slice(0, 5) : ""}` : "";
-      return {
-        tab,
-        summary: `${tabLabel} · 編輯 ${overviewEditing.customer_name || "客戶"} ${when} 的預約`
-      };
-    }
-    if (tab === "schedule" && master) {
-      const wks = showSun === "1" ? getWeeksSun(year, month) : getWeeksMon(year, month, false);
-      const wk = wks[weekIdx];
-      const firstDay = wk ? wk.find(d => d != null) : null;
-      const whereStr = view === "week" && firstDay ? `${month + 1}/${firstDay} 這週` : `${year}/${month + 1}`;
-      return {
-        tab,
-        summary: `${tabLabel} · 查看 ${master.name} 的 ${whereStr}`
-      };
-    }
-    return {
-      tab,
-      summary: tabLabel
-    };
-  }, [tab, master?.id, master?.name, view, weekIdx, year, month, editForm?._booking?.id, editForm?.customer_name, overviewEditing?._booking?.id, overviewEditing?.customer_name, showSun]);
-  const presenceOthers = usePresence(authMaster, activity);
+  // 給presence用的「目前在哪一頁」——只允許安全的頁面分類，不含客人
+  // 姓名、日期時間或任何預約內容。用useMemo是因為這個值會被track()
+  // 送到realtime頻道，沒有memo的話每次render都是新值，會導致
+  // usePresence裡的effect每次render都重送。
+  const presencePage = React.useMemo(() => {
+    if (tab === "schedule") return "schedule";
+    if (tab === "overview") return "overview";
+    if (tab === "pending") return "pending";
+    return "more";
+  }, [tab]);
+  const presenceOthers = usePresence(authMaster, presencePage);
   const [showSearch, setShowSearch] = useState(false);
   const [showDisplaySettings, setShowDisplaySettings] = useState(false);
   const [searchQ, setSearchQ] = useState("");
@@ -6712,7 +6693,7 @@ function MainApp({
     }
   }), /*#__PURE__*/React.createElement(PresenceBar, {
     others: presenceOthers,
-    onTapPerson: p => msg(`${p.name}：${p.activity?.summary || "在線上"}`, false)
+    onTapPerson: p => msg(`${p.display_name}：${presencePageLabel(p.page)}`, false)
   }), pushSupported && !pushSubscribed && /*#__PURE__*/React.createElement("button", {
     onClick: subscribeToPush,
     title: "開啟推播通知(跟LINE通知同步收到，需要允許通知權限)",
