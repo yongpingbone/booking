@@ -41,6 +41,27 @@ jobs:
           echo "{\"jdkPath\": \"$JAVA_HOME\", \"androidSdkPath\": \"$SDK_PATH\"}" > ~/.bubblewrap/config.json
           cat ~/.bubblewrap/config.json
 
+      - name: 動態更新版本代碼(避免Play Console「版本代碼已使用過」)
+        # appVersionCode先前是寫死在twa-manifest.json裡的固定值1，從未
+        # 自動遞增——這代表每次重新打包，AAB裡的版本代碼永遠是1，一旦
+        # Play Console上傳過一次，之後所有版本都會被拒絕(版本代碼已
+        # 使用過，請使用其他版本代碼)。這裡改用github.run_number(GitHub
+        # 針對這個workflow保證嚴格遞增、且不會重複的整數)動態覆寫，
+        # 讓每次打包都自動得到一個比先前任何一次都大的版本代碼，不需要
+        # 再手動修改twa-manifest.json或記得遞增版本號。
+        run: |
+          cd apk-project
+          python3 -c "
+          import json
+          with open('twa-manifest.json') as f:
+              data = json.load(f)
+          data['appVersionCode'] = ${{ github.run_number }}
+          data['appVersionName'] = '${{ github.run_number }}'
+          with open('twa-manifest.json', 'w') as f:
+              json.dump(data, f, indent=2, ensure_ascii=False)
+          print('已更新 appVersionCode/appVersionName 為 ${{ github.run_number }}')
+          "
+
       - name: 產生 Android 專案 + 簽章金鑰(完全不透過互動精靈)
         # twa-manifest.json 是預先產生好、存在 apk-project/ 底下的檔案，
         # 不是這裡才產生的——用 @bubblewrap/core 的底層 API 直接呼叫，
